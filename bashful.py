@@ -26,7 +26,8 @@ class Color:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-TEMPLATE = "{title:{width}s} ❭ {color}{msg}{reset}"
+#TEMPLATE = "{title:{width}s} ❭ {color}{msg}{reset}"
+TEMPLATE = "{title:{width}s}    {color}{msg}{reset}"
 PARALLEL_TEMPLATE = "├── " + TEMPLATE
 LAST_PARALLEL_TEMPLATE = "└── " + TEMPLATE
 
@@ -40,8 +41,11 @@ def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
     else:
         template = TEMPLATE
         offset = 0
+
+    width = MAX_NAME_LEN+INDENT+offset
+    width += len(name)-ansi_len(name)
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg='Starting...', color=Color.YELLOW, reset=Color.NORMAL)
+    output_lines[idx] = template.format(title=name, width=width, msg='Starting...', color=Color.YELLOW, reset=Color.NORMAL)
     error = []
     while True:
         reads = [p.stdout.fileno(), p.stderr.fileno()]
@@ -50,32 +54,32 @@ def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
         for fd in ret[0]:
             if fd == p.stdout.fileno():
                 read = p.stdout.readline()
-                output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg=read, color=Color.NORMAL, reset=Color.NORMAL)
+                output_lines[idx] = template.format(title=name, width=width, msg=read, color=Color.NORMAL, reset=Color.NORMAL)
 
             elif fd == p.stderr.fileno():
                 read = p.stderr.readline()
                 error.append(read.rstrip())
-                output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg=" ".join(read.split('\n')), color=Color.RED, reset=Color.NORMAL)
+                output_lines[idx] = template.format(title=name, width=width, msg=" ".join(read.split('\n')), color=Color.RED, reset=Color.NORMAL)
 
         if p.poll() != None:
             break
 
 
     read = p.stdout.readline()
-    output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg=read, color=Color.NORMAL, reset=Color.NORMAL)
+    output_lines[idx] = template.format(title=name, width=width, msg=read, color=Color.NORMAL, reset=Color.NORMAL)
 
     read = p.stderr.readline()
     error.append(read.rstrip())
-    output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg=" ".join(read.split('\n')), color=Color.RED, reset=Color.NORMAL)
+    output_lines[idx] = template.format(title=name, width=width, msg=" ".join(read.split('\n')), color=Color.RED, reset=Color.NORMAL)
 
 
     if p.returncode != 0:
-        # if len(error) > 0:
-        #     output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg="✘ Error (%d): %s" % (p.returncode, "\n".join(error)), color=Color.RED, reset=Color.NORMAL)
-        # else:
-        output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg="✘ Error (%d)" % p.returncode, color=Color.RED, reset=Color.NORMAL)
+        if len(error) > 0:
+            output_lines[idx] = template.format(title=name, width=width, msg="✘ Error (%d): stderr to follow..." % p.returncode, color=Color.RED, reset=Color.NORMAL)
+        else:
+            output_lines[idx] = template.format(title=name, width=width, msg="✘ Error (%d)" % p.returncode, color=Color.RED, reset=Color.NORMAL)
     else:
-        output_lines[idx] = template.format(title=name, width=MAX_NAME_LEN+INDENT+offset, msg="✔ Complete", color=Color.GREEN, reset=Color.NORMAL)
+        output_lines[idx] = template.format(title=name, width=width, msg="✔ Complete", color=Color.GREEN, reset=Color.NORMAL)
 
     results[idx] = Result(name, cmd, p.returncode, "\n".join(error))
 
@@ -109,10 +113,10 @@ def process_task(options, bold_name=False):
         if 'name' in options and 'cmd' in options:
             global MAX_NAME_LEN
             name = options['name']
-            # if bold_name:
-            #     name = "%s%s%s" % (Color.BOLD, options['name'], Color.NORMAL)
+            if bold_name:
+                name = "%s%s%s" % (Color.BOLD, options['name'], Color.NORMAL)
 
-            MAX_NAME_LEN = max(MAX_NAME_LEN, len(name) )
+            MAX_NAME_LEN = max(MAX_NAME_LEN, ansi_len(name) )
             return name, options['cmd']
         elif 'cmd' in options:
             return options['cmd'], options['cmd']

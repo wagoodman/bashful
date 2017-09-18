@@ -1,3 +1,5 @@
+# Note: the cmd cwd is relative to where the script is designed to run, in
+# this case, in the repo root dir.
 - task:
     name: serial nine
     cmd: example/jitter.sh 9
