@@ -1,18 +1,38 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""bashful
+Because your bash scripts should be quiet and shy (and not such a loudmouth).
+
+Usage:
+  bashful <ymlfile>
+  bashful (-h | --help)
+  bashful --version
+
+Options:
+  -h  --help         Show this screen.
+  -v  --version      Show version.
+"""
+from docopt import docopt
+from functools import partial
+import collections
 import subprocess
 import threading
-import collections
-from reprint import output, ansi_len
-import sys
 import select
 import shlex
 import time
 import yaml
-import sys
-from functools import partial
 
+from bashful.version import __version__
+from bashful.reprint import output, ansi_len
+
+CAP_NAME_LEN = 25
 MAX_NAME_LEN = 0
 INDENT = 0
+
+#TEMPLATE = "{title:{width}s} ❭ {color}{msg}{reset}"
+TEMPLATE = "{title:{width}s}    {color}{msg}{reset}"
+PARALLEL_TEMPLATE = "├── " + TEMPLATE
+LAST_PARALLEL_TEMPLATE = "└── " + TEMPLATE
 
 Result = collections.namedtuple("Result", "name cmd returncode stderr")
 
@@ -25,11 +45,6 @@ class Color:
     NORMAL = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-
-#TEMPLATE = "{title:{width}s} ❭ {color}{msg}{reset}"
-TEMPLATE = "{title:{width}s}    {color}{msg}{reset}"
-PARALLEL_TEMPLATE = "├── " + TEMPLATE
-LAST_PARALLEL_TEMPLATE = "└── " + TEMPLATE
 
 def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
     if indent and last:
@@ -109,20 +124,20 @@ def run_tasks(tasks, title=None):
                 print "%s%s%s" % (Color.RED, result.stderr.strip(), Color.NORMAL)
 
 def process_task(options, bold_name=False):
+    global MAX_NAME_LEN
     if isinstance(options, dict):
         if 'name' in options and 'cmd' in options:
-            global MAX_NAME_LEN
-            name = options['name']
-            if bold_name:
-                name = "%s%s%s" % (Color.BOLD, options['name'], Color.NORMAL)
-
-            MAX_NAME_LEN = max(MAX_NAME_LEN, ansi_len(name) )
-            return name, options['cmd']
+            name, cmd = str(options['name']), options['cmd']
         elif 'cmd' in options:
-            return options['cmd'], options['cmd']
+            name, cmd = options['cmd'], options['cmd']
         else:
             raise RuntimeError("Task requires a name and cmd")
-    return options, options
+
+    if bold_name:
+        name = "%s%s%s" % (Color.BOLD, name, Color.NORMAL)
+    MAX_NAME_LEN = min(max(MAX_NAME_LEN, ansi_len(name) ), CAP_NAME_LEN)
+
+    return name, cmd
 
 
 def build_serial(options):
@@ -137,27 +152,32 @@ def build_parallel(options):
     if 'title' in options:
         title = options['title']
     if 'tasks' not in options:
-        raise RuntimeError('Parallel option requires tasks')
+        raise RuntimeError('Parallel option requires tasks. Given: %s' % repr(options))
     for task_options in options['tasks']:
         name, cmd = process_task(task_options)
         tasks[name] = cmd
     return partial(run_tasks, tasks, title=title)
 
-def builder(obj):
+def builder(task_yml_obj):
     ret = []
-    for item in obj:
-        for definition, options in item.items():
-            if definition == 'task':
-                ret.append(build_serial(options))
-            if definition == 'parallel':
-                ret.append(build_parallel(options))
+    for item in task_yml_obj:
+        if 'cmd' in item.keys():
+            ret.append(build_serial(item))
+        elif 'parallel' in item.keys():
+            ret.append(build_parallel(item['parallel']))
+        else:
+            raise RuntimeError("Unknown config item: %s" % repr(item))
     return ret
 
 def main():
-    obj = yaml.load(open(sys.argv[1],'r').read())
-    task_funcs = builder(obj)
-    for func in task_funcs:
+    version = 'bashful %s' % __version__
+    args = docopt(__doc__, version=version)
+
+    task_yml_obj = yaml.load(open(args['<ymlfile>'],'r').read())
+
+    for func in builder(task_yml_obj):
         func()
 
 
-main()
+if __name__ == '__main__':
+    main()

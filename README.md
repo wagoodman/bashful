@@ -6,5 +6,5 @@ because your bash script should be quiet and shy
 Example:
 
 ```bash
-python bashful.py example/bashful.yml
+bashful example/bashful.yml
 ```
