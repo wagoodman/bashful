@@ -1,9 +1,9 @@
 # Note: the cmd cwd is relative to where the script is designed to run, in
 # this case, in the repo root dir.
-- name: serial nine
-  cmd: example/jitter.sh 9
+- name: serial four
+  cmd: example/jitter.sh 4
 
-- cmd: example/jitter.sh 13
+- cmd: example/jitter.sh 3
 
 - parallel:
     title: Some title that works for these things...
@@ -22,11 +22,11 @@
 
       - cmd: example/jitter.sh 12
 
-      - name: fifteen
-        cmd: example/jitter.sh 15
+      - name: ten
+        cmd: example/jitter.sh 10
 
-      - name: eighteen
-        cmd: example/jitter.sh 18
+      - name: eleven
+        cmd: example/jitter.sh 11
 
 - name: Done.
   cmd: echo "Complete!"

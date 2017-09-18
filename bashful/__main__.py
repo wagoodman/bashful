@@ -25,12 +25,12 @@ import yaml
 from bashful.version import __version__
 from bashful.reprint import output, ansi_len
 
-CAP_NAME_LEN = 25
+CAP_NAME_LEN = 30
 MAX_NAME_LEN = 0
 INDENT = 0
 
 #TEMPLATE = "{title:{width}s} ❭ {color}{msg}{reset}"
-TEMPLATE = "{title:{width}s}    {color}{msg}{reset}"
+TEMPLATE = "{title:{width}s}  {color}{msg}{reset}"
 PARALLEL_TEMPLATE = "├── " + TEMPLATE
 LAST_PARALLEL_TEMPLATE = "└── " + TEMPLATE
 
@@ -59,6 +59,7 @@ def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
 
     width = MAX_NAME_LEN+INDENT+offset
     width += len(name)-ansi_len(name)
+
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output_lines[idx] = template.format(title=name, width=width, msg='Starting...', color=Color.YELLOW, reset=Color.NORMAL)
     error = []
@@ -139,14 +140,13 @@ def process_task(options, bold_name=False):
 
     return name, cmd
 
-
 def build_serial(options):
     name, cmd = process_task(options, bold_name=True)
     return partial(run_tasks, {name: cmd})
 
 def build_parallel(options):
     global INDENT
-    INDENT = 3
+    INDENT = 4
     tasks = collections.OrderedDict()
     title = None
     if 'title' in options:
