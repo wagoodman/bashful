@@ -1,0 +1,32 @@
+- task:
+    name: serial nine
+    cmd: example/jitter.sh 9
+
+- task:
+    name: serial thirteen
+    cmd: example/jitter.sh 13
+
+- parallel:
+    title: Some title that works for these things...
+    tasks:
+      - name: five
+        cmd: example/jitter.sh 5
+
+      - name: eight
+        cmd: example/jitter.sh 8
+
+      - name: oops
+        cmd: example/error.sh 8
+
+      - name: twelve
+        cmd: example/jitter.sh 12
+
+      - name: fifteen
+        cmd: example/jitter.sh 15
+
+      - name: eighteen
+        cmd: example/jitter.sh 18
+
+- task:
+    name: Done.
+    cmd: echo "Complete!"
