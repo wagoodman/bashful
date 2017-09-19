@@ -21,9 +21,11 @@ import select
 import shlex
 import time
 import yaml
+import sys
+import io
 
 from bashful.version import __version__
-from bashful.reprint import output, ansi_len
+from bashful.reprint import output, ansi_len, preprocess
 
 CAP_NAME_LEN = 30
 MAX_NAME_LEN = 0
@@ -36,6 +38,8 @@ LAST_PARALLEL_TEMPLATE = "└── " + TEMPLATE
 
 Result = collections.namedtuple("Result", "name cmd returncode stderr")
 
+EXIT = False
+
 class Color:
     PURPLE = '\033[95m'
     BLUE = '\033[94m'
@@ -47,6 +51,7 @@ class Color:
     UNDERLINE = '\033[4m'
 
 def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
+    global EXIT
     if indent and last:
         template = LAST_PARALLEL_TEMPLATE
         offset = -4
@@ -61,41 +66,48 @@ def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
     width += len(name)-ansi_len(name)
 
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output_lines[idx] = template.format(title=name, width=width, msg='Starting...', color=Color.YELLOW, reset=Color.NORMAL)
+    output_lines[idx] = template.format(title=name, width=width, msg='Working...', color=Color.YELLOW, reset=Color.NORMAL)
     error = []
-    while True:
-        reads = [p.stdout.fileno(), p.stderr.fileno()]
-        ret = select.select(reads, [], [])
+    # while True:
+    #     reads = [p.stdout.fileno(), p.stderr.fileno()]
+    #     ret = select.select(reads, [], [])
+    #
+    #     for fd in ret[0]:
+    #         if fd == p.stdout.fileno():
+    #             #read = preprocess(p.stdout.readline())
+    #             read = preprocess(p.stdout.read())
+    #             output_lines[idx] = template.format(title=name, width=width, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    #
+    #         elif fd == p.stderr.fileno():
+    #             #read = preprocess(p.stderr.readline())
+    #             read = preprocess(p.stderr.read())
+    #             error.append(read.rstrip())
+    #             #output_lines[idx] = template.format(title=name, width=width, msg="Error:" + read.split('\n')[0], color=Color.RED, reset=Color.NORMAL)
+    #             output_lines[idx] = template.format(title=name, width=width, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    #     if p.poll() != None:
+    #         break
+    #
+    #
+    # #read = preprocess(p.stdout.readline())
+    # read = preprocess(p.stdout.read())
+    # output_lines[idx] = template.format(title=name, width=width, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    #
+    # #read = preprocess(p.stderr.readline())
+    # read = preprocess(p.stderr.read())
+    # error.append(read.rstrip())
+    # output_lines[idx] = template.format(title=name, width=width, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
 
-        for fd in ret[0]:
-            if fd == p.stdout.fileno():
-                read = p.stdout.readline()
-                output_lines[idx] = template.format(title=name, width=width, msg=read, color=Color.NORMAL, reset=Color.NORMAL)
-
-            elif fd == p.stderr.fileno():
-                read = p.stderr.readline()
-                error.append(read.rstrip())
-                output_lines[idx] = template.format(title=name, width=width, msg=" ".join(read.split('\n')), color=Color.RED, reset=Color.NORMAL)
-
-        if p.poll() != None:
-            break
-
-
-    read = p.stdout.readline()
-    output_lines[idx] = template.format(title=name, width=width, msg=read, color=Color.NORMAL, reset=Color.NORMAL)
-
-    read = p.stderr.readline()
-    error.append(read.rstrip())
-    output_lines[idx] = template.format(title=name, width=width, msg=" ".join(read.split('\n')), color=Color.RED, reset=Color.NORMAL)
-
+    p.communicate()
+    p.wait()
 
     if p.returncode != 0:
+        EXIT = True
         if len(error) > 0:
             output_lines[idx] = template.format(title=name, width=width, msg="✘ Error (%d): stderr to follow..." % p.returncode, color=Color.RED, reset=Color.NORMAL)
         else:
             output_lines[idx] = template.format(title=name, width=width, msg="✘ Error (%d)" % p.returncode, color=Color.RED, reset=Color.NORMAL)
     else:
-        output_lines[idx] = template.format(title=name, width=width, msg="✔ Complete", color=Color.GREEN, reset=Color.NORMAL)
+        output_lines[idx] = template.format(title=name, width=width, msg="✔", color=Color.GREEN, reset=Color.NORMAL)
 
     results[idx] = Result(name, cmd, p.returncode, "\n".join(error))
 
@@ -150,7 +162,7 @@ def build_parallel(options):
     tasks = collections.OrderedDict()
     title = None
     if 'title' in options:
-        title = options['title']
+        title = options['title']+"..."
     if 'tasks' not in options:
         raise RuntimeError('Parallel option requires tasks. Given: %s' % repr(options))
     for task_options in options['tasks']:
@@ -176,6 +188,9 @@ def main():
     task_yml_obj = yaml.load(open(args['<ymlfile>'],'r').read())
 
     for func in builder(task_yml_obj):
+        if EXIT:
+            print "Exiting..."
+            sys.exit(1)
         func()
 
 

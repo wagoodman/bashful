@@ -37,6 +37,8 @@ widths = [
     (120831, 1), (262141, 2), (1114109, 1),
 ]
 
+LOCK = threading.Lock()
+
 def get_char_width(char):
     global widths
     o = ord(char)
@@ -46,7 +48,6 @@ def get_char_width(char):
         if o <= num:
             return wid
     return 1
-
 
 def preprocess(content):
     """
@@ -86,8 +87,10 @@ def print_line(content, columns, force_single_line):
     output = "{content}{padding}".format(content=content, padding=padding)
     if force_single_line:
         output = cut_off_at(output, columns)
+
     print(output, end='')
     sys.stdout.flush()
+
 
 
 def ansi_len(s):
@@ -309,7 +312,7 @@ class output:
                     self.parent.refresh(int(time.time()*1000), forced=False)
 
 
-    def __init__(self, output_type="list", initial_len=1, interval=0, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
+    def __init__(self, output_type="list", initial_len=1, interval=0.1, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
         self.sort_key = sort_key
         self.no_warning = no_warning
         no_warning and print("All reprint warning diabled.")
