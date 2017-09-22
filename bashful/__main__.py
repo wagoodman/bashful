@@ -32,9 +32,13 @@ MAX_NAME_LEN = 0
 INDENT = 0
 
 #TEMPLATE = "{title:{width}s} ❭ {color}{msg}{reset}"
-TEMPLATE = "{title:{width}s}  {color}{msg}{reset}"
-PARALLEL_TEMPLATE = "├── " + TEMPLATE
-LAST_PARALLEL_TEMPLATE = "└── " + TEMPLATE
+TEMPLATE               = " {color}{status}{reset} {title} {msg}"
+# PARALLEL_TEMPLATE = " {msg} " + TEMPLATE
+# LAST_PARALLEL_TEMPLATE = " {msg} " + TEMPLATE
+# PARALLEL_TEMPLATE = LAST_PARALLEL_TEMPLATE = TEMPLATE
+PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title} {msg}"
+LAST_PARALLEL_TEMPLATE = " {color}{status}{reset}  └─ {title} {msg}"
+INDENT_LEN = 8
 
 Result = collections.namedtuple("Result", "name cmd returncode stderr")
 
@@ -49,15 +53,16 @@ class Color:
     NORMAL = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    INVERSE = '\033[7m'
 
 def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
     global EXIT
     if indent and last:
         template = LAST_PARALLEL_TEMPLATE
-        offset = -4
+        offset = -INDENT_LEN
     elif indent:
         template = PARALLEL_TEMPLATE
-        offset = -4
+        offset = -INDENT_LEN
     else:
         template = TEMPLATE
         offset = 0
@@ -66,7 +71,10 @@ def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
     width += len(name)-ansi_len(name)
 
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    output_lines[idx] = template.format(title=name, width=width, msg='Working...', color=Color.YELLOW, reset=Color.NORMAL)
+
+    # output_lines[idx] = template.format(title=name, width=width, status='…', msg='', color="%s%s"%(Color.YELLOW, Color.BOLD), reset=Color.NORMAL)
+    output_lines[idx] = template.format(title=name, width=width, status='░', msg='', color="%s%s"%(Color.YELLOW, Color.BOLD), reset=Color.NORMAL)
+
     error = []
     # while True:
     #     reads = [p.stdout.fileno(), p.stderr.fileno()]
@@ -103,11 +111,14 @@ def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
     if p.returncode != 0:
         EXIT = True
         if len(error) > 0:
-            output_lines[idx] = template.format(title=name, width=width, msg="✘ Error (%d): stderr to follow..." % p.returncode, color=Color.RED, reset=Color.NORMAL)
+            # output_lines[idx] = template.format(title=name, width=width, status="✘", msg="Error (%d): stderr to follow..." % p.returncode, color="%s%s%s"%(Color.RED, Color.BOLD), reset=Color.NORMAL)
+            output_lines[idx] = template.format(title=name, width=width, status="█", msg="Error (%d): stderr to follow..." % p.returncode, color="%s%s%s"%(Color.RED, Color.BOLD), reset=Color.NORMAL)
         else:
-            output_lines[idx] = template.format(title=name, width=width, msg="✘ Error (%d)" % p.returncode, color=Color.RED, reset=Color.NORMAL)
+            # output_lines[idx] = template.format(title=name, width=width, status="✘", msg="Error (%d)" % p.returncode, color="%s%s%s"%(Color.RED, Color.BOLD), reset=Color.NORMAL)
+            output_lines[idx] = template.format(title=name, width=width, status="█", msg="Error (%d)" % p.returncode, color="%s%s%s"%(Color.RED, Color.BOLD), reset=Color.NORMAL)
     else:
-        output_lines[idx] = template.format(title=name, width=width, msg="✔", color=Color.GREEN, reset=Color.NORMAL)
+        # output_lines[idx] = template.format(title=name,     width=width, status="✔", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
+        output_lines[idx] = template.format(title=name,     width=width, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
     results[idx] = Result(name, cmd, p.returncode, "\n".join(error))
 
@@ -118,7 +129,7 @@ def run_tasks(tasks, title=None):
         offset = 1
     with output(output_type='list', initial_len=length+offset, interval=0) as output_lines:
         if title:
-            output_lines[0] = "%s%s%s"%(Color.BOLD, title,Color.NORMAL)
+            output_lines[0] = "%s%s%s"%(Color.BOLD, title, Color.NORMAL)
         proc = []
         results = [None]*(length+offset)
         MAX_NAME_LEN = max([len(name) for name, cmd in tasks.items()])
@@ -153,16 +164,16 @@ def process_task(options, bold_name=False):
     return name, cmd
 
 def build_serial(options):
-    name, cmd = process_task(options, bold_name=True)
+    name, cmd = process_task(options, bold_name=False)
     return partial(run_tasks, {name: cmd})
 
 def build_parallel(options):
     global INDENT
-    INDENT = 4
+    INDENT = INDENT_LEN
     tasks = collections.OrderedDict()
     title = None
     if 'title' in options:
-        title = options['title']+"..."
+        title = Color.GREEN + " █ " + Color.NORMAL + Color.BOLD + options['title']
     if 'tasks' not in options:
         raise RuntimeError('Parallel option requires tasks. Given: %s' % repr(options))
     for task_options in options['tasks']:

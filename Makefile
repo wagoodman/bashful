@@ -5,7 +5,7 @@ test:
 	tox; \
 	)
 
-upload: test
+upload: #test
 	(. venv/bin/activate; \
 	python setup.py sdist upload; \
 	make clean; \
