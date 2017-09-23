@@ -92,10 +92,12 @@ def print_line(content, columns, force_single_line):
     sys.stdout.flush()
 
 
+def no_ansi(s):
+    return ANSI_RE.sub('', s)
+
 
 def ansi_len(s):
-    s_without_ansi = ANSI_RE.sub('', s)
-    return len(s_without_ansi)
+    return len(no_ansi(s))
 
 
 def line_width(line):
