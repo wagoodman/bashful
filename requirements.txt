@@ -2,3 +2,4 @@ backports.shutil_get_terminal_size
 PyYaml
 six
 docopt
+enum
