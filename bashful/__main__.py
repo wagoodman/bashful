@@ -38,6 +38,7 @@ EXIT = False
 
 Result = collections.namedtuple("Result", "name cmd returncode stderr")
 
+
 class TaskStatus(Enum):
     init = 0
     running = 1
@@ -55,14 +56,41 @@ class Color(Enum):
     UNDERLINE = '\033[4m'
     INVERSE = '\033[7m'
 
+
+def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout=None, is_last=False):
+    if is_parallel and is_last:
+        template = LAST_PARALLEL_TEMPLATE
+    elif is_parallel:
+        template = PARALLEL_TEMPLATE
+    else:
+        template = TEMPLATE
+
+    # has exited...
+    if returncode != None:
+        if returncode != 0:
+            if stderr != None and len(stderr) > 0:
+                return template.format(title=title, status="█", msg="%s Error (%d): stderr to follow...%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+            return template.format(title=title, status="█", msg="%s Error (%d)%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+        return template.format(title=title, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
+
+    # is still running
+    if status in (TaskStatus.init, TaskStatus.running):
+        return template.format(title=title, status='░', msg='', color=Color.YELLOW, reset=Color.NORMAL)
+    elif status in (TaskStatus.successful, ):
+        return template.format(title=title, status='█', msg='', color=Color.GREEN, reset=Color.NORMAL)
+    return template.format(title=title, status='?', msg='', color=Color.RED, reset=Color.NORMAL)
+
+
 def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=False):
     global EXIT
 
+    error = []
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
     out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
-    error = []
+    # This needs to happen, however, when reading you shouldn't depend on there being line breaks at reasonable times...
+    # in fact, don't depend on any!
+
     # while True:
     #     reads = [p.stdout.fileno(), p.stderr.fileno()]
     #     ret = select.select(reads, [], [])
@@ -100,38 +128,13 @@ def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=Fal
         status = TaskStatus.failed
         EXIT = True
 
-    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=name, returncode=p.returncode, stderr=len(error) > 0, stdout=None, is_last=is_last)
+    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=name, returncode=p.returncode, stderr=error, stdout=None, is_last=is_last)
     results[idx] = Result(name, cmd, p.returncode, "\n".join(error))
-
-
-def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout=None, is_last=False):
-
-    if is_parallel and is_last:
-        template = LAST_PARALLEL_TEMPLATE
-    elif is_parallel:
-        template = PARALLEL_TEMPLATE
-    else:
-        template = TEMPLATE
-
-    # has exited...
-    if returncode != None:
-        if returncode != 0:
-
-            if stderr != None:
-                return template.format(title=title, status="█", msg="%s Error (%d): stderr to follow...%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-            return template.format(title=title, status="█", msg="%s Error (%d)%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-        return template.format(title=title, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
-
-    # is still running
-    if status in (TaskStatus.init, TaskStatus.running):
-        return template.format(title=title, status='░', msg='', color=Color.YELLOW, reset=Color.NORMAL)
-    elif status in (TaskStatus.successful, ):
-        return template.format(title=title, status='█', msg='', color=Color.GREEN, reset=Color.NORMAL)
-    return template.format(title=title, status='?', msg='', color=Color.RED, reset=Color.NORMAL)
 
 
 class TaskSet:
     def __init__(self, tasks, title, num, total):
+        # Todo: base this on a set of task definitinos that has name:cmd:options 
         self.tasks = tasks
         self.num = num
         self.total = total
@@ -182,11 +185,13 @@ class TaskSet:
             if self.is_parallel:
                 out_proxy[0] = format_step(is_parallel=False, status=status, title=self.formatted_title)
 
+        err_idx = 0
         for result in results:
             if result != None and result.returncode != 0:
-                print "\n%s%sTask '%s' finished with error: %s%s" % (Color.BOLD,Color.RED, no_ansi(result.name.split('〔')[0]), result.returncode, Color.NORMAL)
+                err_idx += 1
+                print "\n%sError %d: task '%s' failed with error (returncode:%s)%s" % (Color.BOLD+Color.RED, err_idx, no_ansi(result.name.split('〔')[0]), result.returncode, Color.NORMAL)
                 if result.stderr:
-                    print "%s%s%s" % (Color.RED, result.stderr.strip(), Color.NORMAL)
+                    print Color.RED + result.stderr.strip() + Color.NORMAL
 
 class Program:
 
