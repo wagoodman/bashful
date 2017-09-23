@@ -314,7 +314,7 @@ class output:
                     self.parent.refresh(int(time.time()*1000), forced=False)
 
 
-    def __init__(self, output_type="list", initial_len=1, interval=0.1, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
+    def __init__(self, output_type="list", initial_len=1, interval=0, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
         self.sort_key = sort_key
         self.no_warning = no_warning
         no_warning and print("All reprint warning diabled.")

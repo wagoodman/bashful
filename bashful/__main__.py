@@ -30,9 +30,10 @@ from bashful.version import __version__
 from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
 
-TEMPLATE               = " {color}{status}{reset} {title} {msg}"
-PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title} {msg}"
-LAST_PARALLEL_TEMPLATE = " {color}{status}{reset}  └─ {title} {msg}"
+SUPRESS_OUT = True
+TEMPLATE               = " {color}{status}{reset} {title:30s} {msg}"
+PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:30s} {msg}"
+LAST_PARALLEL_TEMPLATE = " {color}{status}{reset}  └─ {title:30s} {msg}"
 
 EXIT = False
 
@@ -73,55 +74,66 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
             return template.format(title=title, status="█", msg="%s Error (%d)%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
         return template.format(title=title, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
+    output = ''
+    if stdout:
+        output = "   ..."+stdout
+    if stderr:
+        output = "   ..."+stderr
+    if len(output) > 50:
+        output = no_ansi(output[:50] + "...")
+
     # is still running
     if status in (TaskStatus.init, TaskStatus.running):
-        return template.format(title=title, status='░', msg='', color=Color.YELLOW, reset=Color.NORMAL)
+        #print repr(stdout)
+        return template.format(title=title, status='░', msg=output, color=Color.YELLOW, reset=Color.NORMAL)
     elif status in (TaskStatus.successful, ):
-        return template.format(title=title, status='█', msg='', color=Color.GREEN, reset=Color.NORMAL)
-    return template.format(title=title, status='?', msg='', color=Color.RED, reset=Color.NORMAL)
+        return template.format(title=title, status='█', msg=output, color=Color.GREEN, reset=Color.NORMAL)
+    return template.format(title=title, status='?', msg="UMM?", color=Color.RED, reset=Color.NORMAL)
 
 
 def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=False):
     global EXIT
 
-    error = []
+    error, out = [], []
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
     # This needs to happen, however, when reading you shouldn't depend on there being line breaks at reasonable times...
     # in fact, don't depend on any!
 
-    # while True:
-    #     reads = [p.stdout.fileno(), p.stderr.fileno()]
-    #     ret = select.select(reads, [], [])
-    #
-    #     for fd in ret[0]:
-    #         if fd == p.stdout.fileno():
-    #             #read = preprocess(p.stdout.readline())
-    #             read = preprocess(p.stdout.read())
-    #             out_proxy[idx] = template.format(title=name, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
-    #
-    #         elif fd == p.stderr.fileno():
-    #             #read = preprocess(p.stderr.readline())
-    #             read = preprocess(p.stderr.read())
-    #             error.append(read.rstrip())
-    #             #out_proxy[idx] = template.format(title=name, msg="Error:" + read.split('\n')[0], color=Color.RED, reset=Color.NORMAL)
-    #             out_proxy[idx] = template.format(title=name, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
-    #     if p.poll() != None:
-    #         break
-    #
-    #
-    # #read = preprocess(p.stdout.readline())
-    # read = preprocess(p.stdout.read())
-    # out_proxy[idx] = template.format(title=name, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
-    #
-    # #read = preprocess(p.stderr.readline())
-    # read = preprocess(p.stderr.read())
-    # error.append(read.rstrip())
-    # out_proxy[idx] = template.format(title=name, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    if not SUPRESS_OUT:
+        while True:
+            reads = [p.stdout.fileno(), p.stderr.fileno()]
+            ret = select.select(reads, [], [])
+            stdout, stderr = '', ''
+            for fd in ret[0]:
+                if fd == p.stdout.fileno():
+                    stdout = preprocess(p.stdout.readline())
+                    #stdout = preprocess(p.stdout.read())
+                    if stdout != None and len(stdout.strip()) > 0:
+                        #print repr(read)
+                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=stdout, is_last=is_last)
 
-    p.communicate()
-    p.wait()
+                elif fd == p.stderr.fileno():
+                    stderr = preprocess(p.stderr.readline())
+                    #stderr = preprocess(p.stderr.read())
+                    if stderr != None and len(stderr.strip()) > 0:
+                        error.append(stderr.rstrip())
+                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=stderr, stdout=None, is_last=is_last)
+            if p.poll() != None:
+                break
+
+        # read = preprocess(p.stdout.read())
+        # out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=read, is_last=is_last)
+        #
+        #
+        # read = preprocess(p.stderr.read())
+        # error.append(read.rstrip())
+        # out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=read, stdout=None, is_last=is_last)
+
+    else:
+        p.communicate()
+        p.wait()
 
     status = TaskStatus.successful
     if p.returncode != 0:
@@ -134,7 +146,7 @@ def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=Fal
 
 class TaskSet:
     def __init__(self, tasks, title, num, total):
-        # Todo: base this on a set of task definitinos that has name:cmd:options 
+        # Todo: base this on a set of task definitinos that has name:cmd:options
         self.tasks = tasks
         self.num = num
         self.total = total
