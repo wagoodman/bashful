@@ -29,19 +29,22 @@ import io
 from bashful.version import __version__
 from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
-INDENT = 0
-INDENT_LEN = 8
 
 TEMPLATE               = " {color}{status}{reset} {title} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title} {msg}"
 LAST_PARALLEL_TEMPLATE = " {color}{status}{reset}  └─ {title} {msg}"
 
+EXIT = False
 
 Result = collections.namedtuple("Result", "name cmd returncode stderr")
 
-EXIT = False
+class TaskStatus(Enum):
+    init = 0
+    running = 1
+    failed = 2
+    successful = 3
 
-class Color:
+class Color(Enum):
     PURPLE = '\033[95m'
     BLUE = '\033[94m'
     GREEN = '\033[92m'
@@ -52,22 +55,12 @@ class Color:
     UNDERLINE = '\033[4m'
     INVERSE = '\033[7m'
 
-def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
+def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=False):
     global EXIT
-    if indent and last:
-        template = LAST_PARALLEL_TEMPLATE
-        offset = -INDENT_LEN
-    elif indent:
-        template = PARALLEL_TEMPLATE
-        offset = -INDENT_LEN
-    else:
-        template = TEMPLATE
-        offset = 0
 
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    # output_lines[idx] = template.format(title=name, status='…', msg='', color="%s%s"%(Color.YELLOW, Color.BOLD), reset=Color.NORMAL)
-    output_lines[idx] = template.format(title=name, status='░', msg='', color="%s%s"%(Color.YELLOW, Color.BOLD), reset=Color.NORMAL)
+    out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
     error = []
     # while True:
@@ -78,73 +71,116 @@ def exec_task(output_lines, idx, name, cmd, results, indent=False, last=False):
     #         if fd == p.stdout.fileno():
     #             #read = preprocess(p.stdout.readline())
     #             read = preprocess(p.stdout.read())
-    #             output_lines[idx] = template.format(title=name, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    #             out_proxy[idx] = template.format(title=name, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
     #
     #         elif fd == p.stderr.fileno():
     #             #read = preprocess(p.stderr.readline())
     #             read = preprocess(p.stderr.read())
     #             error.append(read.rstrip())
-    #             #output_lines[idx] = template.format(title=name, msg="Error:" + read.split('\n')[0], color=Color.RED, reset=Color.NORMAL)
-    #             output_lines[idx] = template.format(title=name, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    #             #out_proxy[idx] = template.format(title=name, msg="Error:" + read.split('\n')[0], color=Color.RED, reset=Color.NORMAL)
+    #             out_proxy[idx] = template.format(title=name, msg="%sWorking... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
     #     if p.poll() != None:
     #         break
     #
     #
     # #read = preprocess(p.stdout.readline())
     # read = preprocess(p.stdout.read())
-    # output_lines[idx] = template.format(title=name, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    # out_proxy[idx] = template.format(title=name, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
     #
     # #read = preprocess(p.stderr.readline())
     # read = preprocess(p.stderr.read())
     # error.append(read.rstrip())
-    # output_lines[idx] = template.format(title=name, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
+    # out_proxy[idx] = template.format(title=name, msg="%sDone... %s%s" % (Color.YELLOW, Color.NORMAL, ":)"), color=Color.NORMAL, reset=Color.NORMAL)
 
     p.communicate()
     p.wait()
 
+    status = TaskStatus.successful
     if p.returncode != 0:
+        status = TaskStatus.failed
         EXIT = True
-        if len(error) > 0:
-            output_lines[idx] = template.format(title=name, status="█", msg="%s Error (%d): stderr to follow...%s" % (Color.RED+Color.BOLD,p.returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-        else:
-            output_lines[idx] = template.format(title=name, status="█", msg="%s Error (%d)%s" % (Color.RED+Color.BOLD,p.returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-    else:
-        output_lines[idx] = template.format(title=name, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
+    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=name, returncode=p.returncode, stderr=len(error) > 0, stdout=None, is_last=is_last)
     results[idx] = Result(name, cmd, p.returncode, "\n".join(error))
 
 
+def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout=None, is_last=False):
 
-def step_number_format(idx, length, name):
-    return "%s%s〔%s/%s〕" % (name, Color.NORMAL+Color.PURPLE,idx+1, length)
+    if is_parallel and is_last:
+        template = LAST_PARALLEL_TEMPLATE
+    elif is_parallel:
+        template = PARALLEL_TEMPLATE
+    else:
+        template = TEMPLATE
+
+    # has exited...
+    if returncode != None:
+        if returncode != 0:
+
+            if stderr != None:
+                return template.format(title=title, status="█", msg="%s Error (%d): stderr to follow...%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+            return template.format(title=title, status="█", msg="%s Error (%d)%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+        return template.format(title=title, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
+
+    # is still running
+    if status in (TaskStatus.init, TaskStatus.running):
+        return template.format(title=title, status='░', msg='', color=Color.YELLOW, reset=Color.NORMAL)
+    elif status in (TaskStatus.successful, ):
+        return template.format(title=title, status='█', msg='', color=Color.GREEN, reset=Color.NORMAL)
+    return template.format(title=title, status='?', msg='', color=Color.RED, reset=Color.NORMAL)
 
 
 class TaskSet:
-    def __init__(self, tasks, title=None):
+    def __init__(self, tasks, title, num, total):
         self.tasks = tasks
+        self.num = num
+        self.total = total
         self.title = title
+
+    @property
+    def formatted_title(self):
+        title = Color.BOLD + self.title + Color.NORMAL
+        return "{title}{step}".format(title=title, step=self.formatted_step_num)
+
+    @property
+    def formatted_step_num(self):
+        return "%s〔%s/%s〕%s" % (Color.NORMAL+Color.PURPLE, self.num, self.total, Color.NORMAL)
+
+    @property
+    def is_parallel(self):
+        return len(self.tasks) > 1
 
     def execute(self):
         offset = 0
-        if self.title:
+
+        if self.is_parallel:
             offset = 1
 
-        with output(output_type='list', initial_len=len(self.tasks)+offset, interval=0) as output_lines:
-            if self.title:
-                output_lines[0] = TEMPLATE.format(title="{}{}{}".format(Color.BOLD,self.title,Color.NORMAL), status='░', msg='', color=Color.YELLOW, reset=Color.NORMAL)
+        with output(output_type='list', initial_len=len(self.tasks)+offset, interval=0) as out_proxy:
+            if self.is_parallel:
+                out_proxy[0] = format_step(is_parallel=False, status=TaskStatus.init, title=self.formatted_title)
+
             proc = []
             results = [None]*(len(self.tasks)+offset)
             for idx, (name, cmd) in enumerate(self.tasks.items()):
                 time.sleep(0.01)
 
-                p = threading.Thread(target=exec_task, args=(output_lines, idx+offset, name, cmd, results, len(self.tasks)!=1, idx==len(self.tasks)-1))
+                if not self.is_parallel:
+                    name+=self.formatted_step_num
+
+                p = threading.Thread(target=exec_task, args=(out_proxy, idx+offset, name, cmd, results, len(self.tasks)>1, idx==len(self.tasks)-1))
                 proc.append(p)
                 p.start()
 
             [p.join() for p in proc]
 
-            if self.title:
-                output_lines[0] = TEMPLATE.format(title="{}{}{}".format(Color.BOLD,self.title,Color.NORMAL), status='█', msg='', color=Color.GREEN, reset=Color.NORMAL)
+            status = TaskStatus.successful
+            for result in results:
+                if result != None and result.returncode != 0:
+                    status = TaskStatus.failed
+
+            if self.is_parallel:
+                out_proxy[0] = format_step(is_parallel=False, status=status, title=self.formatted_title)
 
         for result in results:
             if result != None and result.returncode != 0:
@@ -178,11 +214,9 @@ class Program:
 
     def _build_serial(self, idx, options):
         name, cmd = self._process_task(options, bold_name=False)
-        return TaskSet(tasks={step_number_format(idx, self.num_tasks, name): cmd})
+        return TaskSet(tasks={name: cmd}, title=name, num=idx+1, total=self.num_tasks)
 
     def _build_parallel(self, idx, options):
-        global INDENT
-        INDENT = INDENT_LEN
         tasks = collections.OrderedDict()
 
         if 'title' not in options:
@@ -196,7 +230,7 @@ class Program:
             name, cmd = self._process_task(task_options)
             tasks[name] = cmd
 
-        return TaskSet(tasks, title=step_number_format(idx, self.num_tasks, title))
+        return TaskSet(tasks, title=title, num=idx+1, total=self.num_tasks)
 
     def _process_task(self, options, bold_name=False):
         if isinstance(options, dict):
