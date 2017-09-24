@@ -13,7 +13,7 @@ Options:
   -v  --version      Show version.
 """
 from docopt import docopt
-from functools import partial
+from frozendict import frozendict
 from enum import Enum
 import collections
 import subprocess
@@ -34,9 +34,11 @@ SUPRESS_OUT = True
 TEMPLATE               = " {color}{status}{reset} {title:30s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:30s} {msg}"
 LAST_PARALLEL_TEMPLATE = " {color}{status}{reset}  └─ {title:30s} {msg}"
+ERROR_TEMPLATE         = " {color}{status}{reset} {msg}"
 
 EXIT = False
 
+Task = collections.namedtuple("Task", "name cmd options")
 Result = collections.namedtuple("Result", "name cmd returncode stderr")
 
 
@@ -70,8 +72,8 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     if returncode != None:
         if returncode != 0:
             if stderr != None and len(stderr) > 0:
-                return template.format(title=title, status="█", msg="%s Error (%d): stderr to follow...%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-            return template.format(title=title, status="█", msg="%s Error (%d)%s" % (Color.RED+Color.BOLD, returncode, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+                return template.format(title=title, status="█", msg="%s Failed! (stderr to follow...)%s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+            return template.format(title=title, status="█", msg="%s Failed! %s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
         return template.format(title=title, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
     output = ''
@@ -88,15 +90,34 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
         return template.format(title=title, status='░', msg=output, color=Color.YELLOW, reset=Color.NORMAL)
     elif status in (TaskStatus.successful, ):
         return template.format(title=title, status='█', msg=output, color=Color.GREEN, reset=Color.NORMAL)
-    return template.format(title=title, status='?', msg="UMM?", color=Color.RED, reset=Color.NORMAL)
+    return template.format(title=title, status='█', msg="", color=Color.RED, reset=Color.NORMAL)
+
+def format_error(output, extra=None):
+    ret = []
+    lines = output.split('\n')
+    for idx, line in enumerate(lines):
+        line = "%s%s%s" % (Color.RED+Color.BOLD, line, Color.NORMAL)
+        if idx == 0:
+            ret.append( ERROR_TEMPLATE.format(status="█➜", msg=line, color=Color.RED, reset=Color.NORMAL) )
+        else:
+            ret.append( ERROR_TEMPLATE.format(status="░   ", msg=line, color=Color.RED, reset=Color.NORMAL) )
+
+    if extra:
+        lines = extra.split('\n')
+        for idx, line in enumerate(lines):
+            line = "%s%s%s" % (Color.RED, line, Color.NORMAL)
+            ret.append( ERROR_TEMPLATE.format(status="░   ", msg=line, color=Color.RED, reset=Color.NORMAL) )
 
 
-def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=False):
+    return "\n".join(ret)
+    # return output
+
+def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, name_suffix=''):
     global EXIT
 
     error, out = [], []
-    p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=None, is_last=is_last)
+    p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
     # This needs to happen, however, when reading you shouldn't depend on there being line breaks at reasonable times...
     # in fact, don't depend on any!
@@ -112,14 +133,14 @@ def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=Fal
                     #stdout = preprocess(p.stdout.read())
                     if stdout != None and len(stdout.strip()) > 0:
                         #print repr(read)
-                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=stdout, is_last=is_last)
+                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=stdout, is_last=is_last)
 
                 elif fd == p.stderr.fileno():
                     stderr = preprocess(p.stderr.readline())
                     #stderr = preprocess(p.stderr.read())
                     if stderr != None and len(stderr.strip()) > 0:
                         error.append(stderr.rstrip())
-                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=stderr, stdout=None, is_last=is_last)
+                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=stderr, stdout=None, is_last=is_last)
             if p.poll() != None:
                 break
 
@@ -132,16 +153,18 @@ def exec_task(out_proxy, idx, name, cmd, results, is_parallel=False, is_last=Fal
         # out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=read, stdout=None, is_last=is_last)
 
     else:
-        p.communicate()
+        stdout, stderr = p.communicate()
         p.wait()
+        error = [stderr]
 
     status = TaskStatus.successful
     if p.returncode != 0:
         status = TaskStatus.failed
-        EXIT = True
+        if ('stop_on_failure' in task.options and task.options['stop_on_failure']) or ('stop_on_failure' not in task.options):
+            EXIT = True
 
-    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=name, returncode=p.returncode, stderr=error, stdout=None, is_last=is_last)
-    results[idx] = Result(name, cmd, p.returncode, "\n".join(error))
+    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=task.name+name_suffix, returncode=p.returncode, stderr=error, stdout=None, is_last=is_last)
+    results[idx] = Result(task.name, task.cmd, p.returncode, "\n".join(error))
 
 
 class TaskSet:
@@ -177,13 +200,14 @@ class TaskSet:
 
             proc = []
             results = [None]*(len(self.tasks)+offset)
-            for idx, (name, cmd) in enumerate(self.tasks.items()):
+            for idx, (name, task) in enumerate(self.tasks.items()):
                 time.sleep(0.01)
 
+                name_suffix = ''
                 if not self.is_parallel:
-                    name+=self.formatted_step_num
+                    name_suffix = self.formatted_step_num
 
-                p = threading.Thread(target=exec_task, args=(out_proxy, idx+offset, name, cmd, results, len(self.tasks)>1, idx==len(self.tasks)-1))
+                p = threading.Thread(target=exec_task, args=(out_proxy, idx+offset, task, results, len(self.tasks)>1, idx==len(self.tasks)-1, name_suffix))
                 proc.append(p)
                 p.start()
 
@@ -201,9 +225,9 @@ class TaskSet:
         for result in results:
             if result != None and result.returncode != 0:
                 err_idx += 1
-                print "\n%sError %d: task '%s' failed with error (returncode:%s)%s" % (Color.BOLD+Color.RED, err_idx, no_ansi(result.name.split('〔')[0]), result.returncode, Color.NORMAL)
-                if result.stderr:
-                    print Color.RED + result.stderr.strip() + Color.NORMAL
+
+                error_msg = "Error %d: task '%s' failed with error (returncode:%s)" % (err_idx, no_ansi(result.name.split('〔')[0]), result.returncode)
+                print format_error(error_msg, extra=result.stderr)
 
 class Program:
 
@@ -219,9 +243,12 @@ class Program:
 
     def _parse(self):
         yaml_obj = yaml.load(open(self.yaml_file,'r').read())
-        self.num_tasks = len(yaml_obj)
+        if 'tasks' not in yaml_obj:
+            raise RuntimeError("Require tasks option at root")
 
-        for idx, item in enumerate(yaml_obj):
+        self.num_tasks = len(yaml_obj['tasks'])
+
+        for idx, item in enumerate(yaml_obj['tasks']):
             if 'cmd' in item.keys():
                 self.tasks.append(self._build_serial(idx, item))
             elif 'parallel' in item.keys():
@@ -230,8 +257,9 @@ class Program:
                 raise RuntimeError("Unknown config item: %s" % repr(item))
 
     def _build_serial(self, idx, options):
-        name, cmd = self._process_task(options, bold_name=False)
-        return TaskSet(tasks={name: cmd}, title=name, num=idx+1, total=self.num_tasks)
+        name, cmd, remaining_options = self._process_task(options, bold_name=False)
+        tasks = {name: Task(name, cmd, remaining_options)}
+        return TaskSet(tasks=tasks, title=name, num=idx+1, total=self.num_tasks)
 
     def _build_parallel(self, idx, options):
         tasks = collections.OrderedDict()
@@ -244,8 +272,8 @@ class Program:
             raise RuntimeError('Parallel option requires tasks. Given: %s' % repr(options))
 
         for task_options in options['tasks']:
-            name, cmd = self._process_task(task_options)
-            tasks[name] = cmd
+            name, cmd, remaining_options = self._process_task(task_options)
+            tasks[name] = Task(name, cmd, remaining_options)
 
         return TaskSet(tasks, title=title, num=idx+1, total=self.num_tasks)
 
@@ -253,20 +281,24 @@ class Program:
         if isinstance(options, dict):
             if 'name' in options and 'cmd' in options:
                 name, cmd = str(options['name']), options['cmd']
+                del options['name']
+                del options['cmd']
             elif 'cmd' in options:
                 name, cmd = options['cmd'], options['cmd']
+                del options['cmd']
             else:
                 raise RuntimeError("Task requires a name and cmd")
 
         if bold_name:
             name = "%s%s%s" % (Color.BOLD, name, Color.NORMAL)
 
-        return name, cmd
+        return name, cmd, frozendict(options)
 
     def execute(self):
         self._parse()
         for task_set in self.tasks:
             if EXIT:
+                print "Aborted!"
                 sys.exit(1)
             task_set.execute()
 

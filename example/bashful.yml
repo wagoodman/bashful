@@ -1,32 +1,43 @@
 # Note: the cmd cwd is relative to where the script is designed to run, in
 # this case, in the repo root dir.
-- name: serial four
-  cmd: example/jitter.sh 4
+config:
 
-- cmd: example/jitter.sh 3
 
-- parallel:
-    title: Some title that works for these things...
-    tasks:
-      - name: five
-        cmd: example/jitter.sh 5
+tasks:
+  - name: continue on fail
+    cmd: example/error.sh 2
+    stop_on_failure: false
 
-      - name: 7
-        cmd: example/jitter.sh 7
+  - name: serial four
+    cmd: example/jitter.sh 4
 
-      - name: eight
-        cmd: example/jitter.sh 8
+  - cmd: example/jitter.sh 3
 
-      - name: oops
-        cmd: example/error.sh 8
+  - parallel:
+      title: Some title that works for these things...
+      tasks:
+        - name: five
+          cmd: example/jitter.sh 5
 
-      - cmd: example/jitter.sh 12
+        - name: 7
+          cmd: example/jitter.sh 7
 
-      - name: ten
-        cmd: example/jitter.sh 10
+        - name: eight
+          cmd: example/jitter.sh 8
 
-      - name: eleven
-        cmd: example/jitter.sh 11
+        - name: oops
+          cmd: example/error.sh 8
 
-- name: Done.
-  cmd: echo "Complete!"
+        - cmd: example/jitter.sh 12
+
+        - name: ummm oops again
+          cmd: example/error.sh 8
+
+        - name: ten
+          cmd: example/jitter.sh 10
+
+        - name: eleven
+          cmd: example/jitter.sh 11
+
+  - name: Done.
+    cmd: echo "Complete!"

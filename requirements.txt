@@ -3,3 +3,4 @@ PyYaml
 six
 docopt
 enum
+frozendict
