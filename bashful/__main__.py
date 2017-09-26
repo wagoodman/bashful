@@ -144,7 +144,7 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
     # in fact, don't depend on any!
 
 
-    stdout_audit = collections.deque(maxlen=100)
+    stdout_audit, stderr_audit = collections.deque(maxlen=100), []
     stdout, stderr = [],[]
     if not SUPRESS_OUT:
         while True:
@@ -173,7 +173,7 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
                         if stderr_chr == "\n" or len(stderr) > LIMIT:
 
                             out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=no_ansi(preprocess("".join(stderr))), stdout=None, is_last=is_last)
-                            error.append("".join(stderr))
+                            stderr_audit.append("".join(stderr))
                             stderr = []
 
             if p.poll() != None:
@@ -183,13 +183,13 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
         out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=read, is_last=is_last)
 
         read = no_ansi(preprocess(p.stderr.read()))
-        error.append(read.rstrip())
+        stderr_audit.append(read.rstrip())
         out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=read, stdout=None, is_last=is_last)
 
     else:
         out, err = p.communicate()
         p.wait()
-        stderr = [err]
+        stderr_audit = [err]
         stdout_audit = [out]
 
     status = TaskStatus.successful
@@ -198,8 +198,8 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
         if ('stop_on_failure' in task.options and task.options['stop_on_failure']) or ('stop_on_failure' not in task.options):
             EXIT = True
 
-    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=task.name+name_suffix, returncode=p.returncode, stderr=stderr, stdout=None, is_last=is_last)
-    results[idx] = Result(task.name, task.cmd, p.returncode, "\n".join(stderr), "\n".join(stdout_audit))
+    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=task.name+name_suffix, returncode=p.returncode, stderr=stderr_audit, stdout=None, is_last=is_last)
+    results[idx] = Result(task.name, task.cmd, p.returncode, "\n".join(stderr_audit), "\n".join(stdout_audit))
 
 
 class TaskSet:
