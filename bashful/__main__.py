@@ -26,7 +26,9 @@ import time
 import yaml
 import sys
 import io
+import os
 
+from pyspin import spin
 import six
 if six.PY2:
     from backports.shutil_get_terminal_size import get_terminal_size
@@ -38,6 +40,7 @@ from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
 
 SUPRESS_OUT = True
+SPINNER = False
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -140,7 +143,6 @@ LIMIT = 500
 def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, name_suffix=''):
     global EXIT
 
-    p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
     # This needs to happen, however, when reading you shouldn't depend on there being line breaks at reasonable times...
@@ -149,7 +151,17 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
 
     stdout_audit, stderr_audit = collections.deque(maxlen=100), []
     stdout, stderr = [],[]
-    if not SUPRESS_OUT:
+    if SPINNER:
+        with open(os.devnull, 'w') as devnull:
+            p = subprocess.Popen(shlex.split(task.cmd), stdout=devnull, stderr=devnull)
+            spinner = spin.Spinner(spin.Box1)
+            while p.returncode == None:
+                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=unicode(spinner.next()).encode('utf8'), is_last=is_last)
+                time.sleep(0.25)
+                p.poll()
+            
+    elif not SUPRESS_OUT:
+        p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         while True:
             reads = [p.stdout.fileno(), p.stderr.fileno()]
             ret = select.select(reads, [], [])
@@ -176,6 +188,7 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
                         if stderr_chr == "\n" or len(stderr) > LIMIT:
 
                             out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=no_ansi(preprocess("".join(stderr))), stdout=None, is_last=is_last)
+
                             stderr_audit.append("".join(stderr))
                             stderr = []
 
@@ -190,6 +203,7 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
         out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=read, stdout=None, is_last=is_last)
 
     else:
+        p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = p.communicate()
         p.wait()
         stderr_audit = [err]
