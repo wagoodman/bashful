@@ -18,6 +18,7 @@ from enum import Enum
 import collections
 import subprocess
 import threading
+import logging
 import signal
 import select
 import shlex
@@ -26,20 +27,28 @@ import yaml
 import sys
 import io
 
+import six
+if six.PY2:
+    from backports.shutil_get_terminal_size import get_terminal_size
+else:
+    from shutil import get_terminal_size
+
 from bashful.version import __version__
 from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
 
 SUPRESS_OUT = True
-TEMPLATE               = " {color}{status}{reset} {title:30s} {msg}"
-PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:30s} {msg}"
-LAST_PARALLEL_TEMPLATE = " {color}{status}{reset}  └─ {title:30s} {msg}"
+LOGGING = False
+TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
+PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
+LAST_PARALLEL_TEMPLATE = " {color}{status}{reset}  └─ {title:25s} {msg}"
 ERROR_TEMPLATE         = " {color}{status}{reset} {msg}"
+
 
 EXIT = False
 
 Task = collections.namedtuple("Task", "name cmd options")
-Result = collections.namedtuple("Result", "name cmd returncode stderr")
+Result = collections.namedtuple("Result", "name cmd returncode stderr stdout")
 
 class TaskStatus(Enum):
     init = 0
@@ -80,12 +89,23 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
         return template.format(title=title, status=FILLED_CHAR, msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
     output = ''
+    remaining_space = 0
+    if stdout or stderr:
+        cols, rows = get_terminal_size()
+        dummy = template.format(title=title, status='x', msg="", color=Color.NORMAL, reset=Color.NORMAL)
+        dummy_no_ansi = no_ansi(unicode(dummy, 'utf-8'))
+        remaining_space = max((cols-5) - len(dummy_no_ansi), 0)
+
     if stdout:
-        output = "   ..."+stdout
+        output = " "+no_ansi(stdout)
     if stderr:
-        output = "   ..."+stderr
-    if len(output) > 50:
-        output = no_ansi(output[:50] + "...")
+        output = " "+no_ansi(stderr)
+    if len(output) > remaining_space:
+        output = no_ansi(output[:remaining_space-3] + "...")
+
+    if LOGGING:
+        logging.info(output.strip())
+    output = Color.PURPLE + output + Color.NORMAL
 
     # is still running
     if status in (TaskStatus.init, TaskStatus.running):
@@ -115,50 +135,65 @@ def format_error(output, extra=None):
     return "\n".join(ret)
     # return output
 
+LIMIT = 500
+
 def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, name_suffix=''):
     global EXIT
 
-    error, out = [], []
     p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
     # This needs to happen, however, when reading you shouldn't depend on there being line breaks at reasonable times...
     # in fact, don't depend on any!
 
+
+    stdout_audit, stderr_audit = collections.deque(maxlen=100), []
+    stdout, stderr = [],[]
     if not SUPRESS_OUT:
         while True:
             reads = [p.stdout.fileno(), p.stderr.fileno()]
             ret = select.select(reads, [], [])
-            stdout, stderr = '', ''
+
             for fd in ret[0]:
                 if fd == p.stdout.fileno():
-                    stdout = preprocess(p.stdout.readline())
-                    #stdout = preprocess(p.stdout.read())
-                    if stdout != None and len(stdout.strip()) > 0:
-                        #print repr(read)
-                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=stdout, is_last=is_last)
+                    stdout_chr = p.stdout.read(1)
+
+                    if stdout_chr != None and len(stdout_chr) > 0:
+                        stdout.append(stdout_chr)
+
+                        if stdout_chr == "\n" or len(stdout) > LIMIT:
+                            line = no_ansi(preprocess("".join(stdout)))
+                            stdout_audit.append(line)
+                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=line, is_last=is_last)
+                            stdout = []
 
                 elif fd == p.stderr.fileno():
-                    stderr = preprocess(p.stderr.readline())
-                    #stderr = preprocess(p.stderr.read())
-                    if stderr != None and len(stderr.strip()) > 0:
-                        error.append(stderr.rstrip())
-                        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=stderr, stdout=None, is_last=is_last)
+                    stderr_chr = p.stderr.read(1)
+
+                    if stderr_chr != None and len(stderr_chr) > 0:
+                        stderr.append(stderr_chr)
+
+                        if stderr_chr == "\n" or len(stderr) > LIMIT:
+
+                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=no_ansi(preprocess("".join(stderr))), stdout=None, is_last=is_last)
+                            stderr_audit.append("".join(stderr))
+                            stderr = []
+
             if p.poll() != None:
                 break
 
-        # read = preprocess(p.stdout.read())
-        # out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=None, stdout=read, is_last=is_last)
-        #
-        #
-        # read = preprocess(p.stderr.read())
-        # error.append(read.rstrip())
-        # out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=name, returncode=None, stderr=read, stdout=None, is_last=is_last)
+        read = no_ansi(preprocess(p.stdout.read()))
+        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=read, is_last=is_last)
+
+        read = no_ansi(preprocess(p.stderr.read()))
+        stderr_audit.append(read.rstrip())
+        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=read, stdout=None, is_last=is_last)
 
     else:
-        stdout, stderr = p.communicate()
+        out, err = p.communicate()
         p.wait()
-        error = [stderr]
+        stderr_audit = [err]
+        stdout_audit = [out]
 
     status = TaskStatus.successful
     if p.returncode != 0:
@@ -166,8 +201,8 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
         if ('stop_on_failure' in task.options and task.options['stop_on_failure']) or ('stop_on_failure' not in task.options):
             EXIT = True
 
-    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=task.name+name_suffix, returncode=p.returncode, stderr=error, stdout=None, is_last=is_last)
-    results[idx] = Result(task.name, task.cmd, p.returncode, "\n".join(error))
+    out_proxy[idx] = format_step(is_parallel=is_parallel, status=status, title=task.name+name_suffix, returncode=p.returncode, stderr=stderr_audit, stdout=None, is_last=is_last)
+    results[idx] = Result(task.name, task.cmd, p.returncode, "\n".join(stderr_audit), "\n".join(stdout_audit))
 
 
 class TaskSet:
@@ -230,7 +265,13 @@ class TaskSet:
                 err_idx += 1
 
                 error_msg = "Error %d: task '%s' failed with error (returncode:%s)" % (err_idx, no_ansi(result.name.split('〔')[0]), result.returncode)
-                print format_error(error_msg, extra=result.stderr)
+
+                extra = ""
+                if len(result.stderr) > 0:
+                    extra += Color.BOLD+Color.RED+"Last stderr:\n"+Color.NORMAL+Color.RED+result.stderr
+                if len(result.stdout) > 0:
+                    extra += Color.BOLD+Color.RED+"Last stdout:\n"+Color.NORMAL+Color.RED+result.stdout
+                print(format_error(error_msg, extra=extra))
 
 class Program:
 
@@ -301,7 +342,7 @@ class Program:
         self._parse()
         for task_set in self.tasks:
             if EXIT:
-                print "Aborted!"
+                print("Aborted!")
                 sys.exit(1)
             task_set.execute()
 
@@ -310,6 +351,8 @@ def main():
     version = 'bashful %s' % __version__
     args = docopt(__doc__, version=version)
 
+    if LOGGING:
+        logging.basicConfig(filename="build.log", level=logging.INFO)
     prog = Program(args['<ymlfile>'])
     prog.execute()
 
