@@ -41,7 +41,6 @@ EXIT = False
 Task = collections.namedtuple("Task", "name cmd options")
 Result = collections.namedtuple("Result", "name cmd returncode stderr")
 
-
 class TaskStatus(Enum):
     init = 0
     running = 1
@@ -59,6 +58,10 @@ class Color(Enum):
     UNDERLINE = '\033[4m'
     INVERSE = '\033[7m'
 
+#FILLED_CHAR  = "██"
+FILLED_CHAR  = Color.INVERSE + "  " + Color.NORMAL
+PENDING_CHAR = "░"
+#PENDING_CHAR = Color.INVERSE + "  " + Color.NORMAL
 
 def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout=None, is_last=False):
     if is_parallel and is_last:
@@ -72,9 +75,9 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     if returncode != None:
         if returncode != 0:
             if stderr != None and len(stderr) > 0:
-                return template.format(title=title, status="█", msg="%s Failed! (stderr to follow...)%s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-            return template.format(title=title, status="█", msg="%s Failed! %s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-        return template.format(title=title, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
+                return template.format(title=title, status=FILLED_CHAR, msg="%s Failed! (stderr to follow...)%s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+            return template.format(title=title, status=FILLED_CHAR, msg="%s Failed! %s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+        return template.format(title=title, status=FILLED_CHAR, msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
     output = ''
     if stdout:
@@ -87,10 +90,10 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     # is still running
     if status in (TaskStatus.init, TaskStatus.running):
         #print repr(stdout)
-        return template.format(title=title, status='░', msg=output, color=Color.YELLOW, reset=Color.NORMAL)
+        return template.format(title=title, status=PENDING_CHAR+PENDING_CHAR, msg=output, color=Color.YELLOW, reset=Color.NORMAL)
     elif status in (TaskStatus.successful, ):
-        return template.format(title=title, status='█', msg=output, color=Color.GREEN, reset=Color.NORMAL)
-    return template.format(title=title, status='█', msg="", color=Color.RED, reset=Color.NORMAL)
+        return template.format(title=title, status=FILLED_CHAR, msg=output, color=Color.GREEN, reset=Color.NORMAL)
+    return template.format(title=title, status=FILLED_CHAR, msg="", color=Color.RED, reset=Color.NORMAL)
 
 def format_error(output, extra=None):
     ret = []
@@ -98,15 +101,15 @@ def format_error(output, extra=None):
     for idx, line in enumerate(lines):
         line = "%s%s%s" % (Color.RED+Color.BOLD, line, Color.NORMAL)
         if idx == 0:
-            ret.append( ERROR_TEMPLATE.format(status="█➜", msg=line, color=Color.RED, reset=Color.NORMAL) )
+            ret.append( ERROR_TEMPLATE.format(status="%s%s➜"%(FILLED_CHAR, Color.RED), msg=line, color=Color.RED, reset=Color.NORMAL) )
         else:
-            ret.append( ERROR_TEMPLATE.format(status="░   ", msg=line, color=Color.RED, reset=Color.NORMAL) )
+            ret.append( ERROR_TEMPLATE.format(status="%s  "%PENDING_CHAR, msg=line, color=Color.RED, reset=Color.NORMAL) )
 
     if extra:
         lines = extra.split('\n')
         for idx, line in enumerate(lines):
             line = "%s%s%s" % (Color.RED, line, Color.NORMAL)
-            ret.append( ERROR_TEMPLATE.format(status="░   ", msg=line, color=Color.RED, reset=Color.NORMAL) )
+            ret.append( ERROR_TEMPLATE.format(status="%s  "%PENDING_CHAR, msg=line, color=Color.RED, reset=Color.NORMAL) )
 
 
     return "\n".join(ret)
