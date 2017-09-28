@@ -40,7 +40,7 @@ from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
 
 SUPRESS_OUT = True
-SPINNER = False
+SPINNER = True
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -156,7 +156,10 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
             p = subprocess.Popen(shlex.split(task.cmd), stdout=devnull, stderr=devnull)
             spinner = spin.Spinner(spin.Box1)
             while p.returncode == None:
-                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=unicode(spinner.next()).encode('utf8'), is_last=is_last)
+                try:
+                    out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=unicode(spinner.next()).encode('utf8'), is_last=is_last)
+                except:
+                    pass
                 time.sleep(0.25)
                 p.poll()
             
