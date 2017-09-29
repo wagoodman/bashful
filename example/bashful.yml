@@ -4,9 +4,10 @@ config:
 
 
 tasks:
-  - name: continue on fail
-    cmd: example/error.sh 2
-    stop_on_failure: false
+
+  # - name: continue on fail
+  #   cmd: example/error.sh 2
+  #   stop_on_failure: false
 
   - name: serial four
     cmd: example/jitter.sh 4
@@ -16,8 +17,8 @@ tasks:
   - parallel:
       title: Some title that works for these things...
       tasks:
-        - name: five
-          cmd: example/jitter.sh 5
+
+        - cmd: example/jitter.sh 12
 
         - name: 7
           cmd: example/jitter.sh 7
@@ -25,19 +26,20 @@ tasks:
         - name: eight
           cmd: example/jitter.sh 8
 
-        - name: oops
-          cmd: example/error.sh 8
+        # - name: oops
+        #   cmd: example/error.sh 8
 
-        - cmd: example/jitter.sh 12
-
-        - name: ummm oops again
-          cmd: example/error.sh 8
+        # - name: ummm oops again
+        #   cmd: example/error.sh 8
 
         - name: ten
           cmd: example/jitter.sh 10
 
+        - name: five
+          cmd: example/jitter.sh 5
+
         - name: eleven
           cmd: example/jitter.sh 11
 
-  - name: Done.
+  - name: Last thing to do....
     cmd: echo "Complete!"
