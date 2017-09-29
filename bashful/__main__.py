@@ -18,9 +18,11 @@ from enum import Enum
 import collections
 import subprocess
 import threading
+import termios
 import logging
 import signal
 import select
+import atexit
 import shlex
 import time
 import yaml
@@ -38,9 +40,12 @@ else:
 from bashful.version import __version__
 from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
+fd, old, new = None, None, None
 
-SUPRESS_OUT = True
-SPINNER = True
+
+SUPRESS_OUT = False
+SHOW_ERROR_FOOTER = False
+SPINNER = False
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -52,6 +57,21 @@ EXIT = False
 
 Task = collections.namedtuple("Task", "name cmd options")
 Result = collections.namedtuple("Result", "name cmd returncode stderr stdout")
+
+
+def enable_input():
+    if (fd, old, new) != (None, None, None):
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+def disable_input():
+    global fd, old, new
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    new = termios.tcgetattr(fd)
+    new[3] = new[3] & ~termios.ECHO
+    termios.tcsetattr(fd, termios.TCSADRAIN, new)
+    atexit.register(enable_input)
+
 
 class TaskStatus(Enum):
     init = 0
@@ -87,7 +107,7 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     if returncode != None:
         if returncode != 0:
             if stderr != None and len(stderr) > 0:
-                return template.format(title=title, status=FILLED_CHAR, msg="%s Failed! (stderr to follow...)%s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+                return template.format(title=title, status=FILLED_CHAR, msg="%s Failed!%s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
             return template.format(title=title, status=FILLED_CHAR, msg="%s Failed! %s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
         return template.format(title=title, status=FILLED_CHAR, msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
@@ -109,6 +129,7 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     if LOGGING:
         logging.info(output.strip())
     output = Color.PURPLE + output + Color.NORMAL
+    #print repr(output)
 
     # is still running
     if status in (TaskStatus.init, TaskStatus.running):
@@ -156,12 +177,10 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
             p = subprocess.Popen(shlex.split(task.cmd), stdout=devnull, stderr=devnull)
             spinner = spin.Spinner(spin.Box1)
             while p.returncode == None:
-                try:
-                    out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=unicode(spinner.next()).encode('utf8'), is_last=is_last)
-                except:
-                    pass
-                time.sleep(0.25)
+                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=unicode(spinner.next()).encode('utf8'), is_last=is_last)
                 p.poll()
+                if p.returncode == None:
+                    time.sleep(0.25)
             
     elif not SUPRESS_OUT:
         p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -278,7 +297,7 @@ class TaskSet:
 
         err_idx = 0
         for result in results:
-            if result != None and result.returncode != 0:
+            if SHOW_ERROR_FOOTER and result != None and result.returncode != 0:
                 err_idx += 1
 
                 error_msg = "Error %d: task '%s' failed with error (returncode:%s)" % (err_idx, no_ansi(result.name.split('〔')[0]), result.returncode)
@@ -357,6 +376,13 @@ class Program:
 
     def execute(self):
         self._parse()
+
+        def exit_handler(signal, frame):
+            print(Color.BOLD+'Canceled by the user'+Color.NORMAL)
+            sys.exit(0)
+        signal.signal(signal.SIGINT, exit_handler)
+
+        disable_input()
         for task_set in self.tasks:
             if EXIT:
                 print("Aborted!")

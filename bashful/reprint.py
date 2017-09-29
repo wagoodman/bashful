@@ -18,7 +18,23 @@ else:
     from shutil import get_terminal_size
     from builtins import input
 
-ANSI_RE = re.compile('\x1b\\[(K|.*?m)')
+# ANSI_RE = re.compile('\x1b\\[(K|.*?m)')
+# ansi_pattern = r'\x1b(' \
+#                r'(\[\??\d+[hl])|' \
+#                r'([=<>a-kzNM78])|' \
+#                r'([\(\)][a-b0-2])|' \
+#                r'(\[\d{0,2}[ma-dgkjqi])|' \
+#                r'(\[\d+;\d+[hfy]?)|' \
+#                r'(\[;?[hf])|' \
+#                r'(#[3-68])|' \
+#                r'([01356]n)|' \
+#                r'(O[mlnp-z]?)|' \
+#                r'(/Z)|' \
+#                r'(\d+)|' \
+#                r'(\[\?\d;\d0c)|' \
+#                r'(\d;\dR))'
+# ANSI_RE = re.compile(ansi_pattern, flags=re.IGNORECASE)
+ANSI_RE = re.compile('(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
 
 last_output_lines = 0
 overflow_flag = False
