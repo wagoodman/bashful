@@ -194,7 +194,7 @@ class output:
                 if not is_atty:
                     print("{}".format(value))
                 else:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def clear():
             global is_atty
@@ -205,14 +205,14 @@ class output:
                     super(output.SignalList, self).clear()
 
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def change(self, newlist):
             with self.lock:
                 self.clear()
                 self.extend(newlist)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def append(self, x):
             global is_atty
@@ -221,7 +221,7 @@ class output:
                 if not is_atty:
                     print("{}".format(x))
                 else:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def insert(self, i, x):
             global is_atty
@@ -230,21 +230,21 @@ class output:
                 if not is_atty:
                     print("{}".format(x))
                 else:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def remove(self, x):
             global is_atty
             with self.lock:
                 super(output.SignalList, self).remove(x)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def pop(self, i=-1):
             global is_atty
             with self.lock:
                 rs = super(output.SignalList, self).pop(i)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
                 return rs
 
         def sort(self, *args, **kwargs):
@@ -252,7 +252,7 @@ class output:
             with self.lock:
                 super(output.SignalList, self).sort(*args, **kwargs)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
     class SignalDict(collections.OrderedDict):
 
@@ -265,7 +265,7 @@ class output:
             with self.lock:
                 self.clear()
                 super(output.SignalDict, self).update(newlist)
-                self.parent.refresh(int(time.time()*1000), forced=False)
+                self.parent.refresh(forced=False)
 
         def __setitem__(self, key, value):
             global is_atty
@@ -274,21 +274,21 @@ class output:
                 if not is_atty:
                     print("{}: {}".format(key, value))
                 else:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def clear(self):
             global is_atty
             with self.lock:
                 super(output.SignalDict, self).clear()
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
         def pop(self, *args, **kwargs):
             global is_atty
             with self.lock:
                 rs = super(output.SignalDict, self).pop(*args, **kwargs)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
                 return rs
 
         def popitem(self, *args, **kwargs):
@@ -296,7 +296,7 @@ class output:
             with self.lock:
                 rs = super(output.SignalDict, self).popitem(*args, **kwargs)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
                 return rs
 
         def setdefault(self, *args, **kwargs):
@@ -304,7 +304,7 @@ class output:
             with self.lock:
                 rs = super(output.SignalDict, self).setdefault(*args, **kwargs)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
                 return rs
 
         def update(self, *args, **kwargs):
@@ -312,10 +312,10 @@ class output:
             with self.lock:
                 super(output.SignalDict, self).update(*args, **kwargs)
                 if is_atty:
-                    self.parent.refresh(int(time.time()*1000), forced=False)
+                    self.parent.refresh(forced=False)
 
 
-    def __init__(self, output_type="list", initial_len=1, interval=0.1, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
+    def __init__(self, output_type="list", initial_len=1, interval=10, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
         self.sort_key = sort_key
         self.no_warning = no_warning
         no_warning and print("All reprint warning diabled.")
@@ -341,10 +341,15 @@ class output:
         self.force_single_line = force_single_line
         self._last_update = int(time.time()*1000)
 
-    def refresh(self, new_time=0, forced=True):
+    def refresh(self, forced=True):
+        new_time=time.time()*1000
+        #print("%f >= %f" % (new_time - self._last_update, self.interval))
         if new_time - self._last_update >= self.interval or forced:
+            #print("SHOW")
             print_multi_line(self.warped_obj, self.force_single_line, sort_key=self.sort_key)
             self._last_update = new_time
+        #else:
+        #    print("denied!")
 
     def __enter__(self):
         global is_atty

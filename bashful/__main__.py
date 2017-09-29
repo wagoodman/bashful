@@ -37,7 +37,7 @@ from bashful.version import __version__
 from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
 
-SUPRESS_OUT = True
+SUPRESS_OUT = False
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -229,7 +229,7 @@ class TaskSet:
         if self.is_parallel:
             offset = 1
 
-        with output(output_type='list', initial_len=len(self.tasks)+offset, interval=0) as out_proxy:
+        with output(output_type='list', initial_len=len(self.tasks)+offset) as out_proxy:
             if self.is_parallel:
                 out_proxy[0] = format_step(is_parallel=False, status=TaskStatus.init, title=self.formatted_title)
 
