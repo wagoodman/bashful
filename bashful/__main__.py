@@ -45,7 +45,7 @@ fd, old, new = None, None, None
 
 SUPRESS_OUT = False
 SHOW_ERROR_FOOTER = False
-SPINNER = False
+SPINNER = True
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -172,7 +172,7 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
 
     stdout_audit, stderr_audit = collections.deque(maxlen=100), []
     stdout, stderr = [],[]
-    if SPINNER:
+    if SPINNER and SUPRESS_OUT:
         with open(os.devnull, 'w') as devnull:
             p = subprocess.Popen(shlex.split(task.cmd), stdout=devnull, stderr=devnull)
             spinner = spin.Spinner(spin.Box1)
@@ -184,9 +184,17 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
             
     elif not SUPRESS_OUT:
         p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        spinner = spin.Spinner(spin.Box1)
+        last_out = ''
+        spin_value = unicode(spinner.next()).encode('utf8')
+        last_spin = time.time()
         while True:
             reads = [p.stdout.fileno(), p.stderr.fileno()]
-            ret = select.select(reads, [], [])
+            ret = select.select(reads, [], [], 0.25)
+
+            if SPINNER and time.time() - last_spin >= 0.25:
+                spin_value = spinner.next()
+                last_spin = time.time()
 
             for fd in ret[0]:
                 if fd == p.stdout.fileno():
@@ -198,7 +206,11 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
                         if stdout_chr == "\n" or len(stdout) > LIMIT:
                             line = no_ansi(preprocess("".join(stdout)))
                             stdout_audit.append(line)
-                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=line, is_last=is_last)
+                            if SPINNER:
+                                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=u"%s %s" %(spin_value, line), is_last=is_last)
+                            else:
+                                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=line, is_last=is_last)
+                            last_out = line
                             stdout = []
 
                 elif fd == p.stderr.fileno():
@@ -208,21 +220,22 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
                         stderr.append(stderr_chr)
 
                         if stderr_chr == "\n" or len(stderr) > LIMIT:
-
-                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=no_ansi(preprocess("".join(stderr))), stdout=None, is_last=is_last)
-
+                            line = no_ansi(preprocess("".join(stderr)))
+                            if SPINNER:
+                                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=u"%s %s" %(spin_value, line), stdout=None, is_last=is_last)
+                            else:
+                                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=line, stdout=None, is_last=is_last)
+                            
+                            last_out = line
                             stderr_audit.append("".join(stderr))
                             stderr = []
 
+            if len(ret) == 0:
+                if SPINNER:
+                    out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=u"%s %s" %(spin_value, line), is_last=is_last)
+
             if p.poll() != None:
                 break
-
-        read = no_ansi(preprocess(p.stdout.read()))
-        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=read, is_last=is_last)
-
-        read = no_ansi(preprocess(p.stderr.read()))
-        stderr_audit.append(read.rstrip())
-        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=read, stdout=None, is_last=is_last)
 
     else:
         p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
