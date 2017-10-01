@@ -23,7 +23,7 @@ from multiprocessing.pool import ThreadPool
 from frozendict import frozendict
 from enum import Enum
 import collections
-import subprocess
+import subprocess32 as subprocess
 import threading
 import termios
 import logging
