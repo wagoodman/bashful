@@ -12,7 +12,7 @@ unset sw            # an array of the last '$swx' rates
 for i in $(seq 1 $lct) ;do
     sw[$i]=$(date +%s.%N)  # sliding window start time
     # ================
-      sleep .$RANDOM       #  ... process something here
+      #sleep .$RANDOM       #  ... process something here
     # ================
     now=$(date +%s.%N)     # current unix time
     if ((i<=swx)) ;then
@@ -30,6 +30,8 @@ for i in $(seq 1 $lct) ;do
     # msg="window: $swhz/s   overall: $oavg/s   $pc"
     #printf "\r%"$((${#i}+1))"s=\r%s" "" "$msg"
     # echo "$msg (from $1)"
-    echo .$RANDOM
+    echo "The start..." .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM
     #echo "Something $i Another (from $1)"
+    #pkill -15 -f jitter
+    #echo $?
 done

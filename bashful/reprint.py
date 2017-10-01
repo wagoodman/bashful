@@ -2,8 +2,9 @@
 from __future__ import print_function, division, unicode_literals
 
 # Note: this was tailored from https://github.com/Yinzo/reprint
-
+import logging
 import re
+import os
 import sys
 import time
 import threading
@@ -55,6 +56,15 @@ widths = [
 
 LOCK = threading.Lock()
 
+def stdout_write(s):
+    written = 0
+    while written < len(s):
+        try:
+            written = written + os.write(sys.stdout.fileno(), s[written:])
+        except OSError as e:
+            pass
+
+
 def get_char_width(char):
     global widths
     o = ord(char)
@@ -105,6 +115,8 @@ def print_line(content, columns, force_single_line):
 
     try:
         print(output, end='')
+        logging.info("Line: "+repr(output))
+        #stdout_write(output)
         sys.stdout.flush()
     except IOError:
         pass
@@ -186,10 +198,16 @@ def print_multi_line(content, force_single_line, sort_key):
         raise TypeError("Excepting types: list, dict. Got: {}".format(type(content)))
 
     # do extra blank lines to wipe the remaining of last output
-    print(" " * columns * (last_output_lines - lines), end="")
+    clear = " " * columns * (last_output_lines - lines)
+    print(clear, end="")
+    logging.info("Clear: "+repr(clear))
+    #stdout_write(" " * columns * (last_output_lines - lines))
 
     # back to the origin pos
-    print(magic_char * (max(last_output_lines, lines)-1), end="")
+    magic = magic_char * (max(last_output_lines, lines)-1)
+    print(magic, end="")
+    logging.info("Magic: "+repr(magic))
+    #stdout_write(magic_char * (max(last_output_lines, lines)-1))
     sys.stdout.flush()
     last_output_lines = lines
 

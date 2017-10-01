@@ -13,6 +13,13 @@ Options:
   -v  --version      Show version.
 """
 from docopt import docopt
+
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
+
+from functools import partial
+from multiprocessing.pool import ThreadPool
 from frozendict import frozendict
 from enum import Enum
 import collections
@@ -26,9 +33,9 @@ import atexit
 import shlex
 import time
 import yaml
-import sys
 import io
 import os
+
 
 from pyspin import spin
 import six
@@ -42,10 +49,9 @@ from bashful.reprint import output, ansi_len, preprocess, no_ansi
 
 fd, old, new = None, None, None
 
-
 SUPRESS_OUT = False
 SHOW_ERROR_FOOTER = False
-SPINNER = True
+SPINNER = False
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -75,9 +81,10 @@ def disable_input():
 
 class TaskStatus(Enum):
     init = 0
-    running = 1
-    failed = 2
-    successful = 3
+    pending = 1
+    running = 2
+    failed = 3
+    successful = 4
 
 class Color(Enum):
     PURPLE = '\033[95m'
@@ -132,7 +139,10 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     #print repr(output)
 
     # is still running
-    if status in (TaskStatus.init, TaskStatus.running):
+    if status in (TaskStatus.pending, ):
+        #print repr(stdout)
+        return template.format(title=title, status=PENDING_CHAR+PENDING_CHAR, msg=Color.BLUE+"<pending>"+Color.NORMAL, color=Color.YELLOW, reset=Color.NORMAL)
+    elif status in (TaskStatus.init, TaskStatus.running, ):
         #print repr(stdout)
         return template.format(title=title, status=PENDING_CHAR+PENDING_CHAR, msg=output, color=Color.YELLOW, reset=Color.NORMAL)
     elif status in (TaskStatus.successful, ):
@@ -161,8 +171,30 @@ def format_error(output, extra=None):
 
 LIMIT = 500
 
-def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, name_suffix=''):
+class TaskOptions:
+
+    def __init__(self, out_proxy, idx, task, results, is_parallel, is_last, name_suffix):
+        self.out_proxy = out_proxy
+        self.idx = idx
+        self.task = task
+        self.results = results
+        self.is_parallel = is_parallel
+        self.is_last = is_last
+        self.name_suffix = name_suffix
+
+def exec_task(options):
     global EXIT
+
+    if EXIT:
+        return
+
+    out_proxy = options.out_proxy
+    idx = options.idx
+    task = options.task
+    results = options.results
+    is_parallel = options.is_parallel
+    is_last = options.is_last
+    name_suffix = options.name_suffix
 
     out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
@@ -197,6 +229,8 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
                 last_spin = time.time()
 
             for fd in ret[0]:
+                # if p.returncode != None:
+                #     break
                 if fd == p.stdout.fileno():
                     stdout_chr = p.stdout.read(1)
 
@@ -281,11 +315,12 @@ class TaskSet:
         if self.is_parallel:
             offset = 1
 
+        pool = ThreadPool(1)
         with output(output_type='list', initial_len=len(self.tasks)+offset) as out_proxy:
             if self.is_parallel:
                 out_proxy[0] = format_step(is_parallel=False, status=TaskStatus.init, title=self.formatted_title)
 
-            proc = []
+            options = []
             results = [None]*(len(self.tasks)+offset)
             for idx, (name, task) in enumerate(self.tasks.items()):
                 time.sleep(0.01)
@@ -294,11 +329,21 @@ class TaskSet:
                 if not self.is_parallel:
                     name_suffix = self.formatted_step_num
 
-                p = threading.Thread(target=exec_task, args=(out_proxy, idx+offset, task, results, len(self.tasks)>1, idx==len(self.tasks)-1, name_suffix))
-                proc.append(p)
-                p.start()
+                is_parallel = len(self.tasks)>1
+                is_last = idx==len(self.tasks)-1
+                options.append( TaskOptions(out_proxy, idx+offset, task, results, is_parallel, is_last, name_suffix) )
 
-            [p.join() for p in proc]
+                out_proxy[idx+offset] = format_step(is_parallel=is_parallel, status=TaskStatus.pending, title=task.name, is_last=is_last)
+
+            pool.map(exec_task, options)
+            pool.close()
+            pool.join()
+
+            #     p = threading.Thread(target=exec_task, args=(out_proxy, idx+offset, task, results, len(self.tasks)>1, idx==len(self.tasks)-1, name_suffix))
+            #     proc.append(p)
+            #     p.start()
+
+            # [p.join() for p in proc]
 
             status = TaskStatus.successful
             for result in results:
@@ -391,6 +436,8 @@ class Program:
         self._parse()
 
         def exit_handler(signal, frame):
+            global EXIT
+            EXIT = True
             print(Color.BOLD+'Canceled by the user'+Color.NORMAL)
             sys.exit(0)
         signal.signal(signal.SIGINT, exit_handler)
@@ -407,8 +454,8 @@ def main():
     version = 'bashful %s' % __version__
     args = docopt(__doc__, version=version)
 
-    if LOGGING:
-        logging.basicConfig(filename="build.log", level=logging.INFO)
+    #if LOGGING:
+    logging.basicConfig(filename="build.log", level=logging.INFO)
     prog = Program(args['<ymlfile>'])
     prog.execute()
 
