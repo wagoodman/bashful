@@ -11,6 +11,8 @@ import threading
 from math import ceil
 import collections
 
+from Queue import Queue
+
 import six
 if six.PY2:
     from backports.shutil_get_terminal_size import get_terminal_size
@@ -115,7 +117,7 @@ def print_line(content, columns, force_single_line):
 
     try:
         print(output, end='')
-        logging.info("Line: "+repr(output))
+        #logging.info("Line: "+repr(output))
         #stdout_write(output)
         sys.stdout.flush()
     except IOError:
@@ -155,8 +157,30 @@ def lines_of_content(content, width):
             result += ceil((line_width(_k) + line_width(_v) + 2) / width)
     return int(result)
 
+queue = Queue()
 
 def print_multi_line(content, force_single_line, sort_key):
+    queue.put((list(content), force_single_line, sort_key))
+
+class ConsumerThread(threading.Thread):
+    def run(self):
+        last_item = time.time()
+        while True:
+            params = queue.get()
+            
+            ms = (time.time()-last_item)*1000
+            #logging.info("sleeping " + str(ms))
+            if ms < 10:
+                
+                time.sleep(1.0/1000.0)
+            _print_multi_line(*params)
+            last_item = time.time()
+
+THREAD = ConsumerThread()
+THREAD.daemon = True
+THREAD.start()
+
+def _print_multi_line(content, force_single_line, sort_key):
     """
     'sort_key' parameter only available in 'dict' mode
     """
@@ -200,13 +224,13 @@ def print_multi_line(content, force_single_line, sort_key):
     # do extra blank lines to wipe the remaining of last output
     clear = " " * columns * (last_output_lines - lines)
     print(clear, end="")
-    logging.info("Clear: "+repr(clear))
+    #logging.info("Clear: "+repr(clear))
     #stdout_write(" " * columns * (last_output_lines - lines))
 
     # back to the origin pos
     magic = magic_char * (max(last_output_lines, lines)-1)
     print(magic, end="")
-    logging.info("Magic: "+repr(magic))
+    #logging.info("Magic: "+repr(magic))
     #stdout_write(magic_char * (max(last_output_lines, lines)-1))
     sys.stdout.flush()
     last_output_lines = lines
@@ -222,71 +246,71 @@ class output:
             self.lock = threading.Lock()
 
         def __setitem__(self, key, value):
-            global is_atty
-            with self.lock:
-                super(output.SignalList, self).__setitem__(key, value)
-                if not is_atty:
-                    print("{}".format(value))
-                else:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalList, self).__setitem__(key, value)
+            if not is_atty:
+                print("{}".format(value))
+            else:
+                self.parent.refresh(forced=False)
 
         def clear():
-            global is_atty
-            with self.lock:
-                if six.PY2:
-                    self[:] = []
-                elif six.PY3:
-                    super(output.SignalList, self).clear()
 
-                if is_atty:
-                    self.parent.refresh(forced=False)
+            # with self.lock:
+            if six.PY2:
+                self[:] = []
+            elif six.PY3:
+                super(output.SignalList, self).clear()
+
+            if is_atty:
+                self.parent.refresh(forced=False)
 
         def change(self, newlist):
-            with self.lock:
-                self.clear()
-                self.extend(newlist)
-                if is_atty:
-                    self.parent.refresh(forced=False)
+            # with self.lock:
+            self.clear()
+            self.extend(newlist)
+            if is_atty:
+                self.parent.refresh(forced=False)
 
         def append(self, x):
-            global is_atty
-            with self.lock:
-                super(output.SignalList, self).append(x)
-                if not is_atty:
-                    print("{}".format(x))
-                else:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalList, self).append(x)
+            if not is_atty:
+                print("{}".format(x))
+            else:
+                self.parent.refresh(forced=False)
 
         def insert(self, i, x):
-            global is_atty
-            with self.lock:
-                super(output.SignalList, self).insert(i, x)
-                if not is_atty:
-                    print("{}".format(x))
-                else:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalList, self).insert(i, x)
+            if not is_atty:
+                print("{}".format(x))
+            else:
+                self.parent.refresh(forced=False)
 
         def remove(self, x):
-            global is_atty
-            with self.lock:
-                super(output.SignalList, self).remove(x)
-                if is_atty:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalList, self).remove(x)
+            if is_atty:
+                self.parent.refresh(forced=False)
 
         def pop(self, i=-1):
-            global is_atty
-            with self.lock:
-                rs = super(output.SignalList, self).pop(i)
-                if is_atty:
-                    self.parent.refresh(forced=False)
-                return rs
+
+            # with self.lock:
+            rs = super(output.SignalList, self).pop(i)
+            if is_atty:
+                self.parent.refresh(forced=False)
+            return rs
 
         def sort(self, *args, **kwargs):
-            global is_atty
-            with self.lock:
-                super(output.SignalList, self).sort(*args, **kwargs)
-                if is_atty:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalList, self).sort(*args, **kwargs)
+            if is_atty:
+                self.parent.refresh(forced=False)
 
     class SignalDict(collections.OrderedDict):
 
@@ -296,60 +320,60 @@ class output:
             self.lock = threading.Lock()
 
         def change(self, newlist):
-            with self.lock:
-                self.clear()
-                super(output.SignalDict, self).update(newlist)
-                self.parent.refresh(forced=False)
+            # with self.lock:
+            self.clear()
+            super(output.SignalDict, self).update(newlist)
+            self.parent.refresh(forced=False)
 
         def __setitem__(self, key, value):
-            global is_atty
-            with self.lock:
-                super(output.SignalDict, self).__setitem__(key, value)
-                if not is_atty:
-                    print("{}: {}".format(key, value))
-                else:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalDict, self).__setitem__(key, value)
+            if not is_atty:
+                print("{}: {}".format(key, value))
+            else:
+                self.parent.refresh(forced=False)
 
         def clear(self):
-            global is_atty
-            with self.lock:
-                super(output.SignalDict, self).clear()
-                if is_atty:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalDict, self).clear()
+            if is_atty:
+                self.parent.refresh(forced=False)
 
         def pop(self, *args, **kwargs):
-            global is_atty
-            with self.lock:
-                rs = super(output.SignalDict, self).pop(*args, **kwargs)
-                if is_atty:
-                    self.parent.refresh(forced=False)
-                return rs
+
+            # with self.lock:
+            rs = super(output.SignalDict, self).pop(*args, **kwargs)
+            if is_atty:
+                self.parent.refresh(forced=False)
+            return rs
 
         def popitem(self, *args, **kwargs):
-            global is_atty
-            with self.lock:
-                rs = super(output.SignalDict, self).popitem(*args, **kwargs)
-                if is_atty:
-                    self.parent.refresh(forced=False)
-                return rs
+
+            # with self.lock:
+            rs = super(output.SignalDict, self).popitem(*args, **kwargs)
+            if is_atty:
+                self.parent.refresh(forced=False)
+            return rs
 
         def setdefault(self, *args, **kwargs):
-            global is_atty
-            with self.lock:
-                rs = super(output.SignalDict, self).setdefault(*args, **kwargs)
-                if is_atty:
-                    self.parent.refresh(forced=False)
-                return rs
+
+            # with self.lock:
+            rs = super(output.SignalDict, self).setdefault(*args, **kwargs)
+            if is_atty:
+                self.parent.refresh(forced=False)
+            return rs
 
         def update(self, *args, **kwargs):
-            global is_atty
-            with self.lock:
-                super(output.SignalDict, self).update(*args, **kwargs)
-                if is_atty:
-                    self.parent.refresh(forced=False)
+
+            # with self.lock:
+            super(output.SignalDict, self).update(*args, **kwargs)
+            if is_atty:
+                self.parent.refresh(forced=False)
 
 
-    def __init__(self, output_type="list", initial_len=1, interval=10, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
+    def __init__(self, output_type="list", initial_len=1, interval=0, force_single_line=False, no_warning=False, sort_key=lambda x:x[0]):
         self.sort_key = sort_key
         self.no_warning = no_warning
         no_warning and print("All reprint warning diabled.")

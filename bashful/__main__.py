@@ -51,7 +51,7 @@ fd, old, new = None, None, None
 
 SUPRESS_OUT = False
 SHOW_ERROR_FOOTER = False
-SPINNER = False
+SPINNER = True
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -315,7 +315,7 @@ class TaskSet:
         if self.is_parallel:
             offset = 1
 
-        pool = ThreadPool(1)
+        pool = ThreadPool(4)
         with output(output_type='list', initial_len=len(self.tasks)+offset) as out_proxy:
             if self.is_parallel:
                 out_proxy[0] = format_step(is_parallel=False, status=TaskStatus.init, title=self.formatted_title)
