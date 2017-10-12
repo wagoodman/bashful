@@ -19,8 +19,7 @@ setuptools.setup(
                       'docopt',
                       'backports.shutil_get_terminal_size',
                       'six',
-                      'frozendict',
-                      'enum'
+                      'frozendict'
                       ],
     platforms='linux',
     keywords=['bash'],

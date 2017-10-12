@@ -13,20 +13,41 @@ Options:
   -v  --version      Show version.
 """
 from docopt import docopt
+
+import six
+import sys
+if six.PY2:
+    reload(sys)
+    sys.setdefaultencoding('utf8')
+
+from functools import partial
+from multiprocessing.pool import ThreadPool
 from frozendict import frozendict
-from enum import Enum
 import collections
-import subprocess
+
+if six.PY2:
+    import subprocess32 as subprocess
+else:
+    import subprocess
 import threading
+import termios
 import logging
 import signal
 import select
+import atexit
 import shlex
 import time
 import yaml
-import sys
 import io
+import os
 
+import fcntl
+
+# This makes it worse on mac
+# fcntl.fcntl(sys.stdout, fcntl.F_SETFL, fcntl.fcntl(sys.stdout, fcntl.F_GETFL) | os.O_NONBLOCK)
+# fcntl.fcntl(sys.stderr, fcntl.F_SETFL, fcntl.fcntl(sys.stderr, fcntl.F_GETFL) | os.O_NONBLOCK)
+
+from pyspin import spin
 import six
 if six.PY2:
     from backports.shutil_get_terminal_size import get_terminal_size
@@ -34,10 +55,13 @@ else:
     from shutil import get_terminal_size
 
 from bashful.version import __version__
-from bashful.reprint import output, ansi_len, preprocess, no_ansi
+from bashful.reprint import output, ansi_len, preprocess, no_ansi, queue, _print_multi_line
 
+fd, old, new = None, None, None
 
 SUPRESS_OUT = False
+SHOW_ERROR_FOOTER = False
+SPINNER = False
 LOGGING = False
 TEMPLATE               = " {color}{status}{reset} {title:25s} {msg}"
 PARALLEL_TEMPLATE      = " {color}{status}{reset}  ├─ {title:25s} {msg}"
@@ -51,13 +75,30 @@ Task = collections.namedtuple("Task", "name cmd options")
 Result = collections.namedtuple("Result", "name cmd returncode stderr stdout")
 
 
-class TaskStatus(Enum):
-    init = 0
-    running = 1
-    failed = 2
-    successful = 3
+def enable_input():
+    if (fd, old, new) != (None, None, None):
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
-class Color(Enum):
+def disable_input():
+    global fd, old, new
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    new = termios.tcgetattr(fd)
+    new[3] = new[3] & ~termios.ECHO
+    termios.tcsetattr(fd, termios.TCSADRAIN, new)
+    atexit.register(enable_input)
+
+def unicode(s, encoding='utf8'):
+    return s
+
+class TaskStatus:
+    init = 0
+    pending = 1
+    running = 2
+    failed = 3
+    successful = 4
+
+class Color:
     PURPLE = '\033[95m'
     BLUE = '\033[94m'
     GREEN = '\033[92m'
@@ -68,6 +109,10 @@ class Color(Enum):
     UNDERLINE = '\033[4m'
     INVERSE = '\033[7m'
 
+#FILLED_CHAR  = "██"
+FILLED_CHAR  = Color.INVERSE + "  " + Color.NORMAL
+PENDING_CHAR = "░"
+#PENDING_CHAR = Color.INVERSE + "  " + Color.NORMAL
 
 def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout=None, is_last=False):
     if is_parallel and is_last:
@@ -81,9 +126,9 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     if returncode != None:
         if returncode != 0:
             if stderr != None and len(stderr) > 0:
-                return template.format(title=title, status="█", msg="%s Failed! (stderr to follow...)%s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-            return template.format(title=title, status="█", msg="%s Failed! %s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
-        return template.format(title=title, status="█", msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
+                return template.format(title=title, status=FILLED_CHAR, msg="%s Failed!%s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+            return template.format(title=title, status=FILLED_CHAR, msg="%s Failed! %s" % (Color.RED+Color.BOLD, Color.NORMAL), color=Color.RED, reset=Color.NORMAL)
+        return template.format(title=title, status=FILLED_CHAR, msg="", color="%s%s"%(Color.GREEN, Color.BOLD), reset=Color.NORMAL)
 
     output = ''
     remaining_space = 0
@@ -103,14 +148,18 @@ def format_step(is_parallel, status, title, returncode=None, stderr=None, stdout
     if LOGGING:
         logging.info(output.strip())
     output = Color.PURPLE + output + Color.NORMAL
+    #print repr(output)
 
     # is still running
-    if status in (TaskStatus.init, TaskStatus.running):
+    if status in (TaskStatus.pending, ):
         #print repr(stdout)
-        return template.format(title=title, status='░', msg=output, color=Color.YELLOW, reset=Color.NORMAL)
+        return template.format(title=title, status=PENDING_CHAR+PENDING_CHAR, msg=Color.BLUE+"<pending>"+Color.NORMAL, color=Color.YELLOW, reset=Color.NORMAL)
+    elif status in (TaskStatus.init, TaskStatus.running, ):
+        #print repr(stdout)
+        return template.format(title=title, status=PENDING_CHAR+PENDING_CHAR, msg=output, color=Color.YELLOW, reset=Color.NORMAL)
     elif status in (TaskStatus.successful, ):
-        return template.format(title=title, status='█', msg=output, color=Color.GREEN, reset=Color.NORMAL)
-    return template.format(title=title, status='█', msg="", color=Color.RED, reset=Color.NORMAL)
+        return template.format(title=title, status=FILLED_CHAR, msg=output, color=Color.GREEN, reset=Color.NORMAL)
+    return template.format(title=title, status=FILLED_CHAR, msg="", color=Color.RED, reset=Color.NORMAL)
 
 def format_error(output, extra=None):
     ret = []
@@ -118,15 +167,15 @@ def format_error(output, extra=None):
     for idx, line in enumerate(lines):
         line = "%s%s%s" % (Color.RED+Color.BOLD, line, Color.NORMAL)
         if idx == 0:
-            ret.append( ERROR_TEMPLATE.format(status="█➜", msg=line, color=Color.RED, reset=Color.NORMAL) )
+            ret.append( ERROR_TEMPLATE.format(status="%s%s➜"%(FILLED_CHAR, Color.RED), msg=line, color=Color.RED, reset=Color.NORMAL) )
         else:
-            ret.append( ERROR_TEMPLATE.format(status="░   ", msg=line, color=Color.RED, reset=Color.NORMAL) )
+            ret.append( ERROR_TEMPLATE.format(status="%s  "%PENDING_CHAR, msg=line, color=Color.RED, reset=Color.NORMAL) )
 
     if extra:
         lines = extra.split('\n')
         for idx, line in enumerate(lines):
             line = "%s%s%s" % (Color.RED, line, Color.NORMAL)
-            ret.append( ERROR_TEMPLATE.format(status="░   ", msg=line, color=Color.RED, reset=Color.NORMAL) )
+            ret.append( ERROR_TEMPLATE.format(status="%s  "%PENDING_CHAR, msg=line, color=Color.RED, reset=Color.NORMAL) )
 
 
     return "\n".join(ret)
@@ -134,10 +183,35 @@ def format_error(output, extra=None):
 
 LIMIT = 500
 
-def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, name_suffix=''):
+class TaskOptions:
+
+    def __init__(self, out_proxy, idx, task, results, is_parallel, is_last, name_suffix):
+        self.out_proxy = out_proxy
+        self.idx = idx
+        self.task = task
+        self.results = results
+        self.is_parallel = is_parallel
+        self.is_last = is_last
+        self.name_suffix = name_suffix
+
+def nest_len(l):
+    return sum([len(x) for x in l])
+
+def exec_task(options):
     global EXIT
 
-    p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if EXIT:
+        return
+
+
+    out_proxy = options.out_proxy
+    idx = options.idx
+    task = options.task
+    results = options.results
+    is_parallel = options.is_parallel
+    is_last = options.is_last
+    name_suffix = options.name_suffix
+
     out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=None, is_last=is_last)
 
     # This needs to happen, however, when reading you shouldn't depend on there being line breaks at reasonable times...
@@ -145,48 +219,78 @@ def exec_task(out_proxy, idx, task, results, is_parallel=False, is_last=False, n
 
 
     stdout_audit, stderr_audit = collections.deque(maxlen=100), []
-    stdout, stderr = [],[]
-    if not SUPRESS_OUT:
+    if SPINNER and SUPRESS_OUT:
+        with open(os.devnull, 'w') as devnull:
+            p = subprocess.Popen(shlex.split(task.cmd), stdout=devnull, stderr=devnull)
+            spinner = spin.Spinner(spin.Box1)
+            while p.returncode == None:
+                out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=unicode(spinner.next()).encode('utf8'), is_last=is_last)
+                p.poll()
+                if p.returncode == None:
+                    time.sleep(0.25)
+            
+    elif not SUPRESS_OUT:
+        p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        fcntl.fcntl(p.stdout, fcntl.F_SETFL, fcntl.fcntl(p.stdout, fcntl.F_GETFL) | os.O_NONBLOCK)
+        fcntl.fcntl(p.stderr, fcntl.F_SETFL, fcntl.fcntl(p.stderr, fcntl.F_GETFL) | os.O_NONBLOCK)
+
+        spinner = spin.Spinner(spin.Box1)
+        last_out = ''
+        spin_value = unicode(spinner.next()).encode('utf8')
+        last_spin = time.time()
         while True:
             reads = [p.stdout.fileno(), p.stderr.fileno()]
-            ret = select.select(reads, [], [])
+            ret = select.select(reads, [], [], 0.25)
+
+            if SPINNER and time.time() - last_spin >= 0.25:
+                spin_value = spinner.next()
+                last_spin = time.time()
 
             for fd in ret[0]:
+                # if p.returncode != None:
+                #     break
+                
                 if fd == p.stdout.fileno():
-                    stdout_chr = p.stdout.read(1)
+                    stdout = p.stdout.read()
 
-                    if stdout_chr != None and len(stdout_chr) > 0:
-                        stdout.append(stdout_chr)
-
-                        if stdout_chr == "\n" or len(stdout) > LIMIT:
-                            line = no_ansi(preprocess("".join(stdout)))
-                            stdout_audit.append(line)
+                    if stdout != None and len(stdout) > 0:
+                        #logging.info("OUT: " + repr(stdout))
+                        line = no_ansi(preprocess(stdout))
+                        stdout_audit.append(line)
+                        if SPINNER:
+                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=u"%s %s" %(spin_value, line), is_last=is_last)
+                        else:
                             out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=line, is_last=is_last)
-                            stdout = []
+                        last_out = line
+                        stdout = []
 
                 elif fd == p.stderr.fileno():
-                    stderr_chr = p.stderr.read(1)
+                    stderr = p.stderr.read()
+                    #logging.info(stderr)
 
-                    if stderr_chr != None and len(stderr_chr) > 0:
-                        stderr.append(stderr_chr)
+                    if stderr != None and len(stderr) > 0:
+                        #logging.info("ERR: " + repr(stderr))
+                        line = no_ansi(preprocess(stderr))
+                        if SPINNER:
+                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=u"%s %s" %(spin_value, line), stdout=None, is_last=is_last)
+                        else:
+                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=line, stdout=None, is_last=is_last)
+                        
+                        last_out = line
+                        stderr_audit.append("".join(stderr))
+                        stderr = []
+             
 
-                        if stderr_chr == "\n" or len(stderr) > LIMIT:
-
-                            out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=no_ansi(preprocess("".join(stderr))), stdout=None, is_last=is_last)
-                            stderr_audit.append("".join(stderr))
-                            stderr = []
+            if len(ret) == 0:
+                if SPINNER:
+                    out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=u"%s %s" %(spin_value, line), is_last=is_last)
 
             if p.poll() != None:
                 break
 
-        read = no_ansi(preprocess(p.stdout.read()))
-        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=None, stdout=read, is_last=is_last)
-
-        read = no_ansi(preprocess(p.stderr.read()))
-        stderr_audit.append(read.rstrip())
-        out_proxy[idx] = format_step(is_parallel=is_parallel, status=TaskStatus.running, title=task.name+name_suffix, returncode=None, stderr=read, stdout=None, is_last=is_last)
-
     else:
+        p = subprocess.Popen(shlex.split(task.cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = p.communicate()
         p.wait()
         stderr_audit = [err]
@@ -224,16 +328,18 @@ class TaskSet:
         return len(self.tasks) > 1
 
     def execute(self):
+        global done_processing
         offset = 0
 
         if self.is_parallel:
             offset = 1
 
+        pool = ThreadPool(4)
         with output(output_type='list', initial_len=len(self.tasks)+offset) as out_proxy:
             if self.is_parallel:
                 out_proxy[0] = format_step(is_parallel=False, status=TaskStatus.init, title=self.formatted_title)
 
-            proc = []
+            options = []
             results = [None]*(len(self.tasks)+offset)
             for idx, (name, task) in enumerate(self.tasks.items()):
                 time.sleep(0.01)
@@ -242,11 +348,43 @@ class TaskSet:
                 if not self.is_parallel:
                     name_suffix = self.formatted_step_num
 
-                p = threading.Thread(target=exec_task, args=(out_proxy, idx+offset, task, results, len(self.tasks)>1, idx==len(self.tasks)-1, name_suffix))
-                proc.append(p)
-                p.start()
+                is_parallel = len(self.tasks)>1
+                is_last = idx==len(self.tasks)-1
+                options.append( TaskOptions(out_proxy, idx+offset, task, results, is_parallel, is_last, name_suffix) )
 
-            [p.join() for p in proc]
+                out_proxy[idx+offset] = format_step(is_parallel=is_parallel, status=TaskStatus.pending, title=task.name, is_last=is_last)
+
+            done_processing = False
+
+            def signal_task_completion():
+                global done_processing
+                pool.map(exec_task, options)
+                pool.close()
+                pool.join()
+                done_processing = True
+                queue.put(None)
+            threading.Thread(target=signal_task_completion).start()
+
+            last_item = time.time()
+            while not done_processing:
+                params = queue.get()
+                if params == None:
+                    continue
+                
+                ms = (time.time()-last_item)*1000
+                #logging.info("sleeping " + str(ms))
+                if ms < 10:
+                    
+                    time.sleep(0.01)
+                _print_multi_line(*params)
+                last_item = time.time()
+
+
+            #     p = threading.Thread(target=exec_task, args=(out_proxy, idx+offset, task, results, len(self.tasks)>1, idx==len(self.tasks)-1, name_suffix))
+            #     proc.append(p)
+            #     p.start()
+
+            # [p.join() for p in proc]
 
             status = TaskStatus.successful
             for result in results:
@@ -258,7 +396,7 @@ class TaskSet:
 
         err_idx = 0
         for result in results:
-            if result != None and result.returncode != 0:
+            if SHOW_ERROR_FOOTER and result != None and result.returncode != 0:
                 err_idx += 1
 
                 error_msg = "Error %d: task '%s' failed with error (returncode:%s)" % (err_idx, no_ansi(result.name.split('〔')[0]), result.returncode)
@@ -337,19 +475,33 @@ class Program:
 
     def execute(self):
         self._parse()
+
+        def exit_handler(signal, frame):
+            global EXIT
+            EXIT = True
+            #exit_thread()
+            sys.exit(0)
+        signal.signal(signal.SIGINT, exit_handler)
+
+        disable_input()
         for task_set in self.tasks:
             if EXIT:
                 print("Aborted!")
                 sys.exit(1)
             task_set.execute()
+        #exit_thread()
 
+# def exit_thread():
+#     THREAD.exit = True
+#     queue.put(None)
+#     THREAD.join()
 
 def main():
     version = 'bashful %s' % __version__
     args = docopt(__doc__, version=version)
 
-    if LOGGING:
-        logging.basicConfig(filename="build.log", level=logging.INFO)
+    #if LOGGING:
+    logging.basicConfig(filename="build.log", level=logging.INFO)
     prog = Program(args['<ymlfile>'])
     prog.execute()
 

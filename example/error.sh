@@ -29,14 +29,15 @@ for i in $(seq 1 $lct) ;do
         sw1=$((i-swx+1))
         sww=$swx
     fi
-    bc=($(bc <<<"scale=2; $i/($now-$beg); $sww/($now-${sw[$sw1]})"))
-    oavg=${bc[0]}                  # overall average rate
-    swhz=${bc[1]}                  # sliding window rate
-    ((i>swx)) && unset sw[$sw1-1]  # remove old entry from sliding window list
-    ((tot==0)) && pc= || pc="progress: $(bc <<<"scale=1; x=($i*100)/$tot; if (x<1) print 0; x")%"
-    msg="window: $swhz/s   overall: $oavg/s   $pc"
+    # bc=($(bc <<<"scale=2; $i/($now-$beg); $sww/($now-${sw[$sw1]})"))
+    # oavg=${bc[0]}                  # overall average rate
+    # swhz=${bc[1]}                  # sliding window rate
+    # ((i>swx)) && unset sw[$sw1-1]  # remove old entry from sliding window list
+    # ((tot==0)) && pc= || pc="progress: $(bc <<<"scale=1; x=($i*100)/$tot; if (x<1) print 0; x")%"
+    # msg="window: $swhz/s   overall: $oavg/s   $pc"
     #printf "\r%"$((${#i}+1))"s=\r%s" "" "$msg"
-    echo "$msg (from $1)"
+    # echo "$msg (from $1)"
+    echo .$RANDOM
     #echo "Something $i Another (from $1)"
 done
 echo 'sweeeet'

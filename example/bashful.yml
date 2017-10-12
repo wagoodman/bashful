@@ -18,13 +18,29 @@ tasks:
       title: Some title that works for these things...
       tasks:
 
-        - cmd: example/jitter.sh 12
+        - cmd: example/jitter.sh 112000
 
-        - name: 7
-          cmd: example/jitter.sh 7
+        - cmd: example/jitter.sh 17000
 
-        - name: eight
-          cmd: example/jitter.sh 8
+        - cmd: example/jitter.sh 18000
+
+        - cmd: example/jitter.sh 114000
+
+        - cmd: example/jitter.sh 113000
+
+        - cmd: example/jitter.sh 19000
+
+        - cmd: example/jitter.sh 12000
+
+        - cmd: example/jitter.sh 7000
+
+        - cmd: example/jitter.sh 8000
+
+        - cmd: example/jitter.sh 14000
+
+        - cmd: example/jitter.sh 13000
+
+        - cmd: example/jitter.sh 9000
 
         # - name: oops
         #   cmd: example/error.sh 8
@@ -32,14 +48,17 @@ tasks:
         # - name: ummm oops again
         #   cmd: example/error.sh 8
 
-        - name: ten
-          cmd: example/jitter.sh 10
+        - cmd: example/jitter.sh 10000
 
-        - name: five
-          cmd: example/jitter.sh 5
+        - cmd: example/jitter.sh 5000
 
-        - name: eleven
-          cmd: example/jitter.sh 11
+        - cmd: example/jitter.sh 11000
+
+        - cmd: example/jitter.sh 15000
+
+        - cmd: example/jitter.sh 16000
+
+        - cmd: example/jitter.sh 17000
 
   - name: Last thing to do....
     cmd: echo "Complete!"
