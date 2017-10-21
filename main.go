@@ -82,9 +82,11 @@ type Config struct {
 }
 
 type CmdIR struct {
-	Action *Action
-	Status string
-	Stdout string
+	Action     *Action
+	Status     string
+	Stdout     string
+	Complete   bool
+	ReturnCode int
 }
 
 type PipeIR struct {
@@ -152,7 +154,7 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 // actually use a cmd
 func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	waiter.Add(1)
-	resultChan <- CmdIR{action, StatusPending, ""}
+	resultChan <- CmdIR{action, StatusPending, "", false, -1}
 
 	var waitStatus syscall.WaitStatus
 	var returnCode int
@@ -169,9 +171,9 @@ func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	select {
 	case stdoutMsg := <-stdoutChan:
-		resultChan <- CmdIR{action, StatusRunning, stdoutMsg.message}
+		resultChan <- CmdIR{action, StatusRunning, stdoutMsg.message, false, -1}
 	case stderrMsg := <-stderrChan:
-		resultChan <- CmdIR{action, StatusRunning, stderrMsg.message}
+		resultChan <- CmdIR{action, StatusRunning, stderrMsg.message, false, -1}
 	}
 
 	err := action.Command.Cmd.Wait()
@@ -186,14 +188,13 @@ func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	// note, this is a possible race condition: this thread may be modifying action
 	// while the main thread is reading these fields. Find a better way to do this.
 	// (without locking... just because...)
-	action.Command.ReturnCode = returnCode
-	action.Command.Complete = true
+
 	waiter.Done()
 
 	if returnCode == 0 {
-		resultChan <- CmdIR{action, StatusSuccess, ""}
+		resultChan <- CmdIR{action, StatusSuccess, "", true, returnCode}
 	} else {
-		resultChan <- CmdIR{action, StatusError, ""}
+		resultChan <- CmdIR{action, StatusError, "", true, returnCode}
 	}
 }
 
@@ -316,7 +317,10 @@ func (action *Action) process() {
 			eventAction := msgObj.Action
 
 			// update the state before displaying...
-			if eventAction.Command.Complete {
+			if msgObj.Complete {
+				eventAction.Command.Complete = true
+				eventAction.Command.ReturnCode = msgObj.ReturnCode
+
 				runningCmds--
 				// if a thread has freed up, start the next action (if there are any left)
 				if lastStartedAction < len(actions) {
