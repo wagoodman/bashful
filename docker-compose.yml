@@ -1,0 +1,9 @@
+version: "3"
+
+services:
+  app:
+    build: .
+    volumes:
+      - .:/go/src/github.com/wagoodman/bashful
+    working_dir: /go/src/github.com/wagoodman/bashful
+    command: go run main.go
