@@ -4,27 +4,27 @@ config:
   show-spinner: true
 tasks:
   - name: Verify environment
-    cmd: example/error.sh 1
+    cmd: example/jitter.sh 4
 
   - name: Cloning Repos
     tasks:
         - name: app1
           cmd: example/jitter.sh 3
         - name: another-app2
-          cmd: example/error.sh 4
+          cmd: example/jitter.sh 4
         - name: some-app3
           cmd: example/jitter.sh 5
         - name: some-lib-4
           cmd: example/jitter.sh 6
-        - name: interactive-5
+        - name: some-awesome-app-5
           cmd: example/jitter.sh 7
-        - name: profile
+        - name: watcher-app
           cmd: example/jitter.sh 8
         - name: public-6
           cmd: example/jitter.sh 9
         - name: utilities
-          cmd: example/jitter.sh 8
-        - name: style-guide
+          cmd: example/jitter.sh 1
+        - name: important-lib
           cmd: example/jitter.sh 7
         - name: yup-app-7
           cmd: example/jitter.sh 6
@@ -53,20 +53,20 @@ tasks:
         - name: app1
           cmd: example/jitter.sh 3
         - name: another-app2
-          cmd: example/jitter.sh 4
+          cmd: example/error.sh 4
         - name: some-app3
           cmd: example/jitter.sh 5
         - name: some-lib-4
           cmd: example/jitter.sh 6
-        - name: interactive-5
+        - name: some-awesome-app-5
           cmd: example/jitter.sh 7
-        - name: profile
+        - name: watcher-app
           cmd: example/jitter.sh 8
         - name: public-6
           cmd: example/jitter.sh 9
         - name: utilities
           cmd: example/jitter.sh 8
-        - name: style-guide
+        - name: important-lib
           cmd: example/jitter.sh 7
         - name: yup-app-7
           cmd: example/jitter.sh 6
