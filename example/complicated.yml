@@ -1,0 +1,74 @@
+config:
+  log: build.log
+  show-stdout: true
+  show-spinner: true
+tasks:
+  - name: Verify environment
+    cmd: example/error.sh 1
+
+  - name: Cloning Repos
+    tasks:
+        - name: app1
+          cmd: example/jitter.sh 3
+        - name: another-app2
+          cmd: example/error.sh 4
+        - name: some-app3
+          cmd: example/jitter.sh 5
+        - name: some-lib-4
+          cmd: example/jitter.sh 6
+        - name: interactive-5
+          cmd: example/jitter.sh 7
+        - name: profile
+          cmd: example/jitter.sh 8
+        - name: public-6
+          cmd: example/jitter.sh 9
+        - name: utilities
+          cmd: example/jitter.sh 8
+        - name: style-guide
+          cmd: example/jitter.sh 7
+        - name: yup-app-7
+          cmd: example/jitter.sh 6
+        - name: stuff-n-things
+          cmd: example/jitter.sh 5
+
+  - name: Installing dependencies
+    tasks:
+        - name: Oracle client
+          cmd: example/jitter.sh 3
+        - name: Google chrome
+          cmd: example/jitter.sh 4
+        - name: MD helper
+          cmd: example/jitter.sh 5
+        - name: Bridgy
+          cmd: example/jitter.sh 6
+
+  - name: Build Images
+    cmd: example/jitter.sh 3
+
+  - name: Gathering Secrets
+    cmd: example/jitter.sh 3
+
+  - name: Building and Migrating
+    tasks:
+        - name: app1
+          cmd: example/jitter.sh 3
+        - name: another-app2
+          cmd: example/jitter.sh 4
+        - name: some-app3
+          cmd: example/jitter.sh 5
+        - name: some-lib-4
+          cmd: example/jitter.sh 6
+        - name: interactive-5
+          cmd: example/jitter.sh 7
+        - name: profile
+          cmd: example/jitter.sh 8
+        - name: public-6
+          cmd: example/jitter.sh 9
+        - name: utilities
+          cmd: example/jitter.sh 8
+        - name: style-guide
+          cmd: example/jitter.sh 7
+        - name: yup-app-7
+          cmd: example/jitter.sh 6
+        - name: stuff-n-things
+          cmd: example/jitter.sh 5

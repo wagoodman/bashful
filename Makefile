@@ -1,27 +1,13 @@
-.PHONY: test upload clean bootstrap
+.PHONY: vendor build run
 
-test:
-	(. venv/bin/activate; \
-	tox; \
-	)
+all: vendor build run
 
-upload: #test
-	(. venv/bin/activate; \
-	python setup.py sdist upload; \
-	make clean; \
-	)
+vendor:
+	go get ./...
 
-clean:
-	rm -f MANIFEST
-	rm -rf build dist
+build: vendor
+	go build -v
 
-bootstrap: venv
-	. venv/bin/activate
-	venv/bin/pip install -e .
-	venv/bin/pip install --upgrade tox
-	make clean
-
-venv:
-	virtualenv venv
-	venv/bin/pip install --upgrade pip
-	venv/bin/pip install --upgrade setuptools
+run:
+	clear
+	go run main.go example/complicated.yml
