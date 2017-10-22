@@ -26,18 +26,13 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-type Line struct {
-	Status  string
-	Title   string
-	Msg     string
-	Spinner string
-}
-
 const (
 	MaxParallelCmds = 4
 )
 
 var (
+	Options                     ConfigOptions
+	ExitSignaled                = false
 	purple                      = color.ColorFunc("magenta+h")
 	red                         = color.ColorFunc("red+h")
 	green                       = color.ColorFunc("green")
@@ -46,13 +41,15 @@ var (
 	StatusError                 = color.Color("  ", "red+ih")
 	StatusRunning               = color.Color("  ", "28+i")
 	StatusPending               = color.Color("  ", "22+i")
-	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}       {{.Msg}}")
+	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}      {{.Msg}}")
 	LineParallelTemplate, _     = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  ├─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
 	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  └─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
 	LineErrorTemplate, _        = template.New("error line").Parse(" {{.Status}} {{.Msg}}")
 )
 
 type ConfigOptions struct {
+	StopOnFailure bool `yaml:"stop-on-failure"`
+	ShowSteps     bool `yaml:"show-steps"`
 }
 
 type ActionDisplay struct {
@@ -68,18 +65,25 @@ type ActionCommand struct {
 	ReturnCode int
 }
 
+type Line struct {
+	Status  string
+	Title   string
+	Msg     string
+	Spinner string
+}
+
 type Action struct {
 	Name            string `yaml:"name"`
 	CmdString       string `yaml:"cmd"`
 	Display         ActionDisplay
 	Command         ActionCommand
-	StopOnFailure   bool     `yaml:"stop_on_failure"`
+	StopOnFailure   bool     `yaml:"stop-on-failure"`
 	ParallelActions []Action `yaml:"tasks"`
 	waiter          sync.WaitGroup
 }
 
 type Config struct {
-	Options ConfigOptions `yaml:"options"`
+	Options ConfigOptions `yaml:"config"`
 	Tasks   []Action      `yaml:"tasks"`
 }
 
@@ -95,9 +99,40 @@ type PipeIR struct {
 	message string
 }
 
+// set default values for undefined yaml
+
+func (obj *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type defaults ConfigOptions
+	var defaultValues defaults
+	defaultValues.StopOnFailure = true
+	defaultValues.ShowSteps = true
+
+	if err := unmarshal(&defaultValues); err != nil {
+		return err
+	}
+
+	*obj = ConfigOptions(defaultValues)
+	// set global options
+	Options = *obj
+	return nil
+}
+
+func (obj *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type defaults Action
+	var defaultValues defaults
+	defaultValues.StopOnFailure = Options.StopOnFailure
+
+	if err := unmarshal(&defaultValues); err != nil {
+		return err
+	}
+
+	*obj = Action(defaultValues)
+	return nil
+}
+
 // todo: make setAction function to clean and initialize fields instead of this odd loop....
 
-func (conf *Config) getConfig() {
+func (conf *Config) readConfig() {
 	fmt.Println("Reading " + os.Args[1] + " ...")
 	yamlString, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
@@ -265,6 +300,9 @@ func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		resultChan <- CmdIR{action, StatusSuccess, "", true, returnCode}
 	} else {
 		resultChan <- CmdIR{action, StatusError, "", true, returnCode}
+		if action.StopOnFailure {
+			ExitSignaled = true
+		}
 	}
 }
 
@@ -280,6 +318,10 @@ func (action *Action) process(step, totalTasks int) {
 	ticker := time.NewTicker(150 * time.Millisecond)
 	resultChan := make(chan CmdIR)
 	actions := action.getParallelActions()
+
+	if Options.ShowSteps {
+		action.Name += color.ColorCode("reset") + " " + purple("〔"+strconv.Itoa(step)+"/"+strconv.Itoa(totalTasks)+"〕")
+	}
 
 	// make room for the title of a parallel proc group
 	if len(actions) > 1 {
@@ -342,10 +384,16 @@ func (action *Action) process(step, totalTasks int) {
 			eventAction.Display.Line = Line{msgObj.Status, eventAction.Name, msgObj.Stdout, spinner.Current()}
 			eventAction.display(&curLine)
 
+			if ExitSignaled {
+				break
+			}
+
 		}
 
 	}
-	action.waiter.Wait()
+	if !ExitSignaled {
+		action.waiter.Wait()
+	}
 
 	// complete the proc group status
 	if len(actions) > 1 {
@@ -381,13 +429,16 @@ func (action *Action) process(step, totalTasks int) {
 func main() {
 
 	var conf Config
-	conf.getConfig()
+	conf.readConfig()
 
 	rand.Seed(time.Now().UnixNano())
 
 	fmt.Print("\033[?25l") // hide cursor
 	for index := range conf.Tasks {
-		conf.Tasks[index].process(index, len(conf.Tasks))
+		conf.Tasks[index].process(index+1, len(conf.Tasks))
+		if ExitSignaled {
+			break
+		}
 	}
 	fmt.Print("\033[?25h") // show cursor
 
