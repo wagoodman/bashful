@@ -7,6 +7,10 @@ config:
   show-summary-footer: true
 tasks:
   - name: Verify environment
+    cmd: example/jitter.sh 10
+    stop-on-failure: false
+
+  - name: Verify environment eith error
     cmd: example/error.sh 1
     stop-on-failure: false
 

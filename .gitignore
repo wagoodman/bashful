@@ -3,3 +3,4 @@ bashful
 bin
 vendor
 archive
+*.log

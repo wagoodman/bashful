@@ -19,6 +19,7 @@ import (
 
 	ansi "github.com/k0kubun/go-ansi"
 	//"github.com/k0kubun/pp"
+	nbc "github.com/hectane/go-nonblockingchan"
 	"github.com/lunixbochs/vtclean"
 	color "github.com/mgutz/ansi"
 	spin "github.com/tj/go-spin"
@@ -286,11 +287,14 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 
 	for scanner.Scan() {
 		message := scanner.Text()
+		log.Println("Message:" + message)
 		resultChan <- PipeIR{vtclean.Clean(message, false)}
+		//x := PipeIR{vtclean.Clean(message, false)}
+		//x.message = x.message + ": end"
 	}
 }
 
-func (action *Action) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
+func (action *Action) reportOutput(resultChan chan<- interface{}, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
 
 	stdoutChan := make(chan PipeIR)
 	stderrChan := make(chan PipeIR)
@@ -306,7 +310,7 @@ func (action *Action) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadClos
 	}
 }
 
-func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+func (action *Action) runCmd(resultChan chan<- interface{}, waiter *sync.WaitGroup) {
 	waiter.Add(1)
 	resultChan <- CmdIR{action, StatusRunning, "", false, -1}
 
@@ -356,7 +360,8 @@ func (action *Action) process(step, totalTasks int) {
 
 	spinner := spin.New()
 	ticker := time.NewTicker(150 * time.Millisecond)
-	resultChan := make(chan CmdIR)
+	//resultChan := make(chan CmdIR)
+	resultChan := nbc.New()
 	actions := action.getParallelActions()
 
 	if Options.ShowSteps {
@@ -377,7 +382,7 @@ func (action *Action) process(step, totalTasks int) {
 
 	var runningCmds int
 	for ; lastStartedAction < MaxParallelCmds && lastStartedAction < len(actions); lastStartedAction++ {
-		go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
+		go actions[lastStartedAction].runCmd(resultChan.Send, &action.waiter)
 		actions[lastStartedAction].Command.Started = true
 		runningCmds++
 	}
@@ -403,7 +408,10 @@ func (action *Action) process(step, totalTasks int) {
 				display(footer(SummaryPendingArrow), &curLine, len(actions))
 			}
 
-		case msgObj := <-resultChan:
+		case _msgObj := <-resultChan.Recv:
+
+			msgObj := _msgObj.(CmdIR)
+
 			eventAction := msgObj.Action
 
 			// update the state before displaying...
@@ -415,7 +423,7 @@ func (action *Action) process(step, totalTasks int) {
 				runningCmds--
 				// if a thread has freed up, start the next action (if there are any left)
 				if lastStartedAction < len(actions) {
-					go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
+					go actions[lastStartedAction].runCmd(resultChan.Send, &action.waiter)
 					actions[lastStartedAction].Command.Started = true
 					runningCmds++
 					lastStartedAction++
@@ -478,6 +486,21 @@ func (action *Action) process(step, totalTasks int) {
 }
 
 func main() {
+
+	//create your file with desired read/write permissions
+	f, err := os.OpenFile("test.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//defer to close when you're done with it, not because you think it's idiomatic!
+	defer f.Close()
+
+	//set output of logs to f
+	log.SetOutput(f)
+
+	//test case
+	log.Println("Started!")
 
 	var conf Config
 	conf.readConfig()
