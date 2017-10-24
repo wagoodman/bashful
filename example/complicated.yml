@@ -3,7 +3,8 @@ config:
   # show-stdout: true
   # show-spinner: true
   stop-on-failure: false
-  show-steps: true
+  show-steps: false
+  show-summary-footer: true
 tasks:
   - name: Verify environment
     cmd: example/error.sh 1

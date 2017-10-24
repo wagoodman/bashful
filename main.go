@@ -31,25 +31,32 @@ const (
 )
 
 var (
-	Options                     ConfigOptions
-	ExitSignaled                = false
-	purple                      = color.ColorFunc("magenta+h")
-	red                         = color.ColorFunc("red+h")
-	green                       = color.ColorFunc("green")
-	bold                        = color.ColorFunc("default+b")
-	StatusSuccess               = color.Color("  ", "green+ih")
-	StatusError                 = color.Color("  ", "red+ih")
-	StatusRunning               = color.Color("  ", "28+i")
+	Options       ConfigOptions
+	ExitSignaled  = false
+	purple        = color.ColorFunc("magenta+h")
+	red           = color.ColorFunc("red+h")
+	green         = color.ColorFunc("green")
+	bold          = color.ColorFunc("default+b")
+	StatusSuccess = color.Color("  ", "green+ih")
+	StatusError   = color.Color("  ", "red+ih")
+	//StatusRunning               = color.Color("  ", "28+i")
+	StatusRunning               = color.Color("  ", "22+i")
 	StatusPending               = color.Color("  ", "22+i")
-	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}      {{.Msg}}")
+	SummaryPendingArrow         = color.Color("    ", "22+i")     //color.Color("    ", "22+i")     //+ color.Color("❯❯❯", "22")
+	SummarySuccessArrow         = color.Color("    ", "green+ih") //color.Color("    ", "green+ih") //+ color.Color("❯❯❯", "green+h")
+	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}       {{.Msg}}")
 	LineParallelTemplate, _     = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  ├─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
 	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  └─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
 	LineErrorTemplate, _        = template.New("error line").Parse(" {{.Status}} {{.Msg}}")
+	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + bold(` {{printf "%3.2f" .Percent}}% Complete {{.Msg}}`))
+	TotalTasks                  = 0
+	CompletedTasks              = 0
 )
 
 type ConfigOptions struct {
-	StopOnFailure bool `yaml:"stop-on-failure"`
-	ShowSteps     bool `yaml:"show-steps"`
+	StopOnFailure     bool `yaml:"stop-on-failure"`
+	ShowSteps         bool `yaml:"show-steps"`
+	ShowSummaryFooter bool `yaml:"show-summary-footer"`
 }
 
 type ActionDisplay struct {
@@ -70,6 +77,12 @@ type Line struct {
 	Title   string
 	Msg     string
 	Spinner string
+}
+
+type Summary struct {
+	Status  string
+	Percent float64
+	Msg     string
 }
 
 type Action struct {
@@ -105,7 +118,8 @@ func (obj *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) error
 	type defaults ConfigOptions
 	var defaultValues defaults
 	defaultValues.StopOnFailure = true
-	defaultValues.ShowSteps = true
+	defaultValues.ShowSteps = false
+	defaultValues.ShowSummaryFooter = true
 
 	if err := unmarshal(&defaultValues); err != nil {
 		return err
@@ -159,10 +173,15 @@ func (conf *Config) readConfig() {
 			}
 		}
 
+		if action.CmdString != "" {
+			TotalTasks++
+		}
+
 		for subIndex := range action.ParallelActions {
 			subAction := &action.ParallelActions[subIndex]
 			subAction.Display.Template = LineDefaultTemplate
 			subAction.Display.Idx = subIndex
+			TotalTasks++
 
 			// set the name
 			if subAction.Name == "" {
@@ -202,8 +221,8 @@ func (action *Action) getParallelActions() (actions []*Action) {
 	return actions
 }
 
-func (action *Action) display(curLine *int) {
-	moves := *curLine - action.Display.Idx
+func display(message string, curLine *int, targetIdx int) {
+	moves := *curLine - targetIdx
 	if moves != 0 {
 		if moves < 0 {
 			ansi.CursorDown(moves * -1)
@@ -213,6 +232,22 @@ func (action *Action) display(curLine *int) {
 		*curLine -= moves
 	}
 
+	// trim message length
+	// terminalWidth, _ := terminal.Width()
+	// maxLineLen := int(terminalWidth) - len(message)
+	// if len(message) > maxLineLen {
+	// 	message = message[:maxLineLen-5] + "..."
+	// }
+
+	// display
+	ansi.EraseInLine(2)
+	fmt.Print(message)
+	ansi.CursorDown(1)
+	ansi.CursorHorizontalAbsolute(0)
+	*curLine++
+}
+
+func (action *Action) display(curLine *int) {
 	if action.Command.Complete {
 		action.Display.Line.Spinner = ""
 		if action.Command.ReturnCode != 0 {
@@ -241,11 +276,9 @@ func (action *Action) display(curLine *int) {
 	}
 
 	// display
-	ansi.EraseInLine(2)
-	action.Display.Template.Execute(os.Stdout, action.Display.Line)
-	ansi.CursorDown(1)
-	ansi.CursorHorizontalAbsolute(0)
-	*curLine++
+	var message bytes.Buffer
+	action.Display.Template.Execute(&message, action.Display.Line)
+	display(message.String(), curLine, action.Display.Idx)
 }
 
 func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
@@ -306,6 +339,13 @@ func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	}
 }
 
+func footer(status string) string {
+	var tpl bytes.Buffer
+	percent := (float64(CompletedTasks) * float64(100)) / float64(TotalTasks)
+	SummaryTemplate.Execute(&tpl, Summary{status, percent, ""})
+	return tpl.String()
+}
+
 func (action *Action) process(step, totalTasks int) {
 
 	var (
@@ -358,11 +398,17 @@ func (action *Action) process(step, totalTasks int) {
 				actionObj.display(&curLine)
 			}
 
+			// update the summary line
+			if Options.ShowSummaryFooter {
+				display(footer(SummaryPendingArrow), &curLine, len(actions))
+			}
+
 		case msgObj := <-resultChan:
 			eventAction := msgObj.Action
 
 			// update the state before displaying...
 			if msgObj.Complete {
+				CompletedTasks++
 				eventAction.Command.Complete = true
 				eventAction.Command.ReturnCode = msgObj.ReturnCode
 
@@ -383,6 +429,11 @@ func (action *Action) process(step, totalTasks int) {
 			// display...
 			eventAction.Display.Line = Line{msgObj.Status, eventAction.Name, msgObj.Stdout, spinner.Current()}
 			eventAction.display(&curLine)
+
+			// update the summary line
+			if Options.ShowSummaryFooter {
+				display(footer(SummaryPendingArrow), &curLine, len(actions))
+			}
 
 			if ExitSignaled {
 				break
@@ -440,6 +491,12 @@ func main() {
 			break
 		}
 	}
+	var curLine int
+
+	if Options.ShowSummaryFooter {
+		display(footer(SummarySuccessArrow), &curLine, 0)
+	}
+
 	fmt.Print("\033[?25h") // show cursor
 
 }
