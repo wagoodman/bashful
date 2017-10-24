@@ -19,7 +19,6 @@ import (
 
 	ansi "github.com/k0kubun/go-ansi"
 	//"github.com/k0kubun/pp"
-	nbc "github.com/hectane/go-nonblockingchan"
 	"github.com/lunixbochs/vtclean"
 	color "github.com/mgutz/ansi"
 	spin "github.com/tj/go-spin"
@@ -294,7 +293,7 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 	}
 }
 
-func (action *Action) reportOutput(resultChan chan<- interface{}, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
+func (action *Action) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
 
 	stdoutChan := make(chan PipeIR)
 	stderrChan := make(chan PipeIR)
@@ -310,7 +309,7 @@ func (action *Action) reportOutput(resultChan chan<- interface{}, stdoutPipe io.
 	}
 }
 
-func (action *Action) runCmd(resultChan chan<- interface{}, waiter *sync.WaitGroup) {
+func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	waiter.Add(1)
 	resultChan <- CmdIR{action, StatusRunning, "", false, -1}
 
@@ -360,8 +359,7 @@ func (action *Action) process(step, totalTasks int) {
 
 	spinner := spin.New()
 	ticker := time.NewTicker(150 * time.Millisecond)
-	//resultChan := make(chan CmdIR)
-	resultChan := nbc.New()
+	resultChan := make(chan CmdIR)
 	actions := action.getParallelActions()
 
 	if Options.ShowSteps {
@@ -382,7 +380,7 @@ func (action *Action) process(step, totalTasks int) {
 
 	var runningCmds int
 	for ; lastStartedAction < MaxParallelCmds && lastStartedAction < len(actions); lastStartedAction++ {
-		go actions[lastStartedAction].runCmd(resultChan.Send, &action.waiter)
+		go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
 		actions[lastStartedAction].Command.Started = true
 		runningCmds++
 	}
@@ -408,10 +406,7 @@ func (action *Action) process(step, totalTasks int) {
 				display(footer(SummaryPendingArrow), &curLine, len(actions))
 			}
 
-		case _msgObj := <-resultChan.Recv:
-
-			msgObj := _msgObj.(CmdIR)
-
+		case msgObj := <-resultChan:
 			eventAction := msgObj.Action
 
 			// update the state before displaying...
@@ -423,7 +418,7 @@ func (action *Action) process(step, totalTasks int) {
 				runningCmds--
 				// if a thread has freed up, start the next action (if there are any left)
 				if lastStartedAction < len(actions) {
-					go actions[lastStartedAction].runCmd(resultChan.Send, &action.waiter)
+					go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
 					actions[lastStartedAction].Command.Started = true
 					runningCmds++
 					lastStartedAction++
