@@ -503,7 +503,7 @@ func (action *Action) process(step, totalTasks int) {
 
 func logFlusher() {
 	//create your file with desired read/write permissions
-	f, err := os.OpenFile("test.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	f, err := os.OpenFile(Options.LogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
