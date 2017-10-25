@@ -5,6 +5,7 @@ config:
   stop-on-failure: false
   show-steps: false
   show-summary-footer: true
+  log-path: build.log
 tasks:
   - name: Verify environment
     cmd: example/jitter.sh 10

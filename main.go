@@ -51,12 +51,14 @@ var (
 	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + bold(` {{printf "%3.2f" .Percent}}% Complete {{.Msg}}`))
 	TotalTasks                  = 0
 	CompletedTasks              = 0
+	LogChan                     = make(chan LogItem, 10000)
 )
 
 type ConfigOptions struct {
-	StopOnFailure     bool `yaml:"stop-on-failure"`
-	ShowSteps         bool `yaml:"show-steps"`
-	ShowSummaryFooter bool `yaml:"show-summary-footer"`
+	StopOnFailure     bool   `yaml:"stop-on-failure"`
+	ShowSteps         bool   `yaml:"show-steps"`
+	ShowSummaryFooter bool   `yaml:"show-summary-footer"`
+	LogPath           string `yaml:"log-path"`
 }
 
 type ActionDisplay struct {
@@ -93,6 +95,12 @@ type Action struct {
 	StopOnFailure   bool     `yaml:"stop-on-failure"`
 	ParallelActions []Action `yaml:"tasks"`
 	waiter          sync.WaitGroup
+	LogBuffer       *bytes.Buffer
+}
+
+type LogItem struct {
+	Name    string
+	Message string
 }
 
 type Config struct {
@@ -163,6 +171,7 @@ func (conf *Config) readConfig() {
 		action := &conf.Tasks[index]
 		action.Display.Template = LineDefaultTemplate
 		action.Display.Idx = 0
+		action.LogBuffer = bytes.NewBufferString("")
 
 		// set the name
 		if action.Name == "" {
@@ -181,6 +190,7 @@ func (conf *Config) readConfig() {
 			subAction := &action.ParallelActions[subIndex]
 			subAction.Display.Template = LineDefaultTemplate
 			subAction.Display.Idx = subIndex
+			subAction.LogBuffer = bytes.NewBufferString("")
 			TotalTasks++
 
 			// set the name
@@ -286,7 +296,7 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 
 	for scanner.Scan() {
 		message := scanner.Text()
-		log.Println("Message:" + message)
+
 		resultChan <- PipeIR{vtclean.Clean(message, false)}
 		//x := PipeIR{vtclean.Clean(message, false)}
 		//x.message = x.message + ": end"
@@ -295,17 +305,19 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 
 func (action *Action) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
 
-	stdoutChan := make(chan PipeIR)
-	stderrChan := make(chan PipeIR)
+	stdoutChan := make(chan PipeIR, 10000)
+	stderrChan := make(chan PipeIR, 10000)
 
 	go readPipe(stdoutChan, stdoutPipe)
 	go readPipe(stderrChan, stderrPipe)
 
-	select {
-	case stdoutMsg := <-stdoutChan:
-		resultChan <- CmdIR{action, StatusRunning, stdoutMsg.message, false, -1}
-	case stderrMsg := <-stderrChan:
-		resultChan <- CmdIR{action, StatusRunning, stderrMsg.message, false, -1}
+	for {
+		select {
+		case stdoutMsg := <-stdoutChan:
+			resultChan <- CmdIR{action, StatusRunning, stdoutMsg.message, false, -1}
+		case stderrMsg := <-stderrChan:
+			resultChan <- CmdIR{action, StatusRunning, stderrMsg.message, false, -1}
+		}
 	}
 }
 
@@ -359,7 +371,7 @@ func (action *Action) process(step, totalTasks int) {
 
 	spinner := spin.New()
 	ticker := time.NewTicker(150 * time.Millisecond)
-	resultChan := make(chan CmdIR)
+	resultChan := make(chan CmdIR, 10000)
 	actions := action.getParallelActions()
 
 	if Options.ShowSteps {
@@ -414,6 +426,9 @@ func (action *Action) process(step, totalTasks int) {
 				CompletedTasks++
 				eventAction.Command.Complete = true
 				eventAction.Command.ReturnCode = msgObj.ReturnCode
+				if Options.LogPath != "" {
+					LogChan <- LogItem{eventAction.Name, eventAction.LogBuffer.String()}
+				}
 
 				runningCmds--
 				// if a thread has freed up, start the next action (if there are any left)
@@ -427,6 +442,11 @@ func (action *Action) process(step, totalTasks int) {
 				if msgObj.Status == StatusError {
 					groupSuccess = StatusError
 				}
+			}
+
+			// record
+			if Options.LogPath != "" {
+				eventAction.LogBuffer.WriteString(msgObj.Stdout + "\n")
 			}
 
 			// display...
@@ -445,6 +465,7 @@ func (action *Action) process(step, totalTasks int) {
 		}
 
 	}
+
 	if !ExitSignaled {
 		action.waiter.Wait()
 	}
@@ -480,8 +501,7 @@ func (action *Action) process(step, totalTasks int) {
 
 }
 
-func main() {
-
+func logFlusher() {
 	//create your file with desired read/write permissions
 	f, err := os.OpenFile("test.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -497,10 +517,24 @@ func main() {
 	//test case
 	log.Println("Started!")
 
+	for {
+		select {
+		case logObj := <-LogChan:
+			log.Println("Output from :" + logObj.Name + "\n" + logObj.Message)
+		}
+	}
+}
+
+func main() {
+
 	var conf Config
 	conf.readConfig()
 
 	rand.Seed(time.Now().UnixNano())
+
+	if Options.LogPath != "" {
+		go logFlusher()
+	}
 
 	fmt.Print("\033[?25l") // hide cursor
 	for index := range conf.Tasks {
