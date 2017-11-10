@@ -251,9 +251,8 @@ func display(message string, curLine *int, targetIdx int) {
 
 	// display
 	ansi.EraseInLine(2)
-	fmt.Print(message)
-	ansi.CursorDown(1)
-	ansi.CursorHorizontalAbsolute(0)
+	// note: ansi cursor down cannot be used as this may be the last row
+	fmt.Println(message)
 	*curLine++
 }
 
