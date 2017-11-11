@@ -17,6 +17,8 @@ To run the example:
 - [x] Optionally run commands in parallel
 - [x] Summary of the last line from stdout/stderr printed inline with commands
 - [x] A shiny vertical progress bar
-- [ ] Optionally stop when a single command fails
+- [x] Optionally stop when a single command fails
 - [ ] Configuration yaml block to control the behavior/look & feel
 - [ ] Show detailed error reports when commands fail
+- [ ] Bypass bashful all together and simply run each script/command in series
+- [ ] Log all actions taken with all stdout/stderr

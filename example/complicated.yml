@@ -1,7 +1,4 @@
 config:
-  # log: build.log
-  # show-stdout: true
-  # show-spinner: true
   stop-on-failure: false
   show-steps: false
   show-summary-footer: true

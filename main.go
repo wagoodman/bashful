@@ -270,15 +270,16 @@ func (action *Action) display(curLine *int) {
 	dummyObj.Msg = ""
 	var tpl bytes.Buffer
 	action.Display.Template.Execute(&tpl, dummyObj)
-	maxLineLen := int(terminalWidth) - len(tpl.String())
+
+	maxLineLen := int(terminalWidth) - len(vtclean.Clean(tpl.String(), false))
 	if len(action.Display.Line.Msg) > maxLineLen {
-		action.Display.Line.Msg = action.Display.Line.Msg[:maxLineLen-5] + "..."
+		action.Display.Line.Msg = action.Display.Line.Msg[:maxLineLen-3] + "..."
 	}
 
 	// set the name
 	if action.Name == "" {
 		if len(action.CmdString) > 25 {
-			action.Name = action.CmdString[:20] + "..."
+			action.Name = action.CmdString[:22] + "..."
 		} else {
 			action.Name = action.CmdString
 		}
@@ -297,8 +298,6 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 		message := scanner.Text()
 
 		resultChan <- PipeIR{vtclean.Clean(message, false)}
-		//x := PipeIR{vtclean.Clean(message, false)}
-		//x.message = x.message + ": end"
 	}
 }
 
