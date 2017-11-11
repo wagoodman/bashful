@@ -26,10 +26,6 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-const (
-	MaxParallelCmds = 4
-)
-
 var (
 	Options       ConfigOptions
 	ExitSignaled  = false
@@ -44,6 +40,7 @@ var (
 	StatusPending               = color.Color("  ", "22+i")
 	SummaryPendingArrow         = color.Color("    ", "22+i")     //color.Color("    ", "22+i")     //+ color.Color("❯❯❯", "22")
 	SummarySuccessArrow         = color.Color("    ", "green+ih") //color.Color("    ", "green+ih") //+ color.Color("❯❯❯", "green+h")
+	SummaryFailedArrow          = color.Color("    ", "red+ih")
 	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}       {{.Msg}}")
 	LineParallelTemplate, _     = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  ├─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
 	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  └─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
@@ -52,13 +49,16 @@ var (
 	TotalTasks                  = 0
 	CompletedTasks              = 0
 	LogChan                     = make(chan LogItem, 10000)
+	MaxParallelCmds             = 4
 )
 
 type ConfigOptions struct {
 	StopOnFailure     bool   `yaml:"stop-on-failure"`
 	ShowSteps         bool   `yaml:"show-steps"`
 	ShowSummaryFooter bool   `yaml:"show-summary-footer"`
+	ShowFailureReport bool   `yaml:"show-failure-summary"`
 	LogPath           string `yaml:"log-path"`
+	Vintage           bool   `yaml:"vintage"`
 }
 
 type ActionDisplay struct {
@@ -96,6 +96,7 @@ type Action struct {
 	ParallelActions []Action `yaml:"tasks"`
 	waiter          sync.WaitGroup
 	LogBuffer       *bytes.Buffer
+	ErrorBuffer     *bytes.Buffer
 }
 
 type LogItem struct {
@@ -112,6 +113,7 @@ type CmdIR struct {
 	Action     *Action
 	Status     string
 	Stdout     string
+	Stderr     string
 	Complete   bool
 	ReturnCode int
 }
@@ -172,6 +174,7 @@ func (conf *Config) readConfig() {
 		action.Display.Template = LineDefaultTemplate
 		action.Display.Idx = 0
 		action.LogBuffer = bytes.NewBufferString("")
+		action.ErrorBuffer = bytes.NewBufferString("")
 
 		// set the name
 		if action.Name == "" {
@@ -191,6 +194,7 @@ func (conf *Config) readConfig() {
 			subAction.Display.Template = LineDefaultTemplate
 			subAction.Display.Idx = subIndex
 			subAction.LogBuffer = bytes.NewBufferString("")
+			subAction.ErrorBuffer = bytes.NewBufferString("")
 			TotalTasks++
 
 			// set the name
@@ -312,16 +316,16 @@ func (action *Action) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadClos
 	for {
 		select {
 		case stdoutMsg := <-stdoutChan:
-			resultChan <- CmdIR{action, StatusRunning, stdoutMsg.message, false, -1}
+			resultChan <- CmdIR{action, StatusRunning, stdoutMsg.message, "", false, -1}
 		case stderrMsg := <-stderrChan:
-			resultChan <- CmdIR{action, StatusRunning, stderrMsg.message, false, -1}
+			resultChan <- CmdIR{action, StatusRunning, "", stderrMsg.message, false, -1}
 		}
 	}
 }
 
 func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	waiter.Add(1)
-	resultChan <- CmdIR{action, StatusRunning, "", false, -1}
+	resultChan <- CmdIR{action, StatusRunning, "", "", false, -1}
 
 	stdoutPipe, _ := action.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := action.Command.Cmd.StderrPipe()
@@ -343,9 +347,9 @@ func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	waiter.Done()
 
 	if returnCode == 0 {
-		resultChan <- CmdIR{action, StatusSuccess, "", true, returnCode}
+		resultChan <- CmdIR{action, StatusSuccess, "", "", true, returnCode}
 	} else {
-		resultChan <- CmdIR{action, StatusError, "", true, returnCode}
+		resultChan <- CmdIR{action, StatusError, "", "", true, returnCode}
 		if action.StopOnFailure {
 			ExitSignaled = true
 		}
@@ -359,37 +363,47 @@ func footer(status string) string {
 	return tpl.String()
 }
 
-func (action *Action) process(step, totalTasks int) {
+func (action *Action) process(step, totalTasks int) []*Action {
 
 	var (
 		curLine           int
 		lastStartedAction int
 		moves             int
+		failedActions     []*Action
 	)
 
 	spinner := spin.New()
 	ticker := time.NewTicker(150 * time.Millisecond)
+	if Options.Vintage {
+		ticker.Stop()
+	}
 	resultChan := make(chan CmdIR, 10000)
 	actions := action.getParallelActions()
 
-	if Options.ShowSteps {
-		action.Name += color.ColorCode("reset") + " " + purple("〔"+strconv.Itoa(step)+"/"+strconv.Itoa(totalTasks)+"〕")
-	}
+	if !Options.Vintage {
+		if Options.ShowSteps {
+			action.Name += color.ColorCode("reset") + " " + purple("〔"+strconv.Itoa(step)+"/"+strconv.Itoa(totalTasks)+"〕")
+		}
 
-	// make room for the title of a parallel proc group
-	if len(actions) > 1 {
-		lineObj := Line{StatusRunning, bold(action.Name), "\n", ""}
-		action.Display.Template.Execute(os.Stdout, lineObj)
-	}
+		// make room for the title of a parallel proc group
+		if len(actions) > 1 {
+			lineObj := Line{StatusRunning, bold(action.Name), "\n", ""}
+			action.Display.Template.Execute(os.Stdout, lineObj)
+		}
 
-	for line := 0; line < len(actions); line++ {
-		actions[line].Command.Started = false
-		actions[line].Display.Line = Line{StatusPending, actions[line].Name, "", ""}
-		actions[line].display(&curLine)
+		for line := 0; line < len(actions); line++ {
+			actions[line].Command.Started = false
+			actions[line].Display.Line = Line{StatusPending, actions[line].Name, "", ""}
+			actions[line].display(&curLine)
+		}
 	}
 
 	var runningCmds int
 	for ; lastStartedAction < MaxParallelCmds && lastStartedAction < len(actions); lastStartedAction++ {
+		if Options.Vintage {
+			fmt.Println(bold(action.Name + " : " + actions[lastStartedAction].Name))
+			fmt.Println(bold("Command: " + actions[lastStartedAction].CmdString))
+		}
 		go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
 		actions[lastStartedAction].Command.Started = true
 		runningCmds++
@@ -431,25 +445,56 @@ func (action *Action) process(step, totalTasks int) {
 				runningCmds--
 				// if a thread has freed up, start the next action (if there are any left)
 				if lastStartedAction < len(actions) {
+					if Options.Vintage {
+						fmt.Println(bold(action.Name + " : " + actions[lastStartedAction].Name))
+						fmt.Println("Command: " + bold(actions[lastStartedAction].CmdString))
+					}
 					go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
 					actions[lastStartedAction].Command.Started = true
 					runningCmds++
 					lastStartedAction++
 				}
-				// update the group status
+
 				if msgObj.Status == StatusError {
+					// update the group status to indicate a failed subtask
 					groupSuccess = StatusError
+
+					// keep note of the failed task for an after action report
+					failedActions = append(failedActions, eventAction)
 				}
 			}
 
-			// record
+			// record in the log
 			if Options.LogPath != "" {
-				eventAction.LogBuffer.WriteString(msgObj.Stdout + "\n")
+				if msgObj.Stdout != "" {
+					eventAction.LogBuffer.WriteString(msgObj.Stdout + "\n")
+				}
+				if msgObj.Stderr != "" {
+					eventAction.LogBuffer.WriteString(red(msgObj.Stderr) + "\n")
+				}
+			}
+
+			// keep record of all stderr lines for an after action report
+			if msgObj.Stderr != "" {
+				eventAction.ErrorBuffer.WriteString(msgObj.Stderr + "\n")
 			}
 
 			// display...
-			eventAction.Display.Line = Line{msgObj.Status, eventAction.Name, msgObj.Stdout, spinner.Current()}
-			eventAction.display(&curLine)
+			if Options.Vintage {
+				if msgObj.Stderr != "" {
+					fmt.Println(red(msgObj.Stderr))
+				} else {
+					fmt.Println(msgObj.Stdout)
+				}
+			} else {
+				if msgObj.Stderr != "" {
+					eventAction.Display.Line = Line{msgObj.Status, eventAction.Name, red(msgObj.Stderr), spinner.Current()}
+				} else {
+					eventAction.Display.Line = Line{msgObj.Status, eventAction.Name, msgObj.Stdout, spinner.Current()}
+				}
+
+				eventAction.display(&curLine)
+			}
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
@@ -468,10 +513,27 @@ func (action *Action) process(step, totalTasks int) {
 		action.waiter.Wait()
 	}
 
-	// complete the proc group status
-	if len(actions) > 1 {
+	if !Options.Vintage {
+		// complete the proc group status
+		if len(actions) > 1 {
 
-		moves = curLine + 1
+			moves = curLine + 1
+			if moves != 0 {
+				if moves < 0 {
+					ansi.CursorDown(moves * -1)
+				} else {
+					ansi.CursorUp(moves)
+				}
+				curLine -= moves
+			}
+
+			ansi.EraseInLine(2)
+			action.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(action.Name), "", ""})
+			ansi.CursorHorizontalAbsolute(0)
+		}
+
+		// reset the cursor to the bottom of the section
+		moves = curLine - len(actions)
 		if moves != 0 {
 			if moves < 0 {
 				ansi.CursorDown(moves * -1)
@@ -480,23 +542,9 @@ func (action *Action) process(step, totalTasks int) {
 			}
 			curLine -= moves
 		}
-
-		ansi.EraseInLine(2)
-		action.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(action.Name), "", ""})
-		ansi.CursorHorizontalAbsolute(0)
 	}
 
-	// reset the cursor to the bottom of the section
-	moves = curLine - len(actions)
-	if moves != 0 {
-		if moves < 0 {
-			ansi.CursorDown(moves * -1)
-		} else {
-			ansi.CursorUp(moves)
-		}
-		curLine -= moves
-	}
-
+	return failedActions
 }
 
 func logFlusher() {
@@ -513,12 +561,12 @@ func logFlusher() {
 	log.SetOutput(f)
 
 	//test case
-	log.Println("Started!")
+	log.Println(bold("Started!"))
 
 	for {
 		select {
 		case logObj := <-LogChan:
-			log.Println("Output from :" + logObj.Name + "\n" + logObj.Message)
+			log.Println(bold("Output from :"+logObj.Name) + "\n" + logObj.Message)
 		}
 	}
 }
@@ -534,9 +582,18 @@ func main() {
 		go logFlusher()
 	}
 
+	if Options.Vintage {
+		MaxParallelCmds = 1
+		Options.ShowSummaryFooter = false
+		Options.ShowFailureReport = false
+	}
+
+	var failedActions []*Action
+
 	fmt.Print("\033[?25l") // hide cursor
 	for index := range conf.Tasks {
-		conf.Tasks[index].process(index+1, len(conf.Tasks))
+		failedActions = append(failedActions, conf.Tasks[index].process(index+1, len(conf.Tasks))...)
+
 		if ExitSignaled {
 			break
 		}
@@ -544,7 +601,22 @@ func main() {
 	var curLine int
 
 	if Options.ShowSummaryFooter {
-		display(footer(SummarySuccessArrow), &curLine, 0)
+		if len(failedActions) > 0 {
+			display(footer(SummaryFailedArrow), &curLine, 0)
+		} else {
+			display(footer(SummarySuccessArrow), &curLine, 0)
+		}
+	}
+
+	if Options.ShowFailureReport {
+		fmt.Println("Some tasks failed, see below for details.\n")
+		for _, action := range failedActions {
+			fmt.Println(bold(red("Failed action: " + action.Name)))
+			fmt.Println(" ├─ command: " + action.CmdString)
+			fmt.Println(" ├─ return code: " + strconv.Itoa(action.Command.ReturnCode))
+			fmt.Println(" └─ stderr: \n" + action.ErrorBuffer.String())
+			fmt.Println()
+		}
 	}
 
 	fmt.Print("\033[?25h") // show cursor

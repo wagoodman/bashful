@@ -19,6 +19,6 @@ To run the example:
 - [x] A shiny vertical progress bar
 - [x] Optionally stop when a single command fails
 - [ ] Configuration yaml block to control the behavior/look & feel
-- [ ] Show detailed error reports when commands fail
-- [ ] Bypass bashful all together and simply run each script/command in series
-- [ ] Log all actions taken with all stdout/stderr
+- [x] Show detailed error reports when commands fail
+- [x] Bypass bashful all together and simply run each script/command in series ("vintage" mode)
+- [x] Log all actions taken with all stdout/stderr

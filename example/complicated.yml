@@ -2,10 +2,12 @@ config:
   stop-on-failure: false
   show-steps: false
   show-summary-footer: true
+  show-failure-summary: true
   log-path: build.log
+  vintage: true
 tasks:
   - name: Verify environment
-    cmd: example/jitter.sh 10
+    cmd: example/jitter.sh 2
     stop-on-failure: false
 
   # - name: Verify environment eith error
@@ -20,22 +22,22 @@ tasks:
           cmd: example/jitter.sh 4
         - name: some-app3
           cmd: example/jitter.sh 5
-        - name: some-lib-4
-          cmd: example/jitter.sh 6
-        - name: some-awesome-app-5
-          cmd: example/jitter.sh 7
-        - name: watcher-app
-          cmd: example/jitter.sh 8
-        - name: public-6
-          cmd: example/jitter.sh 9
-        - name: utilities
-          cmd: example/jitter.sh 1
-        - name: important-lib
-          cmd: example/jitter.sh 7
-        - name: yup-app-7
-          cmd: example/jitter.sh 6
-        - name: stuff-n-things
-          cmd: example/jitter.sh 5
+        # - name: some-lib-4
+        #   cmd: example/jitter.sh 6
+        # - name: some-awesome-app-5
+        #   cmd: example/jitter.sh 7
+        # - name: watcher-app
+        #   cmd: example/jitter.sh 8
+        # - name: public-6
+        #   cmd: example/jitter.sh 9
+        # - name: utilities
+        #   cmd: example/jitter.sh 1
+        # - name: important-lib
+        #   cmd: example/jitter.sh 7
+        # - name: yup-app-7
+        #   cmd: example/jitter.sh 6
+        # - name: stuff-n-things
+        #   cmd: example/jitter.sh 5
 
   - name: Installing dependencies
     tasks:
@@ -43,10 +45,10 @@ tasks:
           cmd: example/jitter.sh 3
         - name: Google chrome
           cmd: example/jitter.sh 4
-        - name: MD helper
-          cmd: example/jitter.sh 5
-        - name: Bridgy
-          cmd: example/jitter.sh 6
+        # - name: MD helper
+        #   cmd: example/jitter.sh 5
+        # - name: Bridgy
+        #   cmd: example/jitter.sh 6
 
   - name: Build Images
     cmd: example/jitter.sh 3
@@ -62,19 +64,19 @@ tasks:
           cmd: example/error.sh 4
         - name: some-app3
           cmd: example/jitter.sh 5
-        - name: some-lib-4
-          cmd: example/jitter.sh 6
-        - name: some-awesome-app-5
-          cmd: example/jitter.sh 7
-        - name: watcher-app
-          cmd: example/jitter.sh 8
-        - name: public-6
-          cmd: example/jitter.sh 9
-        - name: utilities
-          cmd: example/jitter.sh 8
-        - name: important-lib
-          cmd: example/jitter.sh 7
-        - name: yup-app-7
-          cmd: example/jitter.sh 6
-        - name: stuff-n-things
-          cmd: example/jitter.sh 5
+        # - name: some-lib-4
+        #   cmd: example/jitter.sh 6
+        # - name: some-awesome-app-5
+        #   cmd: example/jitter.sh 7
+        # - name: watcher-app
+        #   cmd: example/jitter.sh 8
+        # - name: public-6
+        #   cmd: example/jitter.sh 9
+        # - name: utilities
+        #   cmd: example/jitter.sh 8
+        # - name: important-lib
+        #   cmd: example/jitter.sh 7
+        # - name: yup-app-7
+        #   cmd: example/jitter.sh 6
+        # - name: stuff-n-things
+        #   cmd: example/jitter.sh 5
