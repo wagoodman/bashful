@@ -4,7 +4,7 @@ config:
   show-summary-footer: true
   show-failure-summary: true
   log-path: build.log
-  vintage: true
+  vintage: false
 tasks:
   - name: Verify environment
     cmd: example/jitter.sh 2

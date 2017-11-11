@@ -1,7 +1,7 @@
 # bashful
-...because your bash script should be quiet and shy-like (and not such a loud mouth). 
+Because your bash script should be quiet and shy-like (...and not such a loud mouth). 
 
-**Super alpha quality!** Use at your own risk.
+**This is ~~Super alpha~~ pseudo-beta quality!** Use at your own risk.
 
 ![Image](demo.gif)
 
