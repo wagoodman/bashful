@@ -49,7 +49,6 @@ var (
 	TotalTasks                  = 0
 	CompletedTasks              = 0
 	LogChan                     = make(chan LogItem, 10000)
-	MaxParallelCmds             = 4
 )
 
 type ConfigOptions struct {
@@ -59,6 +58,7 @@ type ConfigOptions struct {
 	ShowFailureReport bool   `yaml:"show-failure-summary"`
 	LogPath           string `yaml:"log-path"`
 	Vintage           bool   `yaml:"vintage"`
+	MaxParallelCmds   int    `yaml:"max-parallel-commands"`
 }
 
 type ActionDisplay struct {
@@ -399,7 +399,7 @@ func (action *Action) process(step, totalTasks int) []*Action {
 	}
 
 	var runningCmds int
-	for ; lastStartedAction < MaxParallelCmds && lastStartedAction < len(actions); lastStartedAction++ {
+	for ; lastStartedAction < Options.MaxParallelCmds && lastStartedAction < len(actions); lastStartedAction++ {
 		if Options.Vintage {
 			fmt.Println(bold(action.Name + " : " + actions[lastStartedAction].Name))
 			fmt.Println(bold("Command: " + actions[lastStartedAction].CmdString))
@@ -582,8 +582,12 @@ func main() {
 		go logFlusher()
 	}
 
+	if Options.MaxParallelCmds <= 0 {
+		Options.MaxParallelCmds = 4
+	}
+
 	if Options.Vintage {
-		MaxParallelCmds = 1
+		Options.MaxParallelCmds = 1
 		Options.ShowSummaryFooter = false
 		Options.ShowFailureReport = false
 	}
