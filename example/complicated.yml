@@ -1,11 +1,11 @@
 config:
-  stop-on-failure: false
-  show-steps: false
-  show-summary-footer: true
-  show-failure-summary: true
-  max-parallel-commands: 6
+  # stop-on-failure: false
+  # show-steps: false
+  # show-summary-footer: true
+  # show-failure-summary: true
+  # max-parallel-commands: 6
   log-path: build.log
-  vintage: false
+  # vintage: false
 
 x-reference-data:
   all-apps: &all-apps
@@ -20,6 +20,12 @@ x-reference-data:
     - yup-app-7
     - stuff-n-things
 tasks:
+  - name: Quickly do things (to find race conditions)
+    parallel-tasks:
+      - name: "quick: ?"
+        cmd: example/quick.sh ?
+        for-each: *all-apps
+
   - name: Verify environment
     cmd: example/jitter.sh 2
     stop-on-failure: false

@@ -316,7 +316,7 @@ func display(message string, curLine *int, targetIdx int) {
 		didShorten = true
 	}
 	if didShorten {
-		message += normal("...")
+		message += "..."
 	}
 
 	// display
