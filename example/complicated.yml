@@ -6,6 +6,19 @@ config:
   max-parallel-commands: 6
   log-path: build.log
   vintage: false
+
+x-reference-data:
+  all-apps: &all-apps
+    - some-app1
+    - some-app3
+    - some-lib-4
+    - some-awesome-app-5
+    - watcher-app
+    - public-6
+    - utilities
+    - important-lib
+    - yup-app-7
+    - stuff-n-things
 tasks:
   - name: Verify environment
     cmd: example/jitter.sh 2
@@ -42,26 +55,13 @@ tasks:
 
   - name: "Verifying: ?"
     cmd: example/jitter.sh 1 ?
-    for-each:
-      - some-app1
-      - some-app3
-      - some-lib-4
+    for-each: *all-apps
 
   - name: Cloning Repos
     parallel-tasks:
       - name: "clone: ?"
         cmd: example/jitter.sh 4 ?
-        for-each:
-          - some-app1
-          - some-app3
-          - some-lib-4
-          - some-awesome-app-5
-          - watcher-app
-          - public-6
-          - utilities
-          - important-lib
-          - yup-app-7
-          - stuff-n-things
+        for-each: *all-apps
 
   - name: Installing dependencies
     parallel-tasks:
