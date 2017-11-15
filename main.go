@@ -18,8 +18,8 @@ import (
 	"time"
 
 	ansi "github.com/k0kubun/go-ansi"
-	//"github.com/k0kubun/pp"
 	"github.com/lunixbochs/vtclean"
+	//"github.com/k0kubun/pp"
 	color "github.com/mgutz/ansi"
 	spin "github.com/tj/go-spin"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
@@ -33,6 +33,7 @@ var (
 	red           = color.ColorFunc("red+h")
 	green         = color.ColorFunc("green")
 	bold          = color.ColorFunc("default+b")
+	normal        = color.ColorFunc("default")
 	StatusSuccess = color.Color("  ", "green+ih")
 	StatusError   = color.Color("  ", "red+ih")
 	//StatusRunning               = color.Color("  ", "28+i")
@@ -158,8 +159,6 @@ func (obj *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// todo: make setTask function to clean and initialize fields instead of this odd loop....
-
 func (task *Task) inflate(displayIdx int, replicaValue string) {
 	cmdString := task.CmdString
 	name := task.Name
@@ -278,6 +277,26 @@ func (task *Task) getParallelTasks() (tasks []*Task) {
 	return tasks
 }
 
+func visualLength(str string) int {
+	inEscapeSeq := false
+	length := 0
+
+	for _, r := range str {
+		switch {
+		case inEscapeSeq:
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscapeSeq = false
+			}
+		case r == '\x1b':
+			inEscapeSeq = true
+		default:
+			length++
+		}
+	}
+
+	return length
+}
+
 func display(message string, curLine *int, targetIdx int) {
 	moves := *curLine - targetIdx
 	if moves != 0 {
@@ -290,11 +309,15 @@ func display(message string, curLine *int, targetIdx int) {
 	}
 
 	// trim message length
-	// terminalWidth, _ := terminal.Width()
-	// maxLineLen := int(terminalWidth) - len(message)
-	// if len(message) > maxLineLen {
-	// 	message = message[:maxLineLen-5] + "..."
-	// }
+	terminalWidth, _ := terminal.Width()
+	didShorten := false
+	for visualLength(message) > int(terminalWidth-3) {
+		message = message[:len(message)-3]
+		didShorten = true
+	}
+	if didShorten {
+		message += normal("...")
+	}
 
 	// display
 	ansi.EraseInLine(2)
@@ -309,18 +332,6 @@ func (task *Task) display(curLine *int) {
 		if task.Command.ReturnCode != 0 {
 			task.Display.Line.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
 		}
-	}
-
-	// trim message length
-	terminalWidth, _ := terminal.Width()
-	dummyObj := task.Display.Line
-	dummyObj.Msg = ""
-	var tpl bytes.Buffer
-	task.Display.Template.Execute(&tpl, dummyObj)
-
-	maxLineLen := int(terminalWidth) - len(vtclean.Clean(tpl.String(), false))
-	if len(task.Display.Line.Msg) > maxLineLen {
-		task.Display.Line.Msg = task.Display.Line.Msg[:maxLineLen-3] + "..."
 	}
 
 	// set the name
