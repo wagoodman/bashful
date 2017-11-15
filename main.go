@@ -52,13 +52,14 @@ var (
 )
 
 type ConfigOptions struct {
-	StopOnFailure     bool   `yaml:"stop-on-failure"`
-	ShowSteps         bool   `yaml:"show-steps"`
-	ShowSummaryFooter bool   `yaml:"show-summary-footer"`
-	ShowFailureReport bool   `yaml:"show-failure-summary"`
-	LogPath           string `yaml:"log-path"`
-	Vintage           bool   `yaml:"vintage"`
-	MaxParallelCmds   int    `yaml:"max-parallel-commands"`
+	StopOnFailure        bool   `yaml:"stop-on-failure"`
+	ShowSteps            bool   `yaml:"show-steps"`
+	ShowSummaryFooter    bool   `yaml:"show-summary-footer"`
+	ShowFailureReport    bool   `yaml:"show-failure-summary"`
+	LogPath              string `yaml:"log-path"`
+	Vintage              bool   `yaml:"vintage"`
+	MaxParallelCmds      int    `yaml:"max-parallel-commands"`
+	ReplicaReplaceString string `yaml:"replica-replace-pattern"`
 }
 
 type TaskDisplay struct {
@@ -131,6 +132,8 @@ func (obj *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) error
 	defaultValues.StopOnFailure = true
 	defaultValues.ShowSteps = false
 	defaultValues.ShowSummaryFooter = true
+	defaultValues.ReplicaReplaceString = "?"
+	defaultValues.MaxParallelCmds = 4
 
 	if err := unmarshal(&defaultValues); err != nil {
 		return err
@@ -161,8 +164,8 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	cmdString := task.CmdString
 	name := task.Name
 	if replicaValue != "" {
-		cmdString = strings.Replace(cmdString, "?", replicaValue, -1)
-		name = strings.Replace(name, "?", replicaValue, -1)
+		cmdString = strings.Replace(cmdString, Options.ReplicaReplaceString, replicaValue, -1)
+		name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
 	}
 	command := strings.Split(cmdString, " ")
 	task.Command.Cmd = exec.Command(command[0], command[1:]...)
@@ -620,10 +623,6 @@ func main() {
 
 	if Options.LogPath != "" {
 		go logFlusher()
-	}
-
-	if Options.MaxParallelCmds <= 0 {
-		Options.MaxParallelCmds = 4
 	}
 
 	if Options.Vintage {

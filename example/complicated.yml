@@ -24,9 +24,9 @@ tasks:
     cmd: example/jitter.sh 2
     stop-on-failure: false
 
-  # - name: Verify environment eith error
-  #   cmd: example/error.sh 1
-  #   stop-on-failure: false
+  - name: Some task (non stopping error)
+    cmd: example/error.sh 1
+    stop-on-failure: false
 
   # - name: Cloning Repos
   #   tasks:
@@ -53,7 +53,7 @@ tasks:
   #       - name: stuff-n-things
   #         cmd: example/jitter.sh 5
 
-  - name: "Verifying: ?"
+  - name: "Anchored loop template: ?"
     cmd: example/jitter.sh 1 ?
     for-each: *all-apps
 
