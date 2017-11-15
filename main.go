@@ -61,13 +61,13 @@ type ConfigOptions struct {
 	MaxParallelCmds   int    `yaml:"max-parallel-commands"`
 }
 
-type ActionDisplay struct {
+type TaskDisplay struct {
 	Template *template.Template
 	Idx      int
 	Line     Line
 }
 
-type ActionCommand struct {
+type TaskCommand struct {
 	Cmd        *exec.Cmd
 	Started    bool
 	Complete   bool
@@ -87,16 +87,17 @@ type Summary struct {
 	Msg     string
 }
 
-type Action struct {
-	Name            string `yaml:"name"`
-	CmdString       string `yaml:"cmd"`
-	Display         ActionDisplay
-	Command         ActionCommand
-	StopOnFailure   bool     `yaml:"stop-on-failure"`
-	ParallelActions []Action `yaml:"tasks"`
-	waiter          sync.WaitGroup
-	LogBuffer       *bytes.Buffer
-	ErrorBuffer     *bytes.Buffer
+type Task struct {
+	Name          string `yaml:"name"`
+	CmdString     string `yaml:"cmd"`
+	Display       TaskDisplay
+	Command       TaskCommand
+	StopOnFailure bool     `yaml:"stop-on-failure"`
+	ParallelTasks []Task   `yaml:"parallel-tasks"`
+	ForEach       []string `yaml:"for-each"`
+	waiter        sync.WaitGroup
+	LogBuffer     *bytes.Buffer
+	ErrorBuffer   *bytes.Buffer
 }
 
 type LogItem struct {
@@ -106,11 +107,11 @@ type LogItem struct {
 
 type Config struct {
 	Options ConfigOptions `yaml:"config"`
-	Tasks   []Action      `yaml:"tasks"`
+	Tasks   []Task        `yaml:"tasks"`
 }
 
 type CmdIR struct {
-	Action     *Action
+	Task       *Task
 	Status     string
 	Stdout     string
 	Stderr     string
@@ -141,8 +142,8 @@ func (obj *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) error
 	return nil
 }
 
-func (obj *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type defaults Action
+func (obj *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type defaults Task
 	var defaultValues defaults
 	defaultValues.StopOnFailure = Options.StopOnFailure
 
@@ -150,11 +151,82 @@ func (obj *Action) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
-	*obj = Action(defaultValues)
+	*obj = Task(defaultValues)
 	return nil
 }
 
-// todo: make setAction function to clean and initialize fields instead of this odd loop....
+// todo: make setTask function to clean and initialize fields instead of this odd loop....
+
+func (task *Task) inflate(displayIdx int, replicaValue string) {
+	cmdString := task.CmdString
+	name := task.Name
+	if replicaValue != "" {
+		cmdString = strings.Replace(cmdString, "?", replicaValue, -1)
+		name = strings.Replace(name, "?", replicaValue, -1)
+	}
+	command := strings.Split(cmdString, " ")
+	task.Command.Cmd = exec.Command(command[0], command[1:]...)
+	task.Command.ReturnCode = -1
+	task.Display.Template = LineDefaultTemplate
+	task.Display.Idx = displayIdx
+	task.LogBuffer = bytes.NewBufferString("")
+	task.ErrorBuffer = bytes.NewBufferString("")
+
+	// set the name
+	if name == "" {
+		if len(cmdString) > 25 {
+			task.Name = cmdString[:20] + "..."
+		} else {
+			task.Name = cmdString
+		}
+	} else {
+		task.Name = name
+	}
+}
+
+func (task *Task) create(displayStartIdx int, replicaValue string) {
+	task.inflate(displayStartIdx, replicaValue)
+
+	if task.CmdString != "" {
+		TotalTasks++
+	}
+
+	var finalTasks []Task
+
+	for subIndex := range task.ParallelTasks {
+		subTask := &task.ParallelTasks[subIndex]
+
+		if len(subTask.ForEach) > 0 {
+			subTaskName, subTaskCmdString := subTask.Name, subTask.CmdString
+			for subReplicaIndex, subReplicaValue := range subTask.ForEach {
+				subTask.Name = subTaskName
+				subTask.CmdString = subTaskCmdString
+				subTask.create(subReplicaIndex, subReplicaValue)
+
+				if subReplicaIndex == len(subTask.ForEach)-1 {
+					subTask.Display.Template = LineLastParallelTemplate
+				} else {
+					subTask.Display.Template = LineParallelTemplate
+				}
+
+				finalTasks = append(finalTasks, *subTask)
+			}
+		} else {
+			subTask.inflate(subIndex, replicaValue)
+			TotalTasks++
+
+			if subIndex == len(task.ParallelTasks)-1 {
+				subTask.Display.Template = LineLastParallelTemplate
+			} else {
+				subTask.Display.Template = LineParallelTemplate
+			}
+			finalTasks = append(finalTasks, *subTask)
+		}
+	}
+
+	// replace parallel tasks with the inflated list of final tasks
+	task.ParallelTasks = finalTasks
+}
 
 func (conf *Config) readConfig() {
 	fmt.Println("Reading " + os.Args[1] + " ...")
@@ -168,71 +240,39 @@ func (conf *Config) readConfig() {
 		log.Fatalf("Unmarshal: %v", err)
 	}
 
-	// initialize actions with default values
+	var finalTasks []Task
+
+	// initialize tasks with default values
 	for index := range conf.Tasks {
-		action := &conf.Tasks[index]
-		action.Display.Template = LineDefaultTemplate
-		action.Display.Idx = 0
-		action.LogBuffer = bytes.NewBufferString("")
-		action.ErrorBuffer = bytes.NewBufferString("")
-
-		// set the name
-		if action.Name == "" {
-			if len(action.CmdString) > 25 {
-				action.Name = action.CmdString[:20] + "..."
-			} else {
-				action.Name = action.CmdString
+		task := &conf.Tasks[index]
+		// finalize task by appending to the set of final tasks
+		if len(task.ForEach) > 0 {
+			taskName, taskCmdString := task.Name, task.CmdString
+			for _, replicaValue := range task.ForEach {
+				task.Name = taskName
+				task.CmdString = taskCmdString
+				task.create(0, replicaValue)
+				finalTasks = append(finalTasks, *task)
 			}
+		} else {
+			task.create(0, "")
+			finalTasks = append(finalTasks, *task)
 		}
-
-		if action.CmdString != "" {
-			TotalTasks++
-		}
-
-		for subIndex := range action.ParallelActions {
-			subAction := &action.ParallelActions[subIndex]
-			subAction.Display.Template = LineDefaultTemplate
-			subAction.Display.Idx = subIndex
-			subAction.LogBuffer = bytes.NewBufferString("")
-			subAction.ErrorBuffer = bytes.NewBufferString("")
-			TotalTasks++
-
-			// set the name
-			if subAction.Name == "" {
-				if len(subAction.CmdString) > 25 {
-					subAction.Name = subAction.CmdString[:20] + "..."
-				} else {
-					subAction.Name = subAction.CmdString
-				}
-			}
-
-		}
-
 	}
 
+	// replace the current config with the inflated list of final tasks
+	conf.Tasks = finalTasks
 }
 
-func (action *Action) getParallelActions() (actions []*Action) {
-
-	if action.CmdString != "" {
-		command := strings.Split(action.CmdString, " ")
-		action.Command.Cmd = exec.Command(command[0], command[1:]...)
-		action.Command.ReturnCode = -1
-		actions = append(actions, action)
+func (task *Task) getParallelTasks() (tasks []*Task) {
+	if task.CmdString != "" {
+		tasks = append(tasks, task)
 	} else {
-		for nestIdx := range action.ParallelActions {
-			command := strings.Split(action.ParallelActions[nestIdx].CmdString, " ")
-			action.ParallelActions[nestIdx].Command.Cmd = exec.Command(command[0], command[1:]...)
-			action.ParallelActions[nestIdx].Command.ReturnCode = -1
-			actions = append(actions, &action.ParallelActions[nestIdx])
-			if nestIdx == len(action.ParallelActions)-1 {
-				action.ParallelActions[nestIdx].Display.Template = LineLastParallelTemplate
-			} else {
-				action.ParallelActions[nestIdx].Display.Template = LineParallelTemplate
-			}
+		for nestIdx := range task.ParallelTasks {
+			tasks = append(tasks, &task.ParallelTasks[nestIdx])
 		}
 	}
-	return actions
+	return tasks
 }
 
 func display(message string, curLine *int, targetIdx int) {
@@ -260,39 +300,39 @@ func display(message string, curLine *int, targetIdx int) {
 	*curLine++
 }
 
-func (action *Action) display(curLine *int) {
-	if action.Command.Complete {
-		action.Display.Line.Spinner = ""
-		if action.Command.ReturnCode != 0 {
-			action.Display.Line.Msg = red("Exited with error (" + strconv.Itoa(action.Command.ReturnCode) + ")")
+func (task *Task) display(curLine *int) {
+	if task.Command.Complete {
+		task.Display.Line.Spinner = ""
+		if task.Command.ReturnCode != 0 {
+			task.Display.Line.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
 		}
 	}
 
 	// trim message length
 	terminalWidth, _ := terminal.Width()
-	dummyObj := action.Display.Line
+	dummyObj := task.Display.Line
 	dummyObj.Msg = ""
 	var tpl bytes.Buffer
-	action.Display.Template.Execute(&tpl, dummyObj)
+	task.Display.Template.Execute(&tpl, dummyObj)
 
 	maxLineLen := int(terminalWidth) - len(vtclean.Clean(tpl.String(), false))
-	if len(action.Display.Line.Msg) > maxLineLen {
-		action.Display.Line.Msg = action.Display.Line.Msg[:maxLineLen-3] + "..."
+	if len(task.Display.Line.Msg) > maxLineLen {
+		task.Display.Line.Msg = task.Display.Line.Msg[:maxLineLen-3] + "..."
 	}
 
 	// set the name
-	if action.Name == "" {
-		if len(action.CmdString) > 25 {
-			action.Name = action.CmdString[:22] + "..."
+	if task.Name == "" {
+		if len(task.CmdString) > 25 {
+			task.Name = task.CmdString[:22] + "..."
 		} else {
-			action.Name = action.CmdString
+			task.Name = task.CmdString
 		}
 	}
 
 	// display
 	var message bytes.Buffer
-	action.Display.Template.Execute(&message, action.Display.Line)
-	display(message.String(), curLine, action.Display.Idx)
+	task.Display.Template.Execute(&message, task.Display.Line)
+	display(message.String(), curLine, task.Display.Idx)
 }
 
 func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
@@ -305,7 +345,7 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 	}
 }
 
-func (action *Action) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
+func (task *Task) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
 
 	stdoutChan := make(chan PipeIR, 10000)
 	stderrChan := make(chan PipeIR, 10000)
@@ -316,41 +356,41 @@ func (action *Action) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadClos
 	for {
 		select {
 		case stdoutMsg := <-stdoutChan:
-			resultChan <- CmdIR{action, StatusRunning, stdoutMsg.message, "", false, -1}
+			resultChan <- CmdIR{task, StatusRunning, stdoutMsg.message, "", false, -1}
 		case stderrMsg := <-stderrChan:
-			resultChan <- CmdIR{action, StatusRunning, "", stderrMsg.message, false, -1}
+			resultChan <- CmdIR{task, StatusRunning, "", stderrMsg.message, false, -1}
 		}
 	}
 }
 
-func (action *Action) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+func (task *Task) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	waiter.Add(1)
-	resultChan <- CmdIR{action, StatusRunning, "", "", false, -1}
+	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
 
-	stdoutPipe, _ := action.Command.Cmd.StdoutPipe()
-	stderrPipe, _ := action.Command.Cmd.StderrPipe()
-	go action.reportOutput(resultChan, stdoutPipe, stderrPipe)
-	action.Command.Cmd.Start()
+	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
+	stderrPipe, _ := task.Command.Cmd.StderrPipe()
+	go task.reportOutput(resultChan, stdoutPipe, stderrPipe)
+	task.Command.Cmd.Start()
 
 	var waitStatus syscall.WaitStatus
 	var returnCode int
 
-	err := action.Command.Cmd.Wait()
+	err := task.Command.Cmd.Wait()
 
 	if exitError, ok := err.(*exec.ExitError); ok {
 		waitStatus = exitError.Sys().(syscall.WaitStatus)
 	} else {
-		waitStatus = action.Command.Cmd.ProcessState.Sys().(syscall.WaitStatus)
+		waitStatus = task.Command.Cmd.ProcessState.Sys().(syscall.WaitStatus)
 	}
 	returnCode = waitStatus.ExitStatus()
 
 	waiter.Done()
 
 	if returnCode == 0 {
-		resultChan <- CmdIR{action, StatusSuccess, "", "", true, returnCode}
+		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
 	} else {
-		resultChan <- CmdIR{action, StatusError, "", "", true, returnCode}
-		if action.StopOnFailure {
+		resultChan <- CmdIR{task, StatusError, "", "", true, returnCode}
+		if task.StopOnFailure {
 			ExitSignaled = true
 		}
 	}
@@ -363,13 +403,13 @@ func footer(status string) string {
 	return tpl.String()
 }
 
-func (action *Action) process(step, totalTasks int) []*Action {
+func (task *Task) process(step, totalTasks int) []*Task {
 
 	var (
-		curLine           int
-		lastStartedAction int
-		moves             int
-		failedActions     []*Action
+		curLine         int
+		lastStartedTask int
+		moves           int
+		failedTasks     []*Task
 	)
 
 	spinner := spin.New()
@@ -378,34 +418,34 @@ func (action *Action) process(step, totalTasks int) []*Action {
 		ticker.Stop()
 	}
 	resultChan := make(chan CmdIR, 10000)
-	actions := action.getParallelActions()
+	tasks := task.getParallelTasks()
 
 	if !Options.Vintage {
 		if Options.ShowSteps {
-			action.Name += color.ColorCode("reset") + " " + purple("〔"+strconv.Itoa(step)+"/"+strconv.Itoa(totalTasks)+"〕")
+			task.Name += color.ColorCode("reset") + " " + purple("〔"+strconv.Itoa(step)+"/"+strconv.Itoa(totalTasks)+"〕")
 		}
 
 		// make room for the title of a parallel proc group
-		if len(actions) > 1 {
-			lineObj := Line{StatusRunning, bold(action.Name), "\n", ""}
-			action.Display.Template.Execute(os.Stdout, lineObj)
+		if len(tasks) > 1 {
+			lineObj := Line{StatusRunning, bold(task.Name), "\n", ""}
+			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
-		for line := 0; line < len(actions); line++ {
-			actions[line].Command.Started = false
-			actions[line].Display.Line = Line{StatusPending, actions[line].Name, "", ""}
-			actions[line].display(&curLine)
+		for line := 0; line < len(tasks); line++ {
+			tasks[line].Command.Started = false
+			tasks[line].Display.Line = Line{StatusPending, tasks[line].Name, "", ""}
+			tasks[line].display(&curLine)
 		}
 	}
 
 	var runningCmds int
-	for ; lastStartedAction < Options.MaxParallelCmds && lastStartedAction < len(actions); lastStartedAction++ {
+	for ; lastStartedTask < Options.MaxParallelCmds && lastStartedTask < len(tasks); lastStartedTask++ {
 		if Options.Vintage {
-			fmt.Println(bold(action.Name + " : " + actions[lastStartedAction].Name))
-			fmt.Println(bold("Command: " + actions[lastStartedAction].CmdString))
+			fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
+			fmt.Println(bold("Command: " + tasks[lastStartedTask].CmdString))
 		}
-		go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
-		actions[lastStartedAction].Command.Started = true
+		go tasks[lastStartedTask].runCmd(resultChan, &task.waiter)
+		tasks[lastStartedTask].Command.Started = true
 		runningCmds++
 	}
 	groupSuccess := StatusSuccess
@@ -416,67 +456,67 @@ func (action *Action) process(step, totalTasks int) []*Action {
 		case <-ticker.C:
 			spinner.Next()
 
-			for _, actionObj := range actions {
-				if actionObj.Command.Complete || !actionObj.Command.Started {
-					actionObj.Display.Line.Spinner = ""
+			for _, taskObj := range tasks {
+				if taskObj.Command.Complete || !taskObj.Command.Started {
+					taskObj.Display.Line.Spinner = ""
 				} else {
-					actionObj.Display.Line.Spinner = spinner.Current()
+					taskObj.Display.Line.Spinner = spinner.Current()
 				}
-				actionObj.display(&curLine)
+				taskObj.display(&curLine)
 			}
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(SummaryPendingArrow), &curLine, len(actions))
+				display(footer(SummaryPendingArrow), &curLine, len(tasks))
 			}
 
 		case msgObj := <-resultChan:
-			eventAction := msgObj.Action
+			eventTask := msgObj.Task
 
 			// update the state before displaying...
 			if msgObj.Complete {
 				CompletedTasks++
-				eventAction.Command.Complete = true
-				eventAction.Command.ReturnCode = msgObj.ReturnCode
+				eventTask.Command.Complete = true
+				eventTask.Command.ReturnCode = msgObj.ReturnCode
 				if Options.LogPath != "" {
-					LogChan <- LogItem{eventAction.Name, eventAction.LogBuffer.String()}
+					LogChan <- LogItem{eventTask.Name, eventTask.LogBuffer.String()}
 				}
 
 				runningCmds--
-				// if a thread has freed up, start the next action (if there are any left)
-				if lastStartedAction < len(actions) {
+				// if a thread has freed up, start the next task (if there are any left)
+				if lastStartedTask < len(tasks) {
 					if Options.Vintage {
-						fmt.Println(bold(action.Name + " : " + actions[lastStartedAction].Name))
-						fmt.Println("Command: " + bold(actions[lastStartedAction].CmdString))
+						fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
+						fmt.Println("Command: " + bold(tasks[lastStartedTask].CmdString))
 					}
-					go actions[lastStartedAction].runCmd(resultChan, &action.waiter)
-					actions[lastStartedAction].Command.Started = true
+					go tasks[lastStartedTask].runCmd(resultChan, &task.waiter)
+					tasks[lastStartedTask].Command.Started = true
 					runningCmds++
-					lastStartedAction++
+					lastStartedTask++
 				}
 
 				if msgObj.Status == StatusError {
 					// update the group status to indicate a failed subtask
 					groupSuccess = StatusError
 
-					// keep note of the failed task for an after action report
-					failedActions = append(failedActions, eventAction)
+					// keep note of the failed task for an after task report
+					failedTasks = append(failedTasks, eventTask)
 				}
 			}
 
 			// record in the log
 			if Options.LogPath != "" {
 				if msgObj.Stdout != "" {
-					eventAction.LogBuffer.WriteString(msgObj.Stdout + "\n")
+					eventTask.LogBuffer.WriteString(msgObj.Stdout + "\n")
 				}
 				if msgObj.Stderr != "" {
-					eventAction.LogBuffer.WriteString(red(msgObj.Stderr) + "\n")
+					eventTask.LogBuffer.WriteString(red(msgObj.Stderr) + "\n")
 				}
 			}
 
-			// keep record of all stderr lines for an after action report
+			// keep record of all stderr lines for an after task report
 			if msgObj.Stderr != "" {
-				eventAction.ErrorBuffer.WriteString(msgObj.Stderr + "\n")
+				eventTask.ErrorBuffer.WriteString(msgObj.Stderr + "\n")
 			}
 
 			// display...
@@ -488,17 +528,17 @@ func (action *Action) process(step, totalTasks int) []*Action {
 				}
 			} else {
 				if msgObj.Stderr != "" {
-					eventAction.Display.Line = Line{msgObj.Status, eventAction.Name, red(msgObj.Stderr), spinner.Current()}
+					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current()}
 				} else {
-					eventAction.Display.Line = Line{msgObj.Status, eventAction.Name, msgObj.Stdout, spinner.Current()}
+					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, msgObj.Stdout, spinner.Current()}
 				}
 
-				eventAction.display(&curLine)
+				eventTask.display(&curLine)
 			}
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(SummaryPendingArrow), &curLine, len(actions))
+				display(footer(SummaryPendingArrow), &curLine, len(tasks))
 			}
 
 			if ExitSignaled {
@@ -510,12 +550,12 @@ func (action *Action) process(step, totalTasks int) []*Action {
 	}
 
 	if !ExitSignaled {
-		action.waiter.Wait()
+		task.waiter.Wait()
 	}
 
 	if !Options.Vintage {
 		// complete the proc group status
-		if len(actions) > 1 {
+		if len(tasks) > 1 {
 
 			moves = curLine + 1
 			if moves != 0 {
@@ -528,12 +568,12 @@ func (action *Action) process(step, totalTasks int) []*Action {
 			}
 
 			ansi.EraseInLine(2)
-			action.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(action.Name), "", ""})
+			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(task.Name), "", ""})
 			ansi.CursorHorizontalAbsolute(0)
 		}
 
 		// reset the cursor to the bottom of the section
-		moves = curLine - len(actions)
+		moves = curLine - len(tasks)
 		if moves != 0 {
 			if moves < 0 {
 				ansi.CursorDown(moves * -1)
@@ -544,7 +584,7 @@ func (action *Action) process(step, totalTasks int) []*Action {
 		}
 	}
 
-	return failedActions
+	return failedTasks
 }
 
 func logFlusher() {
@@ -592,11 +632,11 @@ func main() {
 		Options.ShowFailureReport = false
 	}
 
-	var failedActions []*Action
+	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
 	for index := range conf.Tasks {
-		failedActions = append(failedActions, conf.Tasks[index].process(index+1, len(conf.Tasks))...)
+		failedTasks = append(failedTasks, conf.Tasks[index].process(index+1, len(conf.Tasks))...)
 
 		if ExitSignaled {
 			break
@@ -605,7 +645,7 @@ func main() {
 	var curLine int
 
 	if Options.ShowSummaryFooter {
-		if len(failedActions) > 0 {
+		if len(failedTasks) > 0 {
 			display(footer(SummaryFailedArrow), &curLine, 0)
 		} else {
 			display(footer(SummarySuccessArrow), &curLine, 0)
@@ -614,11 +654,11 @@ func main() {
 
 	if Options.ShowFailureReport {
 		fmt.Println("Some tasks failed, see below for details.\n")
-		for _, action := range failedActions {
-			fmt.Println(bold(red("Failed action: " + action.Name)))
-			fmt.Println(" ├─ command: " + action.CmdString)
-			fmt.Println(" ├─ return code: " + strconv.Itoa(action.Command.ReturnCode))
-			fmt.Println(" └─ stderr: \n" + action.ErrorBuffer.String())
+		for _, task := range failedTasks {
+			fmt.Println(bold(red("Failed task: " + task.Name)))
+			fmt.Println(" ├─ command: " + task.CmdString)
+			fmt.Println(" ├─ return code: " + strconv.Itoa(task.Command.ReturnCode))
+			fmt.Println(" └─ stderr: \n" + task.ErrorBuffer.String())
 			fmt.Println()
 		}
 	}
