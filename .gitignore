@@ -1,6 +1,6 @@
 .vscode
 bashful*
-bin
+/bin
 vendor
 archive
 *.log
