@@ -13,5 +13,5 @@ tasks:
     - name: Google Chrome
       cmd: example/bin/download-chrome.sh
 
-    - name: Bridgy
-      cmd: example/bin/install-bridgy.sh
+    # - name: Bridgy
+    #   cmd: example/bin/install-bridgy.sh
