@@ -1,4 +1,4 @@
-#/usr/bin/env bash
+#!/usr/bin/env bash
 set -eux
 
 NORMAL=$(tput sgr0)
@@ -105,5 +105,4 @@ run:
             fail_on_missing: no
             flat: yes
 EOF
-    fi
 fi

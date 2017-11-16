@@ -1,4 +1,4 @@
-#/usr/bin/env bash
+#!/usr/bin/env bash
 set -eux
 
 CHROME_FILES=(google-chrome-stable_61.0.3163.100-1_amd64.deb)

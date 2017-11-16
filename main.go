@@ -201,6 +201,7 @@ func (task *Task) create(displayStartIdx int, replicaValue string) {
 		if len(subTask.ForEach) > 0 {
 			subTaskName, subTaskCmdString := subTask.Name, subTask.CmdString
 			for subReplicaIndex, subReplicaValue := range subTask.ForEach {
+				//subTaskReplica := Task{}
 				subTask.Name = subTaskName
 				subTask.CmdString = subTaskCmdString
 				subTask.create(subReplicaIndex, subReplicaValue)
@@ -349,8 +350,42 @@ func (task *Task) display(curLine *int) {
 	display(message.String(), curLine, task.Display.Idx)
 }
 
+func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+
+	// Return nothing if at end of file and no data passed
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	// Case: \n
+	if i := strings.Index(string(data), "\n"); i >= 0 {
+		return i + 1, data[0:i], nil
+	}
+
+	// Case: \r
+	if i := strings.Index(string(data), "\r"); i >= 0 {
+		return i + 1, data[0:i], nil
+	}
+
+	// Case: it's just too long
+	terminalWidth, _ := terminal.Width()
+	if len(data) > int(terminalWidth*2) {
+		return int(terminalWidth * 2), data[0:int(terminalWidth*2)], nil
+	}
+
+	// todo: by some ansi escape sequences
+
+	// If at end of file with data return the data
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	return
+}
+
 func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 	scanner := bufio.NewScanner(pipe)
+	scanner.Split(variableSplitFunc)
 
 	for scanner.Scan() {
 		message := scanner.Text()

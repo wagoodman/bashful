@@ -4,3 +4,4 @@ bashful*
 vendor
 archive
 *.log
+/downloads
