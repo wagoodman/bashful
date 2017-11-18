@@ -1,25 +1,21 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"html/template"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	ansi "github.com/k0kubun/go-ansi"
-	"github.com/lunixbochs/vtclean"
 	//"github.com/k0kubun/pp"
+	"github.com/go-cmd/cmd"
 	color "github.com/mgutz/ansi"
 	spin "github.com/tj/go-spin"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
@@ -70,7 +66,7 @@ type TaskDisplay struct {
 }
 
 type TaskCommand struct {
-	Cmd        *exec.Cmd
+	Cmd        *cmd.Cmd
 	Started    bool
 	Complete   bool
 	ReturnCode int
@@ -113,12 +109,9 @@ type Config struct {
 }
 
 type CmdIR struct {
-	Task       *Task
-	Status     string
-	Stdout     string
-	Stderr     string
-	Complete   bool
-	ReturnCode int
+	Task      *Task
+	Status    cmd.Status
+	StatusStr string
 }
 
 type PipeIR struct {
@@ -167,7 +160,8 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 		name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
 	}
 	command := strings.Split(cmdString, " ")
-	task.Command.Cmd = exec.Command(command[0], command[1:]...)
+	// task.Command.Cmd = exec.Command(command[0], command[1:]...)
+	task.Command.Cmd = cmd.NewCmd(command[0], command[1:]...)
 	task.Command.ReturnCode = -1
 	task.Display.Template = LineDefaultTemplate
 	task.Display.Idx = displayIdx
@@ -383,66 +377,37 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 	return
 }
 
-func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
-	scanner := bufio.NewScanner(pipe)
-	scanner.Split(variableSplitFunc)
-
-	for scanner.Scan() {
-		message := scanner.Text()
-
-		resultChan <- PipeIR{vtclean.Clean(message, false)}
-	}
-}
-
-func (task *Task) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
-
-	stdoutChan := make(chan PipeIR, 10000)
-	stderrChan := make(chan PipeIR, 10000)
-
-	go readPipe(stdoutChan, stdoutPipe)
-	go readPipe(stderrChan, stderrPipe)
-
-	for {
-		select {
-		case stdoutMsg := <-stdoutChan:
-			resultChan <- CmdIR{task, StatusRunning, stdoutMsg.message, "", false, -1}
-		case stderrMsg := <-stderrChan:
-			resultChan <- CmdIR{task, StatusRunning, "", stderrMsg.message, false, -1}
-		}
-	}
-}
-
 func (task *Task) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	waiter.Add(1)
-	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
+	resultChan <- CmdIR{task, cmd.Status{}, StatusRunning}
+	ticker := time.NewTicker(250 * time.Millisecond)
 
-	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
-	stderrPipe, _ := task.Command.Cmd.StderrPipe()
-	go task.reportOutput(resultChan, stdoutPipe, stderrPipe)
-	task.Command.Cmd.Start()
+	statusChan := task.Command.Cmd.Start()
+	running := true
 
-	var waitStatus syscall.WaitStatus
-	var returnCode int
+	for running {
+		select {
 
-	err := task.Command.Cmd.Wait()
+		case <-ticker.C:
+			resultChan <- CmdIR{task, task.Command.Cmd.Status(), StatusRunning}
 
-	if exitError, ok := err.(*exec.ExitError); ok {
-		waitStatus = exitError.Sys().(syscall.WaitStatus)
-	} else {
-		waitStatus = task.Command.Cmd.ProcessState.Sys().(syscall.WaitStatus)
+		case finalStatus := <-statusChan:
+			// the subprocess has completeds
+			ticker.Stop()
+			running = false
+			finalStatusStr := StatusSuccess
+			if finalStatus.Exit != 0 {
+				finalStatusStr = StatusError
+				if task.StopOnFailure {
+					ExitSignaled = true
+				}
+			}
+			resultChan <- CmdIR{task, finalStatus, finalStatusStr}
+		}
+
 	}
-	returnCode = waitStatus.ExitStatus()
 
 	waiter.Done()
-
-	if returnCode == 0 {
-		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
-	} else {
-		resultChan <- CmdIR{task, StatusError, "", "", true, returnCode}
-		if task.StopOnFailure {
-			ExitSignaled = true
-		}
-	}
 }
 
 func footer(status string) string {
@@ -523,10 +488,10 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			eventTask := msgObj.Task
 
 			// update the state before displaying...
-			if msgObj.Complete {
+			if msgObj.Status.Complete {
 				CompletedTasks++
 				eventTask.Command.Complete = true
-				eventTask.Command.ReturnCode = msgObj.ReturnCode
+				eventTask.Command.ReturnCode = msgObj.Status.Exit
 				if Options.LogPath != "" {
 					LogChan <- LogItem{eventTask.Name, eventTask.LogBuffer.String()}
 				}
@@ -544,7 +509,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 					lastStartedTask++
 				}
 
-				if msgObj.Status == StatusError {
+				if msgObj.Status.Exit != 0 {
 					// update the group status to indicate a failed subtask
 					groupSuccess = StatusError
 
@@ -555,34 +520,62 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			// record in the log
 			if Options.LogPath != "" {
-				if msgObj.Stdout != "" {
-					eventTask.LogBuffer.WriteString(msgObj.Stdout + "\n")
+				if len(msgObj.Status.Stdout) > 0 {
+					for _, line := range msgObj.Status.Stdout {
+						eventTask.LogBuffer.WriteString(line + "\n")
+					}
 				}
-				if msgObj.Stderr != "" {
-					eventTask.LogBuffer.WriteString(red(msgObj.Stderr) + "\n")
+				if len(msgObj.Status.Stderr) > 0 {
+					for _, line := range msgObj.Status.Stderr {
+						eventTask.LogBuffer.WriteString(red(line) + "\n")
+					}
 				}
 			}
 
 			// keep record of all stderr lines for an after task report
-			if msgObj.Stderr != "" {
-				eventTask.ErrorBuffer.WriteString(msgObj.Stderr + "\n")
+			if len(msgObj.Status.Stderr) > 0 {
+				for _, line := range msgObj.Status.Stderr {
+					eventTask.ErrorBuffer.WriteString(line + "\n")
+				}
 			}
 
 			// display...
 			if Options.Vintage {
-				if msgObj.Stderr != "" {
-					fmt.Println(red(msgObj.Stderr))
-				} else {
-					fmt.Println(msgObj.Stdout)
+				if len(msgObj.Status.Stdout) > 0 {
+					for _, line := range msgObj.Status.Stdout {
+						fmt.Println(line)
+					}
+				} else if len(msgObj.Status.Stderr) > 0 {
+					for _, line := range msgObj.Status.Stderr {
+						fmt.Println(red(line))
+					}
 				}
 			} else {
-				if msgObj.Stderr != "" {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current()}
-				} else {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, msgObj.Stdout, spinner.Current()}
-				}
+				if len(msgObj.Status.Stdout) > 0 {
+					eventTask.Display.Line = Line{msgObj.StatusStr,
+						eventTask.Name,
+						msgObj.Status.Stdout[len(msgObj.Status.Stdout)-1],
+						spinner.Current()}
 
-				eventTask.display(&curLine)
+					// if the command has completed, so no output in the normal display mode
+					if msgObj.Status.Complete {
+						eventTask.Display.Line.Msg = ""
+					}
+
+					eventTask.display(&curLine)
+				} else if len(msgObj.Status.Stderr) > 0 {
+					eventTask.Display.Line = Line{msgObj.StatusStr,
+						eventTask.Name,
+						red(msgObj.Status.Stderr[len(msgObj.Status.Stderr)-1]),
+						spinner.Current()}
+
+					// if the command has completed, so no output in the normal display mode
+					if msgObj.Status.Complete {
+						eventTask.Display.Line.Msg = ""
+					}
+
+					eventTask.display(&curLine)
+				}
 			}
 
 			// update the summary line
