@@ -1,6 +1,6 @@
 config:
-  log-path: build.log
-
+  #log-path: build.log
+  max-parallel-commands: 1
 tasks:
 
 

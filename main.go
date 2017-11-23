@@ -127,14 +127,20 @@ type PipeIR struct {
 
 // set default values for undefined yaml
 
-func (obj *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type defaults ConfigOptions
-	var defaultValues defaults
+func defaultOptions() ConfigOptions {
+	var defaultValues ConfigOptions
 	defaultValues.StopOnFailure = true
 	defaultValues.ShowSteps = false
 	defaultValues.ShowSummaryFooter = true
 	defaultValues.ReplicaReplaceString = "?"
 	defaultValues.MaxParallelCmds = 4
+	return defaultValues
+}
+
+func (obj *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type defaults ConfigOptions
+	var defaultValues defaults
+	defaultValues = defaults(defaultOptions())
 
 	if err := unmarshal(&defaultValues); err != nil {
 		return err
@@ -162,10 +168,12 @@ func (obj *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 func (task *Task) inflate(displayIdx int, replicaValue string) {
 	cmdString := task.CmdString
 	name := task.Name
+
 	if replicaValue != "" {
 		cmdString = strings.Replace(cmdString, Options.ReplicaReplaceString, replicaValue, -1)
 		name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
 	}
+
 	command := strings.Split(cmdString, " ")
 	task.Command.Cmd = exec.Command(command[0], command[1:]...)
 	task.Command.ReturnCode = -1
@@ -384,6 +392,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 }
 
 func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
+	defer close(resultChan)
 	scanner := bufio.NewScanner(pipe)
 	scanner.Split(variableSplitFunc)
 
@@ -394,8 +403,10 @@ func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
 	}
 }
 
-func (task *Task) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser) {
+func (task *Task) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, pipeSync *sync.WaitGroup) {
 
+	pipeSync.Add(1)
+	defer pipeSync.Done()
 	stdoutChan := make(chan PipeIR, 10000)
 	stderrChan := make(chan PipeIR, 10000)
 
@@ -404,10 +415,19 @@ func (task *Task) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, 
 
 	for {
 		select {
-		case stdoutMsg := <-stdoutChan:
+		case stdoutMsg, ok := <-stdoutChan:
 			resultChan <- CmdIR{task, StatusRunning, stdoutMsg.message, "", false, -1}
-		case stderrMsg := <-stderrChan:
+			if !ok {
+				stdoutChan = nil
+			}
+		case stderrMsg, ok := <-stderrChan:
 			resultChan <- CmdIR{task, StatusRunning, "", stderrMsg.message, false, -1}
+			if !ok {
+				stderrChan = nil
+			}
+		}
+		if stdoutChan == nil && stderrChan == nil {
+			break
 		}
 	}
 }
@@ -418,7 +438,9 @@ func (task *Task) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := task.Command.Cmd.StderrPipe()
-	go task.reportOutput(resultChan, stdoutPipe, stderrPipe)
+	var pipeSync sync.WaitGroup
+
+	go task.reportOutput(resultChan, stdoutPipe, stderrPipe, &pipeSync)
 	task.Command.Cmd.Start()
 
 	var waitStatus syscall.WaitStatus
@@ -434,6 +456,7 @@ func (task *Task) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	returnCode = waitStatus.ExitStatus()
 
 	waiter.Done()
+	pipeSync.Wait()
 
 	if returnCode == 0 {
 		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
@@ -662,12 +685,15 @@ func logFlusher() {
 
 func main() {
 
+	Options = defaultOptions()
 	var conf Config
 	conf.readConfig()
 
 	rand.Seed(time.Now().UnixNano())
 
 	if Options.LogPath != "" {
+		fmt.Println("Logging is not supported yet!")
+		os.Exit(1)
 		go logFlusher()
 	}
 
