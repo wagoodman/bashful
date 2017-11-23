@@ -32,8 +32,8 @@ var (
 	normal        = color.ColorFunc("default")
 	StatusSuccess = color.Color("  ", "green+ih")
 	StatusError   = color.Color("  ", "red+ih")
-	//StatusRunning               = color.Color("  ", "28+i")
-	StatusRunning               = color.Color("  ", "22+i")
+	StatusRunning = color.Color("  ", "28+i")
+	//StatusRunning               = color.Color("  ", "22+i")
 	StatusPending               = color.Color("  ", "22+i")
 	SummaryPendingArrow         = color.Color("    ", "22+i")     //color.Color("    ", "22+i")     //+ color.Color("❯❯❯", "22")
 	SummarySuccessArrow         = color.Color("    ", "green+ih") //color.Color("    ", "green+ih") //+ color.Color("❯❯❯", "green+h")
@@ -661,7 +661,9 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	if Options.LogPath != "" {
-		go logFlusher()
+		fmt.Println("Logging is not supported yet!")
+		os.Exit(1)
+		// go logFlusher()
 	}
 
 	if Options.Vintage {
