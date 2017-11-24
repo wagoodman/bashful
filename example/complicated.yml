@@ -1,9 +1,9 @@
 config:
   # stop-on-failure: false
-  # show-steps: false
+  show-steps: true
   # show-summary-footer: true
   # show-failure-summary: true
-  # max-parallel-commands: 6
+  max-parallel-commands: 6
   # log-path: build.log
   # vintage: false
   # replica-replace-pattern: '?'

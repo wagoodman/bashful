@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -9,7 +8,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-type ConfigOptions struct {
+type OptionsConfig struct {
 	StopOnFailure        bool   `yaml:"stop-on-failure"`
 	ShowSteps            bool   `yaml:"show-steps"`
 	ShowSummaryFooter    bool   `yaml:"show-summary-footer"`
@@ -20,13 +19,13 @@ type ConfigOptions struct {
 	ReplicaReplaceString string `yaml:"replica-replace-pattern"`
 }
 
-type Config struct {
-	Options ConfigOptions `yaml:"config"`
+type RunConfig struct {
+	Options OptionsConfig `yaml:"config"`
 	Tasks   []Task        `yaml:"tasks"`
 }
 
-func defaultOptions() ConfigOptions {
-	var defaultValues ConfigOptions
+func defaultOptions() OptionsConfig {
+	var defaultValues OptionsConfig
 	defaultValues.StopOnFailure = true
 	defaultValues.ShowSteps = false
 	defaultValues.ShowSummaryFooter = true
@@ -35,8 +34,8 @@ func defaultOptions() ConfigOptions {
 	return defaultValues
 }
 
-func (conf *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type defaults ConfigOptions
+func (conf *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type defaults OptionsConfig
 	var defaultValues defaults
 	defaultValues = defaults(defaultOptions())
 
@@ -44,14 +43,14 @@ func (conf *ConfigOptions) UnmarshalYAML(unmarshal func(interface{}) error) erro
 		return err
 	}
 
-	*conf = ConfigOptions(defaultValues)
-	// set global options
-	Options = *conf
+	*conf = OptionsConfig(defaultValues)
 	return nil
 }
 
-func (conf *Config) read() {
-	fmt.Println("Reading " + os.Args[1] + " ...")
+func (conf *RunConfig) read() {
+	conf.Options = defaultOptions()
+
+	// fmt.Println("Reading " + os.Args[1] + " ...")
 	yamlString, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
 		log.Printf("yamlFile.Get err   #%v ", err)

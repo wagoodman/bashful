@@ -59,7 +59,6 @@ type PipeIR struct {
 	message string
 }
 
-
 func (task *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type defaults Task
 	var defaultValues defaults
@@ -147,7 +146,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	}
 }
 
-func (task *Task) getParallelTasks() (tasks []*Task) {
+func (task *Task) tasks() (tasks []*Task) {
 	if task.CmdString != "" {
 		tasks = append(tasks, task)
 	} else {
@@ -295,7 +294,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 		ticker.Stop()
 	}
 	resultChan := make(chan CmdIR, 10000)
-	tasks := task.getParallelTasks()
+	tasks := task.tasks()
 	var waiter sync.WaitGroup
 
 	if !Options.Vintage {
