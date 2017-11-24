@@ -10,5 +10,5 @@ build: vendor
 
 run:
 	clear
-	#go run main.go example/segexample.yaml 
-	go run main.go example/complicated.yml
+	#go run *.go example/segexample.yaml 
+	go run *.go example/complicated.yml
