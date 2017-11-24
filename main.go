@@ -381,7 +381,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 		return int(terminalWidth * 2), data[0:int(terminalWidth*2)], nil
 	}
 
-	// todo: by some ansi escape sequences
+	// TODO: by some ansi escape sequences
 
 	// If at end of file with data return the data
 	if atEOF {
@@ -391,25 +391,27 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 	return
 }
 
-func readPipe(resultChan chan PipeIR, pipe io.ReadCloser) {
-	defer close(resultChan)
-	scanner := bufio.NewScanner(pipe)
-	scanner.Split(variableSplitFunc)
+func (task *Task) Run(resultChan chan CmdIR) {
+	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
 
-	for scanner.Scan() {
-		message := scanner.Text()
+	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
+	stderrPipe, _ := task.Command.Cmd.StderrPipe()
 
-		resultChan <- PipeIR{vtclean.Clean(message, false)}
+	task.Command.Cmd.Start()
+
+	readPipe := func(resultChan chan PipeIR, pipe io.ReadCloser) {
+		defer close(resultChan)
+
+		scanner := bufio.NewScanner(pipe)
+		scanner.Split(variableSplitFunc)
+		for scanner.Scan() {
+			message := scanner.Text()
+			resultChan <- PipeIR{vtclean.Clean(message, false)}
+		}
 	}
-}
 
-func (task *Task) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, pipeSync *sync.WaitGroup) {
-
-	pipeSync.Add(1)
-	defer pipeSync.Done()
-	stdoutChan := make(chan PipeIR, 10000)
-	stderrChan := make(chan PipeIR, 10000)
-
+	stdoutChan := make(chan PipeIR)
+	stderrChan := make(chan PipeIR)
 	go readPipe(stdoutChan, stdoutPipe)
 	go readPipe(stderrChan, stderrPipe)
 
@@ -430,21 +432,8 @@ func (task *Task) reportOutput(resultChan chan CmdIR, stdoutPipe io.ReadCloser, 
 			break
 		}
 	}
-}
-
-func (task *Task) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
-	waiter.Add(1)
-	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
-
-	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
-	stderrPipe, _ := task.Command.Cmd.StderrPipe()
-	var pipeSync sync.WaitGroup
-
-	go task.reportOutput(resultChan, stdoutPipe, stderrPipe, &pipeSync)
-	task.Command.Cmd.Start()
 
 	var waitStatus syscall.WaitStatus
-	var returnCode int
 
 	err := task.Command.Cmd.Wait()
 
@@ -453,10 +442,8 @@ func (task *Task) runCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	} else {
 		waitStatus = task.Command.Cmd.ProcessState.Sys().(syscall.WaitStatus)
 	}
-	returnCode = waitStatus.ExitStatus()
 
-	waiter.Done()
-	pipeSync.Wait()
+	returnCode := waitStatus.ExitStatus()
 
 	if returnCode == 0 {
 		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
@@ -516,7 +503,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
 			fmt.Println(bold("Command: " + tasks[lastStartedTask].CmdString))
 		}
-		go tasks[lastStartedTask].runCmd(resultChan, &task.waiter)
+		go tasks[lastStartedTask].Run(resultChan)
 		tasks[lastStartedTask].Command.Started = true
 		runningCmds++
 	}
@@ -561,7 +548,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 						fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
 						fmt.Println("Command: " + bold(tasks[lastStartedTask].CmdString))
 					}
-					go tasks[lastStartedTask].runCmd(resultChan, &task.waiter)
+					go tasks[lastStartedTask].Run(resultChan)
 					tasks[lastStartedTask].Command.Started = true
 					runningCmds++
 					lastStartedTask++
