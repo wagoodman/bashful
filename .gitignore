@@ -1,4 +1,5 @@
 .vscode
+/.bashful
 bashful*
 /bin
 vendor

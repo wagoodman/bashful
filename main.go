@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"math/rand"
-	"os"
 	"strconv"
 	"time"
 
@@ -17,6 +16,8 @@ import (
 
 var (
 	Options       OptionsConfig
+	LogCachePath  string
+	CachePath     string
 	ExitSignaled  = false
 	purple        = color.ColorFunc("magenta+h")
 	red           = color.ColorFunc("red+h")
@@ -38,7 +39,8 @@ var (
 	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + bold(` {{printf "%3.2f" .Percent}}% Complete {{.Msg}}`))
 	TotalTasks                  = 0
 	CompletedTasks              = 0
-	LogChan                     = make(chan LogItem, 10000)
+	MainLogChan                 = make(chan LogItem)
+	MainLogConcatChan           = make(chan LogConcat)
 )
 
 type Line struct {
@@ -119,9 +121,9 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	if Options.LogPath != "" {
-		fmt.Println("Logging is not supported yet!")
-		os.Exit(1)
-		go logFlusher()
+		// fmt.Println("Logging is not supported yet!")
+		// os.Exit(1)
+		setupLogging()
 	}
 
 	if Options.Vintage {

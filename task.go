@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strconv"
@@ -29,7 +30,8 @@ type Task struct {
 	StopOnFailure bool     `yaml:"stop-on-failure"`
 	ParallelTasks []Task   `yaml:"parallel-tasks"`
 	ForEach       []string `yaml:"for-each"`
-	LogBuffer     *bytes.Buffer
+	LogChan       chan LogItem
+	LogFile       *os.File
 	ErrorBuffer   *bytes.Buffer
 }
 
@@ -131,7 +133,6 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	task.Command.ReturnCode = -1
 	task.Display.Template = LineDefaultTemplate
 	task.Display.Idx = displayIdx
-	task.LogBuffer = bytes.NewBufferString("")
 	task.ErrorBuffer = bytes.NewBufferString("")
 
 	// set the name
@@ -214,9 +215,15 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 }
 
 func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+	MainLogChan <- LogItem{task.Name, "Running Cmd: " + task.CmdString}
 	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
 	waiter.Add(1)
 	defer waiter.Done()
+
+	tempFile, _ := ioutil.TempFile(LogCachePath, "")
+	task.LogFile = tempFile
+	task.LogChan = make(chan LogItem)
+	go SingleLogger(task.LogChan, task.Name, tempFile.Name())
 
 	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := task.Command.Cmd.StderrPipe()
@@ -242,13 +249,15 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	for {
 		select {
 		case stdoutMsg, ok := <-stdoutChan:
-			resultChan <- CmdIR{task, StatusRunning, stdoutMsg.message, "", false, -1}
-			if !ok {
+			if ok {
+				resultChan <- CmdIR{task, StatusRunning, stdoutMsg.message, "", false, -1}
+			} else {
 				stdoutChan = nil
 			}
 		case stderrMsg, ok := <-stderrChan:
-			resultChan <- CmdIR{task, StatusRunning, "", stderrMsg.message, false, -1}
-			if !ok {
+			if ok {
+				resultChan <- CmdIR{task, StatusRunning, "", stderrMsg.message, false, -1}
+			} else {
 				stderrChan = nil
 			}
 		}
@@ -355,9 +364,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 				CompletedTasks++
 				eventTask.Command.Complete = true
 				eventTask.Command.ReturnCode = msgObj.ReturnCode
-				if Options.LogPath != "" {
-					LogChan <- LogItem{eventTask.Name, eventTask.LogBuffer.String()}
-				}
+				close(eventTask.LogChan)
 
 				runningCmds--
 				// if a thread has freed up, start the next task (if there are any left)
@@ -384,10 +391,10 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			// record in the log
 			if Options.LogPath != "" {
 				if msgObj.Stdout != "" {
-					eventTask.LogBuffer.WriteString(msgObj.Stdout + "\n")
+					eventTask.LogChan <- LogItem{eventTask.Name, msgObj.Stdout + "\n"}
 				}
 				if msgObj.Stderr != "" {
-					eventTask.LogBuffer.WriteString(red(msgObj.Stderr) + "\n")
+					eventTask.LogChan <- LogItem{eventTask.Name, red(msgObj.Stderr) + "\n"}
 				}
 			}
 

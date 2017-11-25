@@ -4,7 +4,7 @@ config:
   # show-summary-footer: true
   # show-failure-summary: true
   max-parallel-commands: 6
-  # log-path: build.log
+  log-path: build.log
   # vintage: false
   # replica-replace-pattern: '?'
 
