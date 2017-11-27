@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"html/template"
 	"math/rand"
+	"os"
 	"strconv"
 	"time"
 
 	ansi "github.com/k0kubun/go-ansi"
 	//"github.com/k0kubun/pp"
+
 	color "github.com/mgutz/ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
@@ -18,7 +20,9 @@ var (
 	Options       OptionsConfig
 	LogCachePath  string
 	CachePath     string
+	EtaCachePath  string
 	ExitSignaled  = false
+	StartTime     = time.Now()
 	purple        = color.ColorFunc("magenta+h")
 	red           = color.ColorFunc("red+h")
 	green         = color.ColorFunc("green")
@@ -32,28 +36,25 @@ var (
 	SummaryPendingArrow         = color.Color("    ", "22+i")     //color.Color("    ", "22+i")     //+ color.Color("❯❯❯", "22")
 	SummarySuccessArrow         = color.Color("    ", "green+ih") //color.Color("    ", "green+ih") //+ color.Color("❯❯❯", "green+h")
 	SummaryFailedArrow          = color.Color("    ", "red+ih")
-	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}       {{.Msg}}")
-	LineParallelTemplate, _     = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  ├─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
-	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  └─ {{printf \"%-25s\" .Title}}   {{.Msg}}")
+	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}     {{.Eta}}{{.Msg}}")
+	LineParallelTemplate, _     = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  ├─ {{printf \"%-25s\" .Title}} {{.Eta}}{{.Msg}}")
+	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}}  └─ {{printf \"%-25s\" .Title}} {{.Eta}}{{.Msg}}")
 	LineErrorTemplate, _        = template.New("error line").Parse(" {{.Status}} {{.Msg}}")
-	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + bold(` {{printf "%3.2f" .Percent}}% Complete {{.Msg}}`))
+	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + bold(` {{printf "%3.2f" .Percent}}% Complete`) + `{{.Msg}}{{.Runtime}}{{.Eta}}`)
 	TotalTasks                  = 0
 	CompletedTasks              = 0
 	MainLogChan                 = make(chan LogItem)
 	MainLogConcatChan           = make(chan LogConcat)
+	CommandTimeCache            = make(map[string]time.Duration)
+	TotalEtaSeconds             float64
 )
-
-type Line struct {
-	Status  string
-	Title   string
-	Msg     string
-	Spinner string
-}
 
 type Summary struct {
 	Status  string
 	Percent float64
 	Msg     string
+	Runtime string
+	Eta     string
 }
 
 func visualLength(str string) int {
@@ -105,16 +106,44 @@ func display(message string, curLine *int, targetIdx int) {
 	*curLine++
 }
 
+func showDuration(duration time.Duration) string {
+	seconds := int64(duration.Seconds()) % 60
+	minutes := int64(duration.Minutes()) % 60
+	hours := int64(duration.Hours()) % 24
+	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
 func footer(status string) string {
 	var tpl bytes.Buffer
+	var durString, etaString string
+
+	if Options.ShowSummaryTimes {
+		duration := time.Since(StartTime)
+		durString = fmt.Sprintf(" Running[%s]", showDuration(duration))
+
+		totalEta := time.Duration(TotalEtaSeconds) * time.Second
+		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
+		etaString = fmt.Sprintf(" Eta[%s]", showDuration(remainingEta))
+	}
+
 	percent := (float64(CompletedTasks) * float64(100)) / float64(TotalTasks)
-	SummaryTemplate.Execute(&tpl, Summary{status, percent, ""})
+	SummaryTemplate.Execute(&tpl, Summary{status, percent, "", durString, etaString})
 	return tpl.String()
+}
+
+func Exists(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
 }
 
 func main() {
 
 	var conf RunConfig
+	var err error
 	conf.read()
 	Options = conf.Options
 
@@ -131,7 +160,6 @@ func main() {
 		Options.ShowSummaryFooter = false
 		Options.ShowFailureReport = false
 	}
-
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
@@ -142,6 +170,10 @@ func main() {
 			break
 		}
 	}
+
+	err = Save(EtaCachePath, &CommandTimeCache)
+	Check(err)
+
 	var curLine int
 
 	if Options.ShowSummaryFooter {
@@ -153,7 +185,7 @@ func main() {
 	}
 
 	if Options.ShowFailureReport {
-		fmt.Println("Some tasks failed, see below for details.\n")
+		fmt.Println("Some tasks failed, see below for details.")
 		for _, task := range failedTasks {
 			fmt.Println(bold(red("Failed task: " + task.Name)))
 			fmt.Println(" ├─ command: " + task.CmdString)

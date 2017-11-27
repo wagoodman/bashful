@@ -42,10 +42,13 @@ type TaskDisplay struct {
 }
 
 type TaskCommand struct {
-	Cmd        *exec.Cmd
-	Started    bool
-	Complete   bool
-	ReturnCode int
+	Cmd              *exec.Cmd
+	StartTime        time.Time
+	StopTime         time.Time
+	EstimatedRuntime time.Duration
+	Started          bool
+	Complete         bool
+	ReturnCode       int
 }
 
 type CmdIR struct {
@@ -59,6 +62,14 @@ type CmdIR struct {
 
 type PipeIR struct {
 	message string
+}
+
+type Line struct {
+	Status  string
+	Title   string
+	Msg     string
+	Spinner string
+	Eta     string
 }
 
 func (task *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -128,6 +139,14 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 		name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
 	}
 
+	task.CmdString = cmdString
+
+	if eta, ok := CommandTimeCache[task.CmdString]; ok {
+		task.Command.EstimatedRuntime = eta
+	} else {
+		task.Command.EstimatedRuntime = time.Duration(-1)
+	}
+
 	command := strings.Split(cmdString, " ")
 	task.Command.Cmd = exec.Command(command[0], command[1:]...)
 	task.Command.ReturnCode = -1
@@ -161,6 +180,7 @@ func (task *Task) tasks() (tasks []*Task) {
 func (task *Task) display(curLine *int) {
 	if task.Command.Complete {
 		task.Display.Line.Spinner = ""
+		task.Display.Line.Eta = ""
 		if task.Command.ReturnCode != 0 {
 			task.Display.Line.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
 		}
@@ -215,6 +235,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 }
 
 func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+	task.Command.StartTime = time.Now()
 	MainLogChan <- LogItem{task.Name, "Running Cmd: " + task.CmdString}
 	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
 	waiter.Add(1)
@@ -269,6 +290,7 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	var waitStatus syscall.WaitStatus
 
 	err := task.Command.Cmd.Wait()
+	task.Command.StopTime = time.Now()
 
 	if exitError, ok := err.(*exec.ExitError); ok {
 		waitStatus = exitError.Sys().(syscall.WaitStatus)
@@ -286,6 +308,20 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 			ExitSignaled = true
 		}
 	}
+}
+
+func (task *Task) eta() string {
+	var eta, etaValue string
+
+	if Options.ShowTaskEta {
+		running := time.Since(task.Command.StartTime)
+		etaValue = "?"
+		if task.Command.EstimatedRuntime > 0 {
+			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
+		}
+		eta = fmt.Sprintf("Eta[%s] ", etaValue)
+	}
+	return eta
 }
 
 func (task *Task) process(step, totalTasks int) []*Task {
@@ -313,13 +349,13 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
-			lineObj := Line{StatusRunning, bold(task.Name), "\n", ""}
+			lineObj := Line{StatusRunning, bold(task.Name), "\n", "", ""}
 			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
 		for line := 0; line < len(tasks); line++ {
 			tasks[line].Command.Started = false
-			tasks[line].Display.Line = Line{StatusPending, tasks[line].Name, "", ""}
+			tasks[line].Display.Line = Line{StatusPending, tasks[line].Name, "", "", ""}
 			tasks[line].display(&curLine)
 		}
 	}
@@ -365,6 +401,8 @@ func (task *Task) process(step, totalTasks int) []*Task {
 				eventTask.Command.Complete = true
 				eventTask.Command.ReturnCode = msgObj.ReturnCode
 				close(eventTask.LogChan)
+
+				CommandTimeCache[eventTask.CmdString] = eventTask.Command.StopTime.Sub(eventTask.Command.StartTime)
 
 				runningCmds--
 				// if a thread has freed up, start the next task (if there are any left)
@@ -412,9 +450,9 @@ func (task *Task) process(step, totalTasks int) []*Task {
 				}
 			} else {
 				if msgObj.Stderr != "" {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current()}
+					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current(), eventTask.eta()}
 				} else {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, msgObj.Stdout, spinner.Current()}
+					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, msgObj.Stdout, spinner.Current(), eventTask.eta()}
 				}
 
 				eventTask.display(&curLine)
@@ -452,7 +490,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			}
 
 			ansi.EraseInLine(2)
-			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(task.Name), "", ""})
+			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(task.Name), "", "", ""})
 			ansi.CursorHorizontalAbsolute(0)
 		}
 

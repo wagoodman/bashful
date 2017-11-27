@@ -1,9 +1,14 @@
 package main
 
 import (
+	"encoding/gob"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
+	"path"
+	"runtime"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -17,6 +22,8 @@ type OptionsConfig struct {
 	Vintage              bool   `yaml:"vintage"`
 	MaxParallelCmds      int    `yaml:"max-parallel-commands"`
 	ReplicaReplaceString string `yaml:"replica-replace-pattern"`
+	ShowTaskEta          bool   `yaml:"show-task-eta"`
+	ShowSummaryTimes     bool   `yaml:"show-summary-times"`
 }
 
 type RunConfig struct {
@@ -31,6 +38,8 @@ func defaultOptions() OptionsConfig {
 	defaultValues.ShowSummaryFooter = true
 	defaultValues.ReplicaReplaceString = "?"
 	defaultValues.MaxParallelCmds = 4
+	defaultValues.ShowSummaryTimes = true
+	defaultValues.ShowTaskEta = true
 	return defaultValues
 }
 
@@ -48,9 +57,26 @@ func (conf *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) erro
 }
 
 func (conf *RunConfig) read() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("Unable to get CWD!")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	CachePath = path.Join(cwd, ".bashful")
+	LogCachePath = path.Join(CachePath, "logs")
+	EtaCachePath = path.Join(CachePath, "eta")
+
+	// note: you must load the eta cache before the run.yml file
+	if Exists(EtaCachePath) {
+		err := Load(EtaCachePath, &CommandTimeCache)
+		Check(err)
+	}
+
 	conf.Options = defaultOptions()
 
-	// fmt.Println("Reading " + os.Args[1] + " ...")
+	// load the run.yml file
 	yamlString, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
 		log.Printf("yamlFile.Get err   #%v ", err)
@@ -83,4 +109,53 @@ func (conf *RunConfig) read() {
 
 	// replace the current config with the inflated list of final tasks
 	conf.Tasks = finalTasks
+
+	// now that all tasks have been inflated, set the total eta
+	for index := range conf.Tasks {
+		task := &conf.Tasks[index]
+		// finalize task by appending to the set of final tasks
+		if task.CmdString != "" && task.Command.EstimatedRuntime != -1 {
+			TotalEtaSeconds += task.Command.EstimatedRuntime.Seconds()
+		}
+
+		var maxParallelEstimatedRuntime float64
+		for subIndex := range task.ParallelTasks {
+			subTask := &task.ParallelTasks[subIndex]
+			if subTask.CmdString != "" && subTask.Command.EstimatedRuntime != -1 {
+				maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, subTask.Command.EstimatedRuntime.Seconds())
+			}
+		}
+		TotalEtaSeconds += maxParallelEstimatedRuntime
+	}
+
+}
+
+// Encode via Gob to file
+func Save(path string, object interface{}) error {
+	file, err := os.Create(path)
+	if err == nil {
+		encoder := gob.NewEncoder(file)
+		encoder.Encode(object)
+	}
+	file.Close()
+	return err
+}
+
+// Decode Gob file
+func Load(path string, object interface{}) error {
+	file, err := os.Open(path)
+	if err == nil {
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(object)
+	}
+	file.Close()
+	return err
+}
+
+func Check(e error) {
+	if e != nil {
+		_, file, line, _ := runtime.Caller(1)
+		fmt.Println(line, "\t", file, "\n", e)
+		os.Exit(1)
+	}
 }
