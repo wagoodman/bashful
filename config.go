@@ -56,6 +56,29 @@ func (conf *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) erro
 	return nil
 }
 
+func MinMax(array []float64) (float64, float64) {
+	var max = array[0]
+	var min = array[0]
+	for _, value := range array {
+		if max < value {
+			max = value
+		}
+		if min > value {
+			min = value
+		}
+	}
+	return min, max
+}
+
+func remove(slice []float64, value float64) []float64 {
+	for index, arrValue := range slice {
+		if arrValue == value {
+			return append(slice[:index], slice[index+1:]...)
+		}
+	}
+	return slice
+}
+
 func (conf *RunConfig) read() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -113,19 +136,42 @@ func (conf *RunConfig) read() {
 	// now that all tasks have been inflated, set the total eta
 	for index := range conf.Tasks {
 		task := &conf.Tasks[index]
+
 		// finalize task by appending to the set of final tasks
 		if task.CmdString != "" && task.Command.EstimatedRuntime != -1 {
 			TotalEtaSeconds += task.Command.EstimatedRuntime.Seconds()
 		}
 
 		var maxParallelEstimatedRuntime float64
+		var taskEndSecond []float64
+		var currentSecond float64
+		var remainingParallelTasks = conf.Options.MaxParallelCmds
+
 		for subIndex := range task.ParallelTasks {
 			subTask := &task.ParallelTasks[subIndex]
 			if subTask.CmdString != "" && subTask.Command.EstimatedRuntime != -1 {
-				maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, subTask.Command.EstimatedRuntime.Seconds())
+				// this is a sub task with an eta
+				if remainingParallelTasks == 0 {
+
+					// we've started all possible tasks, now they should stop...
+					// select the first task to stop
+					remainingParallelTasks++
+					minEndSecond, _ := MinMax(taskEndSecond)
+					taskEndSecond = remove(taskEndSecond, minEndSecond)
+					currentSecond = minEndSecond
+				}
+
+				// we are still starting tasks
+				taskEndSecond = append(taskEndSecond, currentSecond+subTask.Command.EstimatedRuntime.Seconds())
+				remainingParallelTasks--
+
+				_, maxEndSecond := MinMax(taskEndSecond)
+				maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, maxEndSecond)
 			}
+
 		}
 		TotalEtaSeconds += maxParallelEstimatedRuntime
+
 	}
 
 }

@@ -65,7 +65,7 @@ tasks:
   - name: Building and Migrating
     parallel-tasks:
       - name: app1
-        cmd: example/jitter.sh 3
+        cmd: example/jitter.sh 1
       - name: another-app2
         cmd: example/error.sh 4
       - name: some-app3
@@ -75,14 +75,14 @@ tasks:
       - name: some-awesome-app-5
         cmd: example/jitter.sh 7
       - name: watcher-app
-        cmd: example/jitter.sh 8
+        cmd: example/jitter.sh 10
       - name: public-6
         cmd: example/jitter.sh 9
       - name: utilities
-        cmd: example/jitter.sh 8
+        cmd: example/jitter.sh 12
       - name: important-lib
-        cmd: example/jitter.sh 7
+        cmd: example/jitter.sh 1
       - name: yup-app-7
         cmd: example/jitter.sh 6
       - name: stuff-n-things
-        cmd: example/jitter.sh 5
+        cmd: example/jitter.sh 15
