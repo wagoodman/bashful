@@ -32,7 +32,7 @@ for i in $(seq 1 $lct) ;do
     #printf "\r%"$((${#i}+1))"s=\r%s" "" "$msg"
     # echo "$msg (from $1)"
     #echo "The start ($1)..." .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM
-    echo "The start at $1 $2..." .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM  | tee -a compare.log    #echo "Something $i Another (from $1)"
+    echo "The start at $1 $2... at:$i ..." .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM .$RANDOM  | tee -a compare.log    #echo "Something $i Another (from $1)"
     #pkill -15 -f jitter
     #echo $?
 done

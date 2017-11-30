@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 )
 
@@ -38,16 +37,8 @@ func removeDirContents(dir string) error {
 }
 
 func setupLogging() {
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("Unable to get CWD!")
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	CachePath = path.Join(cwd, ".bashful")
-	LogCachePath = path.Join(CachePath, "logs")
 
-	err = os.MkdirAll(CachePath, 0755)
+	err := os.MkdirAll(CachePath, 0755)
 	if err != nil {
 		fmt.Println("Unable to create cache dir!")
 		fmt.Println(err)
