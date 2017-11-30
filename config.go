@@ -110,6 +110,7 @@ func (conf *RunConfig) read() {
 		log.Fatalf("Unmarshal: %v", err)
 	}
 
+	Options = conf.Options
 	var finalTasks []Task
 
 	// initialize tasks with default values

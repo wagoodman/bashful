@@ -70,6 +70,7 @@ type Line struct {
 	Msg     string
 	Spinner string
 	Eta     string
+	Split   string
 }
 
 func (task *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -136,7 +137,6 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 	if replicaValue != "" {
 		cmdString = strings.Replace(cmdString, Options.ReplicaReplaceString, replicaValue, -1)
-		name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
 	}
 
 	task.CmdString = cmdString
@@ -162,6 +162,11 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 			task.Name = cmdString
 		}
 	} else {
+
+		if replicaValue != "" {
+			name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
+		}
+
 		task.Name = name
 	}
 }
@@ -197,8 +202,25 @@ func (task *Task) display(curLine *int) {
 
 	// display
 	var message bytes.Buffer
+
+	// get a string with the summary line without a split gap (eta floats left)
+	task.Display.Line.Split = ""
 	task.Display.Template.Execute(&message, task.Display.Line)
+
+	// // calculate a space buffer to push the eta to the right
+	// terminalWidth, _ := terminal.Width()
+	// splitWidth := int(terminalWidth) - visualLength(message.String())
+	// if splitWidth < 0 {
+	// 	task.Display.Line.Msg = trimToVisualLength(task.Display.Line.Msg, int(terminalWidth)-3) + "..."
+	// 	splitWidth = 0
+	// }
+
+	// message.Reset()
+	// task.Display.Line.Split = strings.Repeat(" ", splitWidth)
+	// task.Display.Template.Execute(&message, task.Display.Line)
+
 	display(message.String(), curLine, task.Display.Idx)
+
 }
 
 func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -319,7 +341,7 @@ func (task *Task) eta() string {
 		if task.Command.EstimatedRuntime > 0 {
 			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}
-		eta = fmt.Sprintf("Eta[%s] ", etaValue)
+		eta = fmt.Sprintf("[%s] ", etaValue)
 	}
 	return eta
 }
@@ -349,13 +371,13 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
-			lineObj := Line{StatusRunning, bold(task.Name), "\n", "", ""}
+			lineObj := Line{StatusRunning, bold(task.Name), "\n", "", "", ""}
 			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
 		for line := 0; line < len(tasks); line++ {
 			tasks[line].Command.Started = false
-			tasks[line].Display.Line = Line{StatusPending, tasks[line].Name, "", "", ""}
+			tasks[line].Display.Line = Line{StatusPending, tasks[line].Name, "", "", "", ""}
 			tasks[line].display(&curLine)
 		}
 	}
@@ -389,7 +411,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(SummaryPendingArrow), &curLine, len(tasks))
+				display(footer(SummaryPendingArrow, FinalStatusPending), &curLine, len(tasks))
 			}
 
 		case msgObj := <-resultChan:
@@ -450,9 +472,9 @@ func (task *Task) process(step, totalTasks int) []*Task {
 				}
 			} else {
 				if msgObj.Stderr != "" {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current(), eventTask.eta()}
+					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current(), eventTask.eta(), ""}
 				} else {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, msgObj.Stdout, spinner.Current(), eventTask.eta()}
+					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, msgObj.Stdout, spinner.Current(), eventTask.eta(), ""}
 				}
 
 				eventTask.display(&curLine)
@@ -460,7 +482,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(SummaryPendingArrow), &curLine, len(tasks))
+				display(footer(SummaryPendingArrow, FinalStatusPending), &curLine, len(tasks))
 			}
 
 			if ExitSignaled {
@@ -490,7 +512,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			}
 
 			ansi.EraseInLine(2)
-			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(task.Name), "", "", ""})
+			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(task.Name), "", "", "", ""})
 			ansi.CursorHorizontalAbsolute(0)
 		}
 

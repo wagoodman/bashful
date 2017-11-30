@@ -1,6 +1,6 @@
 config:
   # stop-on-failure: false
-  show-steps: true
+  # show-steps: true
   # show-summary-footer: true
   # show-failure-summary: true
   max-parallel-commands: 6
@@ -21,7 +21,7 @@ x-reference-data:
     - yup-app-7
     - stuff-n-things
 tasks:
-  # - name: Quickly do things (to find race conditions)
+  # - name: Quickly do things 
   #   parallel-tasks:
   #     - name: "do: ?"
   #       cmd: example/quick.sh ?
@@ -65,10 +65,10 @@ tasks:
   - name: Building and Migrating
     parallel-tasks:
       - name: app1
-        cmd: example/jitter.sh 1
+        cmd: example/jitter.sh 10
       - name: another-app2
-        cmd: example/error.sh 4
-      - name: some-app3
+      #   cmd: example/error.sh 4
+      # - name: some-app3
         cmd: example/jitter.sh 5
       - name: some-lib-4
         cmd: example/jitter.sh 6
@@ -85,4 +85,4 @@ tasks:
       - name: yup-app-7
         cmd: example/jitter.sh 6
       - name: stuff-n-things
-        cmd: example/jitter.sh 15
+        cmd: example/jitter.sh 10
