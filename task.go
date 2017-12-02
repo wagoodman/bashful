@@ -29,6 +29,7 @@ type Task struct {
 	Display       TaskDisplay
 	Command       TaskCommand
 	StopOnFailure bool     `yaml:"stop-on-failure"`
+	IgnoreFailure bool     `yaml:"ignore-failure"`
 	ParallelTasks []Task   `yaml:"parallel-tasks"`
 	ForEach       []string `yaml:"for-each"`
 	LogChan       chan LogItem
@@ -187,7 +188,7 @@ func (task *Task) display(curLine *int) {
 	if task.Command.Complete {
 		task.Display.Line.Spinner = ""
 		task.Display.Line.Eta = ""
-		if task.Command.ReturnCode != 0 {
+		if task.Command.ReturnCode != 0 && task.IgnoreFailure == false {
 			task.Display.Line.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
 		}
 	}
@@ -325,7 +326,7 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	MainLogChan <- LogItem{task.Name, boldyellow("Return Code: " + strconv.Itoa(returnCode))}
 
-	if returnCode == 0 {
+	if returnCode == 0 || task.IgnoreFailure {
 		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
 	} else {
 		resultChan <- CmdIR{task, StatusError, "", "", true, returnCode}
