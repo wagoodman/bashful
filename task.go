@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -258,7 +259,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	task.Command.StartTime = time.Now()
-	MainLogChan <- LogItem{task.Name, "Running Cmd: " + task.CmdString}
+	MainLogChan <- LogItem{task.Name, boldyellow("Started Cmd: " + task.CmdString)}
 	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
 	waiter.Add(1)
 	defer waiter.Done()
@@ -322,6 +323,8 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	returnCode := waitStatus.ExitStatus()
 
+	MainLogChan <- LogItem{task.Name, boldyellow("Return Code: " + strconv.Itoa(returnCode))}
+
 	if returnCode == 0 {
 		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
 	} else {
@@ -330,6 +333,45 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 			ExitSignaled = true
 		}
 	}
+}
+
+func (task *Task) EstimatedRuntime() float64 {
+	var etaSeconds float64
+	// finalize task by appending to the set of final tasks
+	if task.CmdString != "" && task.Command.EstimatedRuntime != -1 {
+		etaSeconds += task.Command.EstimatedRuntime.Seconds()
+	}
+
+	var maxParallelEstimatedRuntime float64
+	var taskEndSecond []float64
+	var currentSecond float64
+	var remainingParallelTasks = Options.MaxParallelCmds
+
+	for subIndex := range task.ParallelTasks {
+		subTask := &task.ParallelTasks[subIndex]
+		if subTask.CmdString != "" && subTask.Command.EstimatedRuntime != -1 {
+			// this is a sub task with an eta
+			if remainingParallelTasks == 0 {
+
+				// we've started all possible tasks, now they should stop...
+				// select the first task to stop
+				remainingParallelTasks++
+				minEndSecond, _ := MinMax(taskEndSecond)
+				taskEndSecond = remove(taskEndSecond, minEndSecond)
+				currentSecond = minEndSecond
+			}
+
+			// we are still starting tasks
+			taskEndSecond = append(taskEndSecond, currentSecond+subTask.Command.EstimatedRuntime.Seconds())
+			remainingParallelTasks--
+
+			_, maxEndSecond := MinMax(taskEndSecond)
+			maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, maxEndSecond)
+		}
+
+	}
+	etaSeconds += maxParallelEstimatedRuntime
+	return etaSeconds
 }
 
 func (task *Task) eta() string {
@@ -341,7 +383,7 @@ func (task *Task) eta() string {
 		if task.Command.EstimatedRuntime > 0 {
 			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}
-		eta = fmt.Sprintf("[%s] ", etaValue)
+		eta = fmt.Sprintf("T-[%s] ", etaValue)
 	}
 	return eta
 }
@@ -371,11 +413,13 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
+			ansi.EraseInLine(2)
 			lineObj := Line{StatusRunning, bold(task.Name), "\n", "", "", ""}
 			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
 		for line := 0; line < len(tasks); line++ {
+			ansi.EraseInLine(2)
 			tasks[line].Command.Started = false
 			tasks[line].Display.Line = Line{StatusPending, tasks[line].Name, "", "", "", ""}
 			tasks[line].display(&curLine)

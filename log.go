@@ -129,6 +129,7 @@ func MainLogger(logPath string) {
 					fmt.Println(err)
 					os.Exit(1)
 				}
+				logger = log.New(file, "", log.Ldate|log.Ltime)
 
 				os.Remove(logCmd.File)
 			} else {

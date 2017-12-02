@@ -2,7 +2,7 @@ config:
   # stop-on-failure: false
   # show-steps: true
   # show-summary-footer: true
-  # show-failure-summary: true
+  # show-failure-summary: false
   max-parallel-commands: 6
   log-path: build.log
   # vintage: false
@@ -21,68 +21,67 @@ x-reference-data:
     - yup-app-7
     - stuff-n-things
 tasks:
-  # - name: Quickly do things 
-  #   parallel-tasks:
-  #     - name: "do: ?"
-  #       cmd: example/quick.sh ?
-  #       for-each: *all-apps
-
-  # - name: Verify environment
-  #   cmd: example/jitter.sh 2
-  #   stop-on-failure: false
-
-  # - name: Some task (non stopping error)
-  #   cmd: example/error.sh 1
-  #   stop-on-failure: false
-
-  # - name: "Anchored loop template: ?"
-  #   cmd: example/jitter.sh 1 ?
-  #   for-each: *all-apps
-
-  # - name: Cloning Repos
-  #   parallel-tasks:
-  #     - name: "clone: ?"
-  #       cmd: example/jitter.sh 4 ?
-  #       for-each: *all-apps
-
-  # - name: Installing dependencies
-  #   parallel-tasks:
-  #     - name: Oracle client
-  #       cmd: example/jitter.sh 3
-  #     - name: Google chrome
-  #       cmd: example/jitter.sh 4
-  #     - name: MD helper
-  #       cmd: example/jitter.sh 5
-  #     - name: Bridgy
-  #       cmd: example/jitter.sh 6
-
-  # - name: Build Images
-  #   cmd: example/jitter.sh 3
-
-  # - name: Gathering Secrets
-  #   cmd: example/jitter.sh 3
-
-  - name: Building and Migrating
+  - name: Quickly do things 
     parallel-tasks:
-      - name: app1
-        cmd: example/jitter.sh 10
-      - name: another-app2
-      #   cmd: example/error.sh 4
-      # - name: some-app3
+      - name: "do: ?"
+        cmd: example/quick.sh ?
+        for-each: *all-apps
+
+  - name: Verify environment
+    cmd: example/jitter.sh 2
+
+  - name: Some task (non stopping error)
+    cmd: example/error.sh 1
+    # stop-on-failure: false
+
+  - name: "Anchored loop template: ?"
+    cmd: example/jitter.sh 1 ?
+    for-each: *all-apps
+
+  - name: Cloning Repos
+    parallel-tasks:
+      - name: "clone: ?"
+        cmd: example/jitter.sh 4 ?
+        for-each: *all-apps
+
+  - name: Installing dependencies
+    parallel-tasks:
+      - name: Oracle client
+        cmd: example/jitter.sh 3
+      - name: Google chrome
+        cmd: example/jitter.sh 4
+      - name: MD helper
         cmd: example/jitter.sh 5
-      - name: some-lib-4
+      - name: Bridgy
         cmd: example/jitter.sh 6
-      - name: some-awesome-app-5
-        cmd: example/jitter.sh 7
-      - name: watcher-app
-        cmd: example/jitter.sh 10
-      - name: public-6
-        cmd: example/jitter.sh 9
-      - name: utilities
-        cmd: example/jitter.sh 12
-      - name: important-lib
-        cmd: example/jitter.sh 1
-      - name: yup-app-7
-        cmd: example/jitter.sh 6
-      - name: stuff-n-things
-        cmd: example/jitter.sh 10
+
+  - name: Build Images
+    cmd: example/jitter.sh 3
+
+  - name: Gathering Secrets
+    cmd: example/jitter.sh 3
+
+  # - name: Building and Migrating
+  #   parallel-tasks:
+  #     - name: app1
+  #       cmd: example/jitter.sh 10
+  #     - name: another-app2
+  #       cmd: example/error.sh 4
+  #     - name: some-app3
+  #       cmd: example/jitter.sh 5
+  #     - name: some-lib-4
+  #       cmd: example/jitter.sh 6
+  #     - name: some-awesome-app-5
+  #       cmd: example/jitter.sh 7
+  #     - name: watcher-app
+  #       cmd: example/jitter.sh 10
+  #     - name: public-6
+  #       cmd: example/jitter.sh 9
+  #     - name: utilities
+  #       cmd: example/jitter.sh 12
+  #     - name: important-lib
+  #       cmd: example/jitter.sh 1
+  #     - name: yup-app-7
+  #       cmd: example/jitter.sh 6
+  #     - name: stuff-n-things
+  #       cmd: example/jitter.sh 10
