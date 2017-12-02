@@ -27,6 +27,7 @@ var (
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	green              = color.ColorFunc("green")
+	boldyellow         = color.ColorFunc("yellow+b")
 	bold               = color.ColorFunc("default+b")
 	normal             = color.ColorFunc("default")
 	StatusSuccess      = color.Color("  ", "green+ih")
@@ -45,7 +46,7 @@ var (
 	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} └─ {{printf \"%-25s\" .Title}} {{.Eta}}{{.Msg}}")
 	LineErrorTemplate, _        = template.New("error line").Parse(" {{.Status}} {{.Msg}}")
 	PercentTemplate, _          = template.New("summary percent").Parse(`{{printf "%3.2f" .Value}}% Complete`)
-	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + color.Reset + ` {{.FinalStatusColor}}{{printf "%-24s" .Percent}}` + color.Reset + ` {{.Eta}}{{.Runtime}}{{.Msg}}`)
+	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + color.Reset + ` {{.FinalStatusColor}}{{printf "%-15s" .Percent}}` + color.Reset + ` {{.Runtime}}{{.Eta}}{{.Msg}}`)
 	TotalTasks                  = 0
 	CompletedTasks              = 0
 	MainLogChan                 = make(chan LogItem)
@@ -136,7 +137,11 @@ func footer(status, finalStatus string) string {
 
 		totalEta := time.Duration(TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" ETA[%s]", showDuration(remainingEta))
+		etaString = fmt.Sprintf(" T-[%s]", showDuration(remainingEta))
+	}
+
+	if CompletedTasks == TotalTasks {
+		etaString = ""
 	}
 
 	// get a string with the summary line without a split gap (eta floats left)
@@ -156,7 +161,7 @@ func footer(status, finalStatus string) string {
 	}
 
 	tpl.Reset()
-	SummaryTemplate.Execute(&tpl, Summary{status, percentStr, "", durString, etaString, strings.Repeat(" ", splitWidth), finalStatus})
+	SummaryTemplate.Execute(&tpl, Summary{status, percentStr, "", bold(durString), bold(etaString), strings.Repeat(" ", splitWidth), finalStatus})
 
 	return tpl.String()
 }
@@ -214,12 +219,12 @@ func main() {
 	}
 
 	if Options.ShowFailureReport {
-		fmt.Println("Some tasks failed, see below for details.")
+		fmt.Println(red(" ...Some tasks failed, see below for details.\n"))
 		for _, task := range failedTasks {
-			fmt.Println(bold(red("Failed task: " + task.Name)))
-			fmt.Println(" ├─ command: " + task.CmdString)
-			fmt.Println(" ├─ return code: " + strconv.Itoa(task.Command.ReturnCode))
-			fmt.Println(" └─ stderr: \n" + task.ErrorBuffer.String())
+			fmt.Println(bold(red("⏺ Failed task: ")) + bold(task.Name))
+			fmt.Println(red("  ├─ command: ") + task.CmdString)
+			fmt.Println(red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode))
+			fmt.Println(red("  └─ stderr: \n") + task.ErrorBuffer.String())
 			fmt.Println()
 		}
 	}

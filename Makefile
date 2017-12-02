@@ -9,6 +9,6 @@ build: vendor
 	go build -v
 
 run:
-	clear
+	#clear
 	#go run *.go example/segexample.yaml 
 	go run *.go example/complicated.yml

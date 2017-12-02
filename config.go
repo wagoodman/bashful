@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"os"
 	"path"
 	"runtime"
@@ -36,6 +35,7 @@ func defaultOptions() OptionsConfig {
 	defaultValues.StopOnFailure = true
 	defaultValues.ShowSteps = false
 	defaultValues.ShowSummaryFooter = true
+	defaultValues.ShowFailureReport = true
 	defaultValues.ReplicaReplaceString = "?"
 	defaultValues.MaxParallelCmds = 4
 	defaultValues.ShowSummaryTimes = true
@@ -53,6 +53,8 @@ func (conf *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) erro
 	}
 
 	*conf = OptionsConfig(defaultValues)
+	// the global options must be available when parsing the task yaml (does order matter?)
+	Options = *conf
 	return nil
 }
 
@@ -110,7 +112,8 @@ func (conf *RunConfig) read() {
 		log.Fatalf("Unmarshal: %v", err)
 	}
 
-	Options = conf.Options
+	// This needs to be done as soon as the options are parsed so that defailt task options can reference the global
+	// Options = conf.Options
 	var finalTasks []Task
 
 	// initialize tasks with default values
@@ -137,42 +140,7 @@ func (conf *RunConfig) read() {
 	// now that all tasks have been inflated, set the total eta
 	for index := range conf.Tasks {
 		task := &conf.Tasks[index]
-
-		// finalize task by appending to the set of final tasks
-		if task.CmdString != "" && task.Command.EstimatedRuntime != -1 {
-			TotalEtaSeconds += task.Command.EstimatedRuntime.Seconds()
-		}
-
-		var maxParallelEstimatedRuntime float64
-		var taskEndSecond []float64
-		var currentSecond float64
-		var remainingParallelTasks = conf.Options.MaxParallelCmds
-
-		for subIndex := range task.ParallelTasks {
-			subTask := &task.ParallelTasks[subIndex]
-			if subTask.CmdString != "" && subTask.Command.EstimatedRuntime != -1 {
-				// this is a sub task with an eta
-				if remainingParallelTasks == 0 {
-
-					// we've started all possible tasks, now they should stop...
-					// select the first task to stop
-					remainingParallelTasks++
-					minEndSecond, _ := MinMax(taskEndSecond)
-					taskEndSecond = remove(taskEndSecond, minEndSecond)
-					currentSecond = minEndSecond
-				}
-
-				// we are still starting tasks
-				taskEndSecond = append(taskEndSecond, currentSecond+subTask.Command.EstimatedRuntime.Seconds())
-				remainingParallelTasks--
-
-				_, maxEndSecond := MinMax(taskEndSecond)
-				maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, maxEndSecond)
-			}
-
-		}
-		TotalEtaSeconds += maxParallelEstimatedRuntime
-
+		TotalEtaSeconds += task.EstimatedRuntime()
 	}
 
 }
