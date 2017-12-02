@@ -30,9 +30,13 @@ tasks:
   - name: Verify environment
     cmd: example/jitter.sh 2
 
-  - name: Some task (non stopping error)
+  - name: Some task ignored error
     cmd: example/error.sh 1
-    # stop-on-failure: false
+    ignore-failure: true
+
+  - name: Some task with non stopping error
+    cmd: example/error.sh 1
+    stop-on-failure: false
 
   - name: "Anchored loop template: ?"
     cmd: example/jitter.sh 1 ?
