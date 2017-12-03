@@ -28,6 +28,7 @@ var (
 	red                = color.ColorFunc("red+h")
 	green              = color.ColorFunc("green")
 	boldyellow         = color.ColorFunc("yellow+b")
+	boldcyan           = color.ColorFunc("cyan+b")
 	bold               = color.ColorFunc("default+b")
 	normal             = color.ColorFunc("default")
 	StatusSuccess      = color.Color("  ", "green+ih")
@@ -137,7 +138,7 @@ func footer(status, finalStatus string) string {
 
 		totalEta := time.Duration(TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" T-[%s]", showDuration(remainingEta))
+		etaString = fmt.Sprintf(" [%s]", showDuration(remainingEta))
 	}
 
 	if CompletedTasks == TotalTasks {
@@ -197,6 +198,7 @@ func main() {
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
+	MainLogChan <- LogItem{"[Main]", boldcyan("Running " + os.Args[1])}
 	for index := range conf.Tasks {
 		failedTasks = append(failedTasks, conf.Tasks[index].process(index+1, len(conf.Tasks))...)
 
@@ -204,6 +206,7 @@ func main() {
 			break
 		}
 	}
+	MainLogChan <- LogItem{"[Main]", boldcyan("Finished " + os.Args[1])}
 
 	err = Save(EtaCachePath, &CommandTimeCache)
 	Check(err)
@@ -219,15 +222,24 @@ func main() {
 	}
 
 	if Options.ShowFailureReport {
-		fmt.Println(red(" ...Some tasks failed, see below for details.\n"))
+		var buffer bytes.Buffer
+		buffer.WriteString(red(" ...Some tasks failed, see below for details.\n"))
+
 		for _, task := range failedTasks {
-			fmt.Println(bold(red("⏺ Failed task: ")) + bold(task.Name))
-			fmt.Println(red("  ├─ command: ") + task.CmdString)
-			fmt.Println(red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode))
-			fmt.Println(red("  └─ stderr: \n") + task.ErrorBuffer.String())
-			fmt.Println()
+
+			buffer.WriteString("\n")
+			buffer.WriteString(bold(red("⏺ Failed task: ")) + bold(task.Name) + "\n")
+			buffer.WriteString(red("  ├─ command: ") + task.CmdString + "\n")
+			buffer.WriteString(red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode) + "\n")
+			buffer.WriteString(red("  └─ stderr: \n") + task.ErrorBuffer.String() + "\n")
+
 		}
+		MainLogChan <- LogItem{"[Main]", buffer.String()}
+		fmt.Print(buffer.String())
+
 	}
+
+	MainLogChan <- LogItem{"[Main]", boldcyan("Exiting")}
 
 	fmt.Print("\033[?25h") // show cursor
 
