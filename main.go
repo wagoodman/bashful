@@ -30,20 +30,10 @@ var (
 	boldyellow                  func(string) string      = color.ColorFunc("yellow+b")
 	boldcyan                    func(string) string      = color.ColorFunc("cyan+b")
 	bold                        func(string) string      = color.ColorFunc("default+b")
-	statusSuccess               string                   = color.Color("  ", "green+ih")
-	statusError                 string                   = color.Color("  ", "red+ih")
-	finalStatusPending          string                   = color.ColorCode("default+b")
-	finalStatusSuccess          string                   = color.ColorCode("green+bh")
-	finalStatusError            string                   = color.ColorCode("red+bh")
-	statusRunning               string                   = color.Color("  ", "28+i")
-	statusPending               string                   = color.Color("  ", "22+i")
-	summaryPendingArrow         string                   = color.Color("    ", "22+i")     //color.Color("    ", "22+i")     //+ color.Color("❯❯❯", "22")
-	summarySuccessArrow         string                   = color.Color("    ", "green+ih") //color.Color("    ", "green+ih") //+ color.Color("❯❯❯", "green+h")
-	summaryFailedArrow          string                   = color.Color("    ", "red+ih")
-	lineDefaultTemplate, _                               = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}} {{.Msg}}{{.Split}}{{.Eta}}")
-	lineParallelTemplate, _                              = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} ├─ {{printf \"%-25s\" .Title}} {{.Msg}}{{.Split}}{{.Eta}}")
-	lineLastParallelTemplate, _                          = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} └─ {{printf \"%-25s\" .Title}} {{.Msg}}{{.Split}}{{.Eta}}")
-	summaryTemplate, _                                   = template.New("summary line").Parse(` {{.Status}}` + color.Reset + ` {{.FinalStatusColor}}{{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
+	lineDefaultTemplate, _                               = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineParallelTemplate, _                              = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineLastParallelTemplate, _                          = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} └─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	summaryTemplate, _                                   = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 	totalTasks                  int                      = 0
 	completedTasks              int                      = 0
 	totalFailedTasks            int                      = 0
@@ -60,7 +50,6 @@ type Summary struct {
 	Runtime          string
 	Eta              string
 	Split            string
-	FinalStatusColor string
 	Steps            string
 	Errors           string
 }
@@ -123,7 +112,7 @@ func showDuration(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 }
 
-func footer(status, finalStatus string) string {
+func footer(status CommandStatus) string {
 	var tpl bytes.Buffer
 	var durString, etaString, stepString, errorString string
 
@@ -150,8 +139,15 @@ func footer(status, finalStatus string) string {
 
 	// get a string with the summary line without a split gap (eta floats left)
 	percentValue := (float64(completedTasks) * float64(100)) / float64(totalTasks)
-	percentStr := fmt.Sprintf("%3.2f", percentValue)
-	summaryTemplate.Execute(&tpl, Summary{Status: status, Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString})
+	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
+
+	if completedTasks == totalTasks {
+		percentStr = status.Color("b") + percentStr + color.Reset
+	} else {
+		percentStr = color.Color(percentStr, "default+b")
+	}
+
+	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString})
 
 	// calculate a space buffer to push the eta to the right
 	terminalWidth, _ := terminal.Width()
@@ -161,7 +157,7 @@ func footer(status, finalStatus string) string {
 	}
 
 	tpl.Reset()
-	summaryTemplate.Execute(&tpl, Summary{Status: status, Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), FinalStatusColor: finalStatus, Steps: bold(stepString), Errors: bold(errorString)})
+	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString)})
 
 	return tpl.String()
 }
@@ -199,7 +195,7 @@ func main() {
 	fmt.Print("\033[?25l") // hide cursor
 	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + os.Args[1])}
 	for index := range conf.Tasks {
-		newFailedTasks := conf.Tasks[index].process(index+1, len(conf.Tasks))
+		newFailedTasks := conf.Tasks[index].Process()
 		totalFailedTasks += len(newFailedTasks)
 
 		failedTasks = append(failedTasks, newFailedTasks...)
@@ -217,9 +213,9 @@ func main() {
 
 	if Options.ShowSummaryFooter {
 		if len(failedTasks) > 0 {
-			display(footer(summaryFailedArrow, finalStatusError), &curLine, 0)
+			display(footer(StatusError), &curLine, 0)
 		} else {
-			display(footer(summarySuccessArrow, finalStatusSuccess), &curLine, 0)
+			display(footer(StatusSuccess), &curLine, 0)
 		}
 	}
 

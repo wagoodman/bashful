@@ -1,6 +1,5 @@
 config:
   # stop-on-failure: false
-  # show-steps: true
   # show-summary-footer: false
   # show-failure-summary: false
   max-parallel-commands: 6
