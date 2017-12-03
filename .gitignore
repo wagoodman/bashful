@@ -6,3 +6,4 @@ vendor
 archive
 *.log
 /downloads
+/.idea

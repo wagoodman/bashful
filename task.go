@@ -94,7 +94,7 @@ func (task *Task) Create(displayStartIdx int, replicaValue string) {
 	task.inflate(displayStartIdx, replicaValue)
 
 	if task.CmdString != "" {
-		TotalTasks++
+		totalTasks++
 	}
 
 	var finalTasks []Task
@@ -111,21 +111,21 @@ func (task *Task) Create(displayStartIdx int, replicaValue string) {
 				subTask.Create(subReplicaIndex, subReplicaValue)
 
 				if subReplicaIndex == len(subTask.ForEach)-1 {
-					subTask.Display.Template = LineLastParallelTemplate
+					subTask.Display.Template = lineLastParallelTemplate
 				} else {
-					subTask.Display.Template = LineParallelTemplate
+					subTask.Display.Template = lineParallelTemplate
 				}
 
 				finalTasks = append(finalTasks, *subTask)
 			}
 		} else {
 			subTask.inflate(subIndex, replicaValue)
-			TotalTasks++
+			totalTasks++
 
 			if subIndex == len(task.ParallelTasks)-1 {
-				subTask.Display.Template = LineLastParallelTemplate
+				subTask.Display.Template = lineLastParallelTemplate
 			} else {
-				subTask.Display.Template = LineParallelTemplate
+				subTask.Display.Template = lineParallelTemplate
 			}
 			finalTasks = append(finalTasks, *subTask)
 		}
@@ -145,7 +145,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 	task.CmdString = cmdString
 
-	if eta, ok := CommandTimeCache[task.CmdString]; ok {
+	if eta, ok := commandTimeCache[task.CmdString]; ok {
 		task.Command.EstimatedRuntime = eta
 	} else {
 		task.Command.EstimatedRuntime = time.Duration(-1)
@@ -154,7 +154,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	command := strings.Split(cmdString, " ")
 	task.Command.Cmd = exec.Command(command[0], command[1:]...)
 	task.Command.ReturnCode = -1
-	task.Display.Template = LineDefaultTemplate
+	task.Display.Template = lineDefaultTemplate
 	task.Display.Idx = displayIdx
 	task.ErrorBuffer = bytes.NewBufferString("")
 
@@ -170,7 +170,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 }
 
-func (task *Task) tasks() (tasks []*Task) {
+func (task *Task) Tasks() (tasks []*Task) {
 	if task.CmdString != "" {
 		tasks = append(tasks, task)
 	} else {
@@ -181,7 +181,7 @@ func (task *Task) tasks() (tasks []*Task) {
 	return tasks
 }
 
-func (task *Task) display(curLine *int) {
+func (task *Task) String() string {
 	if task.Command.Complete {
 		task.Display.Line.Spinner = ""
 		task.Display.Line.Eta = ""
@@ -227,10 +227,13 @@ func (task *Task) display(curLine *int) {
 	message.Reset()
 	task.Display.Line.Split = strings.Repeat(" ", splitWidth)
 	task.Display.Template.Execute(&message, task.Display.Line)
-
-	display(message.String(), curLine, task.Display.Idx)
-
+	return message.String()
 }
+
+func (task *Task) display(curLine *int) {
+	display(task.String(), curLine, task.Display.Idx)
+}
+
 
 func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 
@@ -267,12 +270,12 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	task.Command.StartTime = time.Now()
-	MainLogChan <- LogItem{task.Name, boldyellow("Started Task: " + task.Name)}
-	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
+	mainLogChan <- LogItem{task.Name, boldyellow("Started Task: " + task.Name)}
+	resultChan <- CmdIR{task, statusRunning, "", "", false, -1}
 	waiter.Add(1)
 	defer waiter.Done()
 
-	tempFile, _ := ioutil.TempFile(LogCachePath, "")
+	tempFile, _ := ioutil.TempFile(logCachePath, "")
 	task.LogFile = tempFile
 	task.LogChan = make(chan LogItem)
 	go SingleLogger(task.LogChan, task.Name, tempFile.Name())
@@ -302,13 +305,13 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		select {
 		case stdoutMsg, ok := <-stdoutChan:
 			if ok {
-				resultChan <- CmdIR{task, StatusRunning, stdoutMsg.message, "", false, -1}
+				resultChan <- CmdIR{task, statusRunning, stdoutMsg.message, "", false, -1}
 			} else {
 				stdoutChan = nil
 			}
 		case stderrMsg, ok := <-stderrChan:
 			if ok {
-				resultChan <- CmdIR{task, StatusRunning, "", stderrMsg.message, false, -1}
+				resultChan <- CmdIR{task, statusRunning, "", stderrMsg.message, false, -1}
 			} else {
 				stderrChan = nil
 			}
@@ -331,14 +334,14 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	returnCode := waitStatus.ExitStatus()
 
-	MainLogChan <- LogItem{task.Name, boldyellow("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
+	mainLogChan <- LogItem{task.Name, boldyellow("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
 
 	if returnCode == 0 || task.IgnoreFailure {
-		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
+		resultChan <- CmdIR{task, statusSuccess, "", "", true, returnCode}
 	} else {
-		resultChan <- CmdIR{task, StatusError, "", "", true, returnCode}
+		resultChan <- CmdIR{task, statusError, "", "", true, returnCode}
 		if task.StopOnFailure {
-			ExitSignaled = true
+			exitSignaled = true
 		}
 	}
 }
@@ -411,7 +414,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 		ticker.Stop()
 	}
 	resultChan := make(chan CmdIR, 10000)
-	tasks := task.tasks()
+	tasks := task.Tasks()
 	var waiter sync.WaitGroup
 
 	if !Options.Vintage {
@@ -422,14 +425,14 @@ func (task *Task) process(step, totalTasks int) []*Task {
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
 			ansi.EraseInLine(2)
-			lineObj := Line{StatusRunning, task.Name, "\n", "", "", ""}
+			lineObj := Line{statusRunning, task.Name, "\n", "", "", ""}
 			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
 		for line := 0; line < len(tasks); line++ {
 			ansi.EraseInLine(2)
 			tasks[line].Command.Started = false
-			tasks[line].Display.Line = Line{StatusPending, tasks[line].Name, "", "", "", ""}
+			tasks[line].Display.Line = Line{statusPending, tasks[line].Name, "", "", "", ""}
 			tasks[line].display(&curLine)
 		}
 	}
@@ -444,7 +447,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 		tasks[lastStartedTask].Command.Started = true
 		runningCmds++
 	}
-	groupSuccess := StatusSuccess
+	groupSuccess := statusSuccess
 
 	// just wait for stuff to come back
 	for runningCmds > 0 {
@@ -463,7 +466,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(SummaryPendingArrow, FinalStatusPending), &curLine, len(tasks))
+				display(footer(summaryPendingArrow, finalStatusPending), &curLine, len(tasks))
 			}
 
 		case msgObj := <-resultChan:
@@ -471,12 +474,12 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			// update the state before displaying...
 			if msgObj.Complete {
-				CompletedTasks++
+				completedTasks++
 				eventTask.Command.Complete = true
 				eventTask.Command.ReturnCode = msgObj.ReturnCode
 				close(eventTask.LogChan)
 
-				CommandTimeCache[eventTask.CmdString] = eventTask.Command.StopTime.Sub(eventTask.Command.StartTime)
+				commandTimeCache[eventTask.CmdString] = eventTask.Command.StopTime.Sub(eventTask.Command.StartTime)
 
 				runningCmds--
 				// if a thread has freed up, start the next task (if there are any left)
@@ -491,9 +494,9 @@ func (task *Task) process(step, totalTasks int) []*Task {
 					lastStartedTask++
 				}
 
-				if msgObj.Status == StatusError {
+				if msgObj.Status == statusError {
 					// update the group status to indicate a failed subtask
-					groupSuccess = StatusError
+					groupSuccess = statusError
 
 					// keep note of the failed task for an after task report
 					failedTasks = append(failedTasks, eventTask)
@@ -539,10 +542,10 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(SummaryPendingArrow, FinalStatusPending), &curLine, len(tasks))
+				display(footer(summaryPendingArrow, finalStatusPending), &curLine, len(tasks))
 			}
 
-			if ExitSignaled {
+			if exitSignaled {
 				break
 			}
 
@@ -550,7 +553,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 	}
 
-	if !ExitSignaled {
+	if !exitSignaled {
 		waiter.Wait()
 	}
 
