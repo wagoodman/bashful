@@ -158,19 +158,14 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 	// set the name
 	if name == "" {
-		if len(cmdString) > 25 {
-			task.Name = cmdString[:20] + "..."
-		} else {
-			task.Name = cmdString
-		}
+		task.Name = cmdString
 	} else {
-
 		if replicaValue != "" {
 			name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
 		}
-
 		task.Name = name
 	}
+
 }
 
 func (task *Task) tasks() (tasks []*Task) {
@@ -260,7 +255,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	task.Command.StartTime = time.Now()
-	MainLogChan <- LogItem{task.Name, boldyellow("Started Cmd: " + task.CmdString)}
+	MainLogChan <- LogItem{task.Name, boldyellow("Started Task: " + task.Name)}
 	resultChan <- CmdIR{task, StatusRunning, "", "", false, -1}
 	waiter.Add(1)
 	defer waiter.Done()
@@ -324,7 +319,7 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	returnCode := waitStatus.ExitStatus()
 
-	MainLogChan <- LogItem{task.Name, boldyellow("Return Code: " + strconv.Itoa(returnCode))}
+	MainLogChan <- LogItem{task.Name, boldyellow("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
 
 	if returnCode == 0 || task.IgnoreFailure {
 		resultChan <- CmdIR{task, StatusSuccess, "", "", true, returnCode}
@@ -384,7 +379,7 @@ func (task *Task) eta() string {
 		if task.Command.EstimatedRuntime > 0 {
 			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}
-		eta = fmt.Sprintf("T-[%s] ", etaValue)
+		eta = fmt.Sprintf(bold("[%s] "), etaValue)
 	}
 	return eta
 }

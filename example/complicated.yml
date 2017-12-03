@@ -27,6 +27,11 @@ tasks:
         cmd: example/quick.sh ?
         for-each: *all-apps
 
+  - name: Show commands
+    parallel-tasks:
+      - cmd: example/jitter.sh 5 ?
+        for-each: *all-apps
+
   - name: Verify environment
     cmd: example/jitter.sh 2
 
@@ -44,22 +49,22 @@ tasks:
 
   - name: Cloning Repos
     parallel-tasks:
-      - name: "clone: ?"
+      - name: "Cloning ?"
         cmd: example/jitter.sh 4 ?
         for-each: *all-apps
 
   - name: Installing dependencies
     parallel-tasks:
-      - name: Oracle client
+      - name: Installing Oracle client
         cmd: example/jitter.sh 3
-      - name: Google chrome
+      - name: Installing Google chrome
         cmd: example/jitter.sh 4
-      - name: MD helper
+      - name: Installing MD helper
         cmd: example/jitter.sh 5
-      - name: Bridgy
+      - name: Installing Bridgy
         cmd: example/jitter.sh 6
 
-  - name: Build Images
+  - name: Building Images
     cmd: example/jitter.sh 3
 
   - name: Gathering Secrets

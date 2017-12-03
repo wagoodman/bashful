@@ -69,7 +69,7 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 	}()
 
 	logger := log.New(file, "", 0)
-	logger.Println(bold("Started: " + name))
+	logger.Println(bold("Task full output: " + name))
 
 	for {
 		select {
@@ -85,7 +85,6 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 		}
 	}
 
-	logger.Println(bold("Finished: " + name))
 }
 
 func MainLogger(logPath string) {
@@ -99,7 +98,6 @@ func MainLogger(logPath string) {
 	defer file.Close()
 
 	logger := log.New(file, "", log.Ldate|log.Ltime)
-	logger.Println(bold("Started!"))
 
 	for {
 		select {
