@@ -21,7 +21,7 @@ type OptionsConfig struct {
 	Vintage              bool   `yaml:"vintage"`
 	MaxParallelCmds      int    `yaml:"max-parallel-commands"`
 	ReplicaReplaceString string `yaml:"replica-replace-pattern"`
-	ShowTaskEta          bool   `yaml:"show-task-eta"`
+	ShowTaskEta          bool   `yaml:"show-task-times"`
 	ShowSummaryTimes     bool   `yaml:"show-summary-times"`
 }
 

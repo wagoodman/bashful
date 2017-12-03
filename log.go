@@ -68,8 +68,9 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 		MainLogConcatChan <- LogConcat{logPath}
 	}()
 
-	logger := log.New(file, "", 0)
+	logger := log.New(file, "", log.Ldate|log.Ltime)
 	logger.Println(bold("Task full output: " + name))
+	logger.SetFlags(0)
 
 	for {
 		select {

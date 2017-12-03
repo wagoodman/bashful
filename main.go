@@ -27,6 +27,7 @@ var (
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	green              = color.ColorFunc("green")
+	yellow             = color.ColorFunc("yellow+h")
 	boldyellow         = color.ColorFunc("yellow+b")
 	boldcyan           = color.ColorFunc("cyan+b")
 	bold               = color.ColorFunc("default+b")
@@ -42,12 +43,12 @@ var (
 	SummaryPendingArrow         = color.Color("    ", "22+i")     //color.Color("    ", "22+i")     //+ color.Color("❯❯❯", "22")
 	SummarySuccessArrow         = color.Color("    ", "green+ih") //color.Color("    ", "green+ih") //+ color.Color("❯❯❯", "green+h")
 	SummaryFailedArrow          = color.Color("    ", "red+ih")
-	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}}     {{.Eta}}{{.Msg}}")
-	LineParallelTemplate, _     = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} ├─ {{printf \"%-25s\" .Title}} {{.Eta}}{{.Msg}}")
-	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} └─ {{printf \"%-25s\" .Title}} {{.Eta}}{{.Msg}}")
+	LineDefaultTemplate, _      = template.New("default line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} {{printf \"%-25s\" .Title}} {{.Msg}}{{.Split}}{{.Eta}}")
+	LineParallelTemplate, _     = template.New("parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} ├─ {{printf \"%-25s\" .Title}} {{.Msg}}{{.Split}}{{.Eta}}")
+	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} └─ {{printf \"%-25s\" .Title}} {{.Msg}}{{.Split}}{{.Eta}}")
 	LineErrorTemplate, _        = template.New("error line").Parse(" {{.Status}} {{.Msg}}")
 	PercentTemplate, _          = template.New("summary percent").Parse(`{{printf "%3.2f" .Value}}% Complete`)
-	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + color.Reset + ` {{.FinalStatusColor}}{{printf "%-15s" .Percent}}` + color.Reset + ` {{.Runtime}}{{.Eta}}{{.Msg}}`)
+	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + color.Reset + ` {{.FinalStatusColor}}{{printf "%-15s" .Percent}}` + color.Reset + ` {{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 	TotalTasks                  = 0
 	CompletedTasks              = 0
 	MainLogChan                 = make(chan LogItem)
@@ -138,7 +139,7 @@ func footer(status, finalStatus string) string {
 
 		totalEta := time.Duration(TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" [%s]", showDuration(remainingEta))
+		etaString = fmt.Sprintf(" ETA[%s]", showDuration(remainingEta))
 	}
 
 	if CompletedTasks == TotalTasks {
@@ -221,7 +222,7 @@ func main() {
 		}
 	}
 
-	if Options.ShowFailureReport {
+	if Options.ShowFailureReport && len(failedTasks) > 0 {
 		var buffer bytes.Buffer
 		buffer.WriteString(red(" ...Some tasks failed, see below for details.\n"))
 
