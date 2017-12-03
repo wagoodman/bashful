@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/k0kubun/go-ansi"
 	color "github.com/mgutz/ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
@@ -53,57 +52,6 @@ func CheckError(err error, message string) {
 		fmt.Println(line, "\t", file, "\n", err)
 		os.Exit(1)
 	}
-}
-
-func visualLength(str string) int {
-	inEscapeSeq := false
-	length := 0
-
-	for _, r := range str {
-		switch {
-		case inEscapeSeq:
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
-				inEscapeSeq = false
-			}
-		case r == '\x1b':
-			inEscapeSeq = true
-		default:
-			length++
-		}
-	}
-
-	return length
-}
-
-func trimToVisualLength(message string, length int) string {
-	for visualLength(message) > length {
-		message = message[:len(message)-1]
-	}
-	return message
-}
-
-func display(message string, curLine *int, targetIdx int) {
-	moves := *curLine - targetIdx
-	if moves != 0 {
-		if moves < 0 {
-			ansi.CursorDown(moves * -1)
-		} else {
-			ansi.CursorUp(moves)
-		}
-		*curLine -= moves
-	}
-
-	// trim message length
-	terminalWidth, _ := terminal.Width()
-	for visualLength(message) > int(terminalWidth) {
-		message = trimToVisualLength(message, int(terminalWidth)-3) + "..."
-	}
-
-	// display
-	ansi.EraseInLine(2)
-	// note: ansi cursor down cannot be used as this may be the last row
-	fmt.Println(message)
-	*curLine++
 }
 
 func showDuration(duration time.Duration) string {
@@ -196,7 +144,7 @@ func main() {
 	fmt.Print("\033[?25l") // hide cursor
 	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + os.Args[1])}
 	for index := range config.Tasks {
-		newFailedTasks := config.Tasks[index].Process()
+		newFailedTasks := config.Tasks[index].RunAndDisplay()
 		totalFailedTasks += len(newFailedTasks)
 
 		failedTasks = append(failedTasks, newFailedTasks...)
@@ -210,13 +158,11 @@ func main() {
 	err = Save(config.etaCachePath, &config.commandTimeCache)
 	CheckError(err, "Unable to save command eta cache.")
 
-	var curLine int
-
 	if config.Options.ShowSummaryFooter {
 		if len(failedTasks) > 0 {
-			display(footer(StatusError), &curLine, 0)
+			Screen().DisplayFooter(footer(StatusError))
 		} else {
-			display(footer(StatusSuccess), &curLine, 0)
+			Screen().DisplayFooter(footer(StatusSuccess))
 		}
 	}
 
