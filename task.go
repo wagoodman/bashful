@@ -270,8 +270,8 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	task.Command.StartTime = time.Now()
-	mainLogChan <- LogItem{task.Name, boldyellow("Started Task: " + task.Name)}
-	resultChan <- CmdIR{task, statusRunning, "", "", false, -1}
+	mainLogChan <- LogItem{Name: task.Name, Message: boldyellow("Started Task: " + task.Name)}
+	resultChan <- CmdIR{Task: task, Status: statusRunning, ReturnCode: -1}
 	waiter.Add(1)
 	defer waiter.Done()
 
@@ -292,7 +292,7 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		scanner.Split(variableSplitFunc)
 		for scanner.Scan() {
 			message := scanner.Text()
-			resultChan <- PipeIR{vtclean.Clean(message, false)}
+			resultChan <- PipeIR{message: vtclean.Clean(message, false)}
 		}
 	}
 
@@ -305,13 +305,13 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		select {
 		case stdoutMsg, ok := <-stdoutChan:
 			if ok {
-				resultChan <- CmdIR{task, statusRunning, stdoutMsg.message, "", false, -1}
+				resultChan <- CmdIR{Task: task, Status: statusRunning, Stdout: stdoutMsg.message, ReturnCode: -1}
 			} else {
 				stdoutChan = nil
 			}
 		case stderrMsg, ok := <-stderrChan:
 			if ok {
-				resultChan <- CmdIR{task, statusRunning, "", stderrMsg.message, false, -1}
+				resultChan <- CmdIR{Task: task, Status: statusRunning, Stderr: stderrMsg.message, ReturnCode: -1}
 			} else {
 				stderrChan = nil
 			}
@@ -334,12 +334,12 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	returnCode := waitStatus.ExitStatus()
 
-	mainLogChan <- LogItem{task.Name, boldyellow("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
+	mainLogChan <- LogItem{Name: task.Name, Message: boldyellow("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
 
 	if returnCode == 0 || task.IgnoreFailure {
-		resultChan <- CmdIR{task, statusSuccess, "", "", true, returnCode}
+		resultChan <- CmdIR{Task: task, Status: statusSuccess, Complete: true, ReturnCode: returnCode}
 	} else {
-		resultChan <- CmdIR{task, statusError, "", "", true, returnCode}
+		resultChan <- CmdIR{Task: task, Status: statusError, Complete: true, ReturnCode: returnCode}
 		if task.StopOnFailure {
 			exitSignaled = true
 		}
@@ -425,14 +425,14 @@ func (task *Task) process(step, totalTasks int) []*Task {
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
 			ansi.EraseInLine(2)
-			lineObj := Line{statusRunning, task.Name, "\n", "", "", ""}
+			lineObj := Line{Status: statusRunning, Title: task.Name, Msg: "\n"}
 			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
 		for line := 0; line < len(tasks); line++ {
 			ansi.EraseInLine(2)
 			tasks[line].Command.Started = false
-			tasks[line].Display.Line = Line{statusPending, tasks[line].Name, "", "", "", ""}
+			tasks[line].Display.Line = Line{Status: statusPending, Title: tasks[line].Name}
 			tasks[line].display(&curLine)
 		}
 	}
@@ -506,10 +506,10 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			// record in the log
 			if Options.LogPath != "" {
 				if msgObj.Stdout != "" {
-					eventTask.LogChan <- LogItem{eventTask.Name, msgObj.Stdout + "\n"}
+					eventTask.LogChan <- LogItem{Name: eventTask.Name, Message: msgObj.Stdout + "\n"}
 				}
 				if msgObj.Stderr != "" {
-					eventTask.LogChan <- LogItem{eventTask.Name, red(msgObj.Stderr) + "\n"}
+					eventTask.LogChan <- LogItem{Name: eventTask.Name, Message: red(msgObj.Stderr) + "\n"}
 				}
 			}
 
@@ -532,9 +532,9 @@ func (task *Task) process(step, totalTasks int) []*Task {
 				}
 
 				if msgObj.Stderr != "" {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current(), eventTask.eta(), ""}
+					eventTask.Display.Line = Line{Status: msgObj.Status, Title: eventTask.Name, Msg: red(msgObj.Stderr), Spinner: spinner.Current(), Eta: eventTask.eta()}
 				} else {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, yellow(msgObj.Stdout), spinner.Current(), eventTask.eta(), ""}
+					eventTask.Display.Line = Line{Status: msgObj.Status, Title: eventTask.Name, Msg: yellow(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.eta()}
 				}
 
 				eventTask.display(&curLine)
@@ -572,7 +572,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			}
 
 			ansi.EraseInLine(2)
-			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)"), "", "", "", ""})
+			task.Display.Template.Execute(os.Stdout, Line{Status: groupSuccess, Title: task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)")})
 			ansi.CursorHorizontalAbsolute(0)
 		}
 

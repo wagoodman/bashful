@@ -197,7 +197,7 @@ func main() {
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
-	mainLogChan <- LogItem{"[Main]", boldcyan("Running " + os.Args[1])}
+	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + os.Args[1])}
 	for index := range conf.Tasks {
 		newFailedTasks := conf.Tasks[index].process(index+1, len(conf.Tasks))
 		totalFailedTasks += len(newFailedTasks)
@@ -208,7 +208,7 @@ func main() {
 			break
 		}
 	}
-	mainLogChan <- LogItem{"[Main]", boldcyan("Finished " + os.Args[1])}
+	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Finished " + os.Args[1])}
 
 	err = Save(etaCachePath, &commandTimeCache)
 	Check(err)
@@ -236,12 +236,12 @@ func main() {
 			buffer.WriteString(red("  └─ stderr: \n") + task.ErrorBuffer.String() + "\n")
 
 		}
-		mainLogChan <- LogItem{"[Main]", buffer.String()}
+		mainLogChan <- LogItem{Name: "[Main]", Message: buffer.String()}
 		fmt.Print(buffer.String())
 
 	}
 
-	mainLogChan <- LogItem{"[Main]", boldcyan("Exiting")}
+	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Exiting")}
 
 	fmt.Print("\033[?25h") // show cursor
 
