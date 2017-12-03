@@ -24,6 +24,7 @@ type OptionsConfig struct {
 	MaxParallelCmds      int    `yaml:"max-parallel-commands"`
 	ReplicaReplaceString string `yaml:"replica-replace-pattern"`
 	ShowTaskEta          bool   `yaml:"show-task-times"`
+	ShowTaskOutput       bool   `yaml:"show-task-output"`
 	ShowSummaryTimes     bool   `yaml:"show-summary-times"`
 	CollapseOnCompletion bool   `yaml:"collapse-on-completion"`
 }
@@ -38,6 +39,9 @@ func defaultOptions() OptionsConfig {
 	defaultValues.StopOnFailure = true
 	defaultValues.ShowSteps = false
 	defaultValues.ShowSummaryFooter = true
+	defaultValues.ShowErrorSummary = true
+	defaultValues.ShowStepSummary = true
+	defaultValues.ShowTaskOutput = true
 	defaultValues.ShowFailureReport = true
 	defaultValues.ReplicaReplaceString = "?"
 	defaultValues.MaxParallelCmds = 4

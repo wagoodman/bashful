@@ -24,17 +24,18 @@ import (
 )
 
 type Task struct {
-	Name          string `yaml:"name"`
-	CmdString     string `yaml:"cmd"`
-	Display       TaskDisplay
-	Command       TaskCommand
-	StopOnFailure bool     `yaml:"stop-on-failure"`
-	IgnoreFailure bool     `yaml:"ignore-failure"`
-	ParallelTasks []Task   `yaml:"parallel-tasks"`
-	ForEach       []string `yaml:"for-each"`
-	LogChan       chan LogItem
-	LogFile       *os.File
-	ErrorBuffer   *bytes.Buffer
+	Name           string `yaml:"name"`
+	CmdString      string `yaml:"cmd"`
+	Display        TaskDisplay
+	Command        TaskCommand
+	StopOnFailure  bool     `yaml:"stop-on-failure"`
+	ShowTaskOutput bool     `yaml:"show-output"`
+	IgnoreFailure  bool     `yaml:"ignore-failure"`
+	ParallelTasks  []Task   `yaml:"parallel-tasks"`
+	ForEach        []string `yaml:"for-each"`
+	LogChan        chan LogItem
+	LogFile        *os.File
+	ErrorBuffer    *bytes.Buffer
 }
 
 type TaskDisplay struct {
@@ -79,6 +80,7 @@ func (task *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type defaults Task
 	var defaultValues defaults
 	defaultValues.StopOnFailure = Options.StopOnFailure
+	defaultValues.ShowTaskOutput = Options.ShowTaskOutput
 
 	if err := unmarshal(&defaultValues); err != nil {
 		return err
@@ -521,6 +523,11 @@ func (task *Task) process(step, totalTasks int) []*Task {
 					fmt.Println(msgObj.Stdout)
 				}
 			} else {
+				if eventTask.ShowTaskOutput == false {
+					msgObj.Stderr = ""
+					msgObj.Stdout = ""
+				}
+
 				if msgObj.Stderr != "" {
 					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current(), eventTask.eta(), ""}
 				} else {
@@ -562,7 +569,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			}
 
 			ansi.EraseInLine(2)
-			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, task.Name + " (" + strconv.Itoa(len(tasks)) + " tasks)", "", "", "", ""})
+			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)"), "", "", "", ""})
 			ansi.CursorHorizontalAbsolute(0)
 		}
 
