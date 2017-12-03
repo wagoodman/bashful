@@ -96,13 +96,13 @@ func (conf *RunConfig) read() {
 		os.Exit(1)
 	}
 
-	CachePath = path.Join(cwd, ".bashful")
-	LogCachePath = path.Join(CachePath, "logs")
-	EtaCachePath = path.Join(CachePath, "eta")
+	cachePath = path.Join(cwd, ".bashful")
+	logCachePath = path.Join(cachePath, "logs")
+	etaCachePath = path.Join(cachePath, "eta")
 
 	// note: you must load the eta cache before the run.yml file
-	if Exists(EtaCachePath) {
-		err := Load(EtaCachePath, &CommandTimeCache)
+	if doesFileExist(etaCachePath) {
+		err := Load(etaCachePath, &commandTimeCache)
 		Check(err)
 	}
 
@@ -147,7 +147,7 @@ func (conf *RunConfig) read() {
 	// now that all tasks have been inflated, set the total eta
 	for index := range conf.Tasks {
 		task := &conf.Tasks[index]
-		TotalEtaSeconds += task.EstimatedRuntime()
+		totalEtaSeconds += task.EstimatedRuntime()
 	}
 
 }

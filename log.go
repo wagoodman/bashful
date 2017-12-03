@@ -38,20 +38,20 @@ func removeDirContents(dir string) error {
 
 func setupLogging() {
 
-	err := os.MkdirAll(CachePath, 0755)
+	err := os.MkdirAll(cachePath, 0755)
 	if err != nil {
 		fmt.Println("Unable to create cache dir!")
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	err = os.MkdirAll(LogCachePath, 0755)
+	err = os.MkdirAll(logCachePath, 0755)
 	if err != nil {
 		fmt.Println("Unable to create log dir!")
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	removeDirContents(LogCachePath)
+	removeDirContents(logCachePath)
 	go MainLogger(Options.LogPath)
 }
 
@@ -65,7 +65,7 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 	}
 	defer file.Close()
 	defer func() {
-		MainLogConcatChan <- LogConcat{logPath}
+		mainLogConcatChan <- LogConcat{logPath}
 	}()
 
 	logger := log.New(file, "", log.Ldate|log.Ltime)
@@ -102,14 +102,14 @@ func MainLogger(logPath string) {
 
 	for {
 		select {
-		case logObj, ok := <-MainLogChan:
+		case logObj, ok := <-mainLogChan:
 			if ok {
 				logger.Print(logObj.Message)
 			} else {
-				MainLogChan = nil
+				mainLogChan = nil
 			}
 
-		case logCmd, ok := <-MainLogConcatChan:
+		case logCmd, ok := <-mainLogConcatChan:
 			if ok {
 				file.Close()
 
@@ -132,10 +132,10 @@ func MainLogger(logPath string) {
 
 				os.Remove(logCmd.File)
 			} else {
-				MainLogConcatChan = nil
+				mainLogConcatChan = nil
 			}
 		}
-		if MainLogChan == nil && MainLogConcatChan == nil {
+		if mainLogChan == nil && mainLogConcatChan == nil {
 			break
 		}
 	}
