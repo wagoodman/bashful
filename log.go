@@ -8,6 +8,11 @@ import (
 	"path/filepath"
 )
 
+var (
+	mainLogChan       chan LogItem   = make(chan LogItem)
+	mainLogConcatChan chan LogConcat = make(chan LogConcat)
+)
+
 type LogItem struct {
 	Name    string
 	Message string
@@ -38,21 +43,21 @@ func removeDirContents(dir string) error {
 
 func setupLogging() {
 
-	err := os.MkdirAll(cachePath, 0755)
+	err := os.MkdirAll(config.cachePath, 0755)
 	if err != nil {
 		fmt.Println("Unable to create cache dir!")
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	err = os.MkdirAll(logCachePath, 0755)
+	err = os.MkdirAll(config.logCachePath, 0755)
 	if err != nil {
 		fmt.Println("Unable to create log dir!")
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	removeDirContents(logCachePath)
-	go MainLogger(Options.LogPath)
+	removeDirContents(config.logCachePath)
+	go MainLogger(config.Options.LogPath)
 }
 
 func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {

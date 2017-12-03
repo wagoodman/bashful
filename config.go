@@ -2,15 +2,23 @@ package main
 
 import (
 	"encoding/gob"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
-	"runtime"
+	"time"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
+
+var config struct {
+	Options          OptionsConfig `yaml:"config"`
+	Tasks            []Task        `yaml:"tasks"`
+	logCachePath     string
+	cachePath        string
+	etaCachePath     string
+	totalEtaSeconds  float64
+	commandTimeCache map[string]time.Duration
+}
 
 type OptionsConfig struct {
 	StopOnFailure        bool   `yaml:"stop-on-failure"`
@@ -28,11 +36,6 @@ type OptionsConfig struct {
 	CollapseOnCompletion bool   `yaml:"collapse-on-completion"`
 }
 
-type RunConfig struct {
-	Options OptionsConfig `yaml:"config"`
-	Tasks   []Task        `yaml:"tasks"`
-}
-
 func defaultOptions() OptionsConfig {
 	var defaultValues OptionsConfig
 	defaultValues.StopOnFailure = true
@@ -48,7 +51,7 @@ func defaultOptions() OptionsConfig {
 	return defaultValues
 }
 
-func (conf *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type defaults OptionsConfig
 	var defaultValues defaults
 	defaultValues = defaults(defaultOptions())
@@ -57,9 +60,9 @@ func (conf *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) erro
 		return err
 	}
 
-	*conf = OptionsConfig(defaultValues)
+	*options = OptionsConfig(defaultValues)
 	// the global options must be available when parsing the task yaml (does order matter?)
-	Options = *conf
+	config.Options = *options
 	return nil
 }
 
@@ -86,44 +89,35 @@ func remove(slice []float64, value float64) []float64 {
 	return slice
 }
 
-func (conf *RunConfig) read() {
+func readConfig() {
+	// fetch the ETA cache from disk (this must be done before fetching/parsing the run.yaml)...
 	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("Unable to get CWD!")
-		fmt.Println(err)
-		os.Exit(1)
+	CheckError(err, "Unable to get CWD.")
+
+	config.cachePath = path.Join(cwd, ".bashful")
+	config.logCachePath = path.Join(config.cachePath, "logs")
+	config.etaCachePath = path.Join(config.cachePath, "eta")
+
+	config.commandTimeCache = make(map[string]time.Duration)
+	if doesFileExist(config.etaCachePath) {
+		err := Load(config.etaCachePath, &config.commandTimeCache)
+		CheckError(err, "Unable to load command eta cache.")
 	}
 
-	cachePath = path.Join(cwd, ".bashful")
-	logCachePath = path.Join(cachePath, "logs")
-	etaCachePath = path.Join(cachePath, "eta")
+	// fetch and parse the run.yaml user file...
+	config.Options = defaultOptions()
 
-	// note: you must load the eta cache before the run.yml file
-	if doesFileExist(etaCachePath) {
-		err := Load(etaCachePath, &commandTimeCache)
-		Check(err)
-	}
-
-	conf.Options = defaultOptions()
-
-	// load the run.yml file
 	yamlString, err := ioutil.ReadFile(os.Args[1])
-	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
-	}
+	CheckError(err, "Unable to read yaml config.")
 
-	err = yaml.Unmarshal(yamlString, conf)
-	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
-	}
+	err = yaml.Unmarshal(yamlString, &config)
+	CheckError(err, "Unable to parse yaml config.")
 
-	// This needs to be done as soon as the options are parsed so that defailt task options can reference the global
-	// Options = conf.Options
 	var finalTasks []Task
 
-	// initialize tasks with default values
-	for index := range conf.Tasks {
-		task := &conf.Tasks[index]
+	// initialize tasks with default values...
+	for index := range config.Tasks {
+		task := &config.Tasks[index]
 		// finalize task by appending to the set of final tasks
 		if len(task.ForEach) > 0 {
 			taskName, taskCmdString := task.Name, task.CmdString
@@ -139,15 +133,14 @@ func (conf *RunConfig) read() {
 		}
 	}
 
-	// replace the current config with the inflated list of final tasks
-	conf.Tasks = finalTasks
-
 	// now that all tasks have been inflated, set the total eta
-	for index := range conf.Tasks {
-		task := &conf.Tasks[index]
-		totalEtaSeconds += task.EstimatedRuntime()
+	for index := range finalTasks {
+		task := &finalTasks[index]
+		config.totalEtaSeconds += task.EstimatedRuntime()
 	}
 
+	// replace the current config with the inflated list of final tasks
+	config.Tasks = finalTasks
 }
 
 // Encode via Gob to file
@@ -170,12 +163,4 @@ func Load(path string, object interface{}) error {
 	}
 	file.Close()
 	return err
-}
-
-func Check(e error) {
-	if e != nil {
-		_, file, line, _ := runtime.Caller(1)
-		fmt.Println(line, "\t", file, "\n", e)
-		os.Exit(1)
-	}
 }
