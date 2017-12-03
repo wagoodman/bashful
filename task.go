@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/k0kubun/go-ansi"
 	"github.com/lunixbochs/vtclean"
 	"github.com/tj/go-spin"
 	color "github.com/mgutz/ansi"
@@ -259,8 +258,8 @@ func (task *Task) String() string {
 	return message.String()
 }
 
-func (task *Task) display(curLine *int) {
-	display(task.String(), curLine, task.Display.Index)
+func (task *Task) display() {
+	Screen().Display(task.String(), task.Display.Index)
 }
 
 func (task *Task) EstimatedRuntime() float64 {
@@ -427,33 +426,36 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	}
 }
 
-func (task *Task) Process() []*Task {
+func (task *Task) RunAndDisplay() []*Task {
 
 	var (
-		curLine         int
 		lastStartedTask int
-		moves           int
 		failedTasks     []*Task
+		waiter          sync.WaitGroup
+		message bytes.Buffer
 	)
 
 	resultChan := make(chan CmdIR)
 	tasks := task.Tasks()
-	var waiter sync.WaitGroup
+	scr := Screen()
+	hasHeader := len(tasks) > 1
+	scr.ResetFrame(len(tasks), hasHeader, config.Options.ShowSummaryFooter)
 
 	if !config.Options.Vintage {
 
 		// make room for the title of a parallel proc group
-		if len(tasks) > 1 {
-			ansi.EraseInLine(2)
-			lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Name, Msg: "\n"}
-			task.Display.Template.Execute(os.Stdout, lineObj)
+		if hasHeader {
+
+			message.Reset()
+			lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Name, Msg: ""}
+			task.Display.Template.Execute(&message, lineObj)
+			scr.DisplayHeader(message.String())
 		}
 
 		for line := 0; line < len(tasks); line++ {
-			ansi.EraseInLine(2)
 			tasks[line].Command.Started = false
 			tasks[line].Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: tasks[line].Name}
-			tasks[line].display(&curLine)
+			tasks[line].display()
 		}
 	}
 
@@ -481,12 +483,12 @@ func (task *Task) Process() []*Task {
 				} else {
 					taskObj.Display.Values.Spinner = spinner.Current()
 				}
-				taskObj.display(&curLine)
+				taskObj.display()
 			}
 
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
-				display(footer(StatusPending), &curLine, len(tasks))
+				scr.DisplayFooter(footer(StatusPending))
 			}
 
 		case msgObj := <-resultChan:
@@ -557,12 +559,12 @@ func (task *Task) Process() []*Task {
 					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: yellow(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				}
 
-				eventTask.display(&curLine)
+				eventTask.display()
 			}
 
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
-				display(footer(StatusPending), &curLine, len(tasks))
+				scr.DisplayFooter(footer(StatusPending))
 			}
 
 			if exitSignaled {
@@ -579,73 +581,27 @@ func (task *Task) Process() []*Task {
 
 	if !config.Options.Vintage {
 		// complete the proc group status
-		if len(tasks) > 1 {
-
-			moves = curLine + 1
-			if moves != 0 {
-				if moves < 0 {
-					ansi.CursorDown(moves * -1)
-				} else {
-					ansi.CursorUp(moves)
-				}
-				curLine -= moves
-			}
-
-			ansi.EraseInLine(2)
-			task.Display.Template.Execute(os.Stdout, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)")})
-			ansi.CursorHorizontalAbsolute(0)
+		if hasHeader {
+			message.Reset()
+			task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)")})
+			scr.DisplayHeader(message.String())
 		}
 
 		// collapse sections or parallel tasks...
 		if config.Options.CollapseOnCompletion && len(tasks) > 1 {
 			// erase the lines for this section (except for the header)
 
-			// head to the top of the section
-			moves = curLine
-			if moves != 0 {
-				if moves < 0 {
-					ansi.CursorDown(moves * -1)
-				} else {
-					ansi.CursorUp(moves)
-				}
-				curLine -= moves
-			}
-			// erase all lines
-			for range tasks {
-				ansi.EraseInLine(2)
-				ansi.CursorDown(1)
-				curLine++
-			}
-			// erase the summary line
-			if config.Options.ShowSummaryFooter {
-				ansi.EraseInLine(2)
-				ansi.CursorDown(1)
-				curLine++
-			}
+			// head to the top of the section (below the header) and erase all lines
+			scr.EraseBelowHeader()
+
 			// head back to the top of the section
-			moves = curLine
-			if moves != 0 {
-				if moves < 0 {
-					ansi.CursorDown(moves * -1)
-				} else {
-					ansi.CursorUp(moves)
-				}
-				curLine -= moves
-			}
+			scr.MoveCursorToFirstLine()
 		} else {
 			// ... or this is a single task or configured not to collapse
 
 			// instead, leave all of the text on the screen...
 			// ...reset the cursor to the bottom of the section
-			moves = curLine - len(tasks)
-			if moves != 0 {
-				if moves < 0 {
-					ansi.CursorDown(moves * -1)
-				} else {
-					ansi.CursorUp(moves)
-				}
-				curLine -= moves
-			}
+			scr.MovePastFrame(false)
 		}
 	}
 
