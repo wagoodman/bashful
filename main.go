@@ -48,9 +48,10 @@ var (
 	LineLastParallelTemplate, _ = template.New("last parallel line").Parse(" {{.Status}} {{printf \"%1s\" .Spinner}} └─ {{printf \"%-25s\" .Title}} {{.Msg}}{{.Split}}{{.Eta}}")
 	LineErrorTemplate, _        = template.New("error line").Parse(" {{.Status}} {{.Msg}}")
 	PercentTemplate, _          = template.New("summary percent").Parse(`{{printf "%3.2f" .Value}}% Complete`)
-	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + color.Reset + ` {{.FinalStatusColor}}{{printf "%-15s" .Percent}}` + color.Reset + ` {{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
+	SummaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}` + color.Reset + ` {{.FinalStatusColor}}{{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 	TotalTasks                  = 0
 	CompletedTasks              = 0
+	TotalFailedTasks            = 0
 	MainLogChan                 = make(chan LogItem)
 	MainLogConcatChan           = make(chan LogConcat)
 	CommandTimeCache            = make(map[string]time.Duration)
@@ -69,6 +70,8 @@ type Summary struct {
 	Eta              string
 	Split            string
 	FinalStatusColor string
+	Steps            string
+	Errors           string
 }
 
 func visualLength(str string) int {
@@ -131,7 +134,7 @@ func showDuration(duration time.Duration) string {
 
 func footer(status, finalStatus string) string {
 	var tpl bytes.Buffer
-	var durString, etaString string
+	var durString, etaString, stepString, errorString string
 
 	if Options.ShowSummaryTimes {
 		duration := time.Since(StartTime)
@@ -146,6 +149,14 @@ func footer(status, finalStatus string) string {
 		etaString = ""
 	}
 
+	if Options.ShowStepSummary {
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", CompletedTasks, TotalTasks)
+	}
+
+	if Options.ShowErrorSummary {
+		errorString = fmt.Sprintf(" Errors[%d]", TotalFailedTasks)
+	}
+
 	// get a string with the summary line without a split gap (eta floats left)
 	var ptpl bytes.Buffer
 	percentValue := (float64(CompletedTasks) * float64(100)) / float64(TotalTasks)
@@ -153,7 +164,7 @@ func footer(status, finalStatus string) string {
 	PercentTemplate.Execute(&ptpl, percent)
 	percentStr := ptpl.String()
 
-	SummaryTemplate.Execute(&tpl, Summary{status, percentStr, "", durString, etaString, "", ""})
+	SummaryTemplate.Execute(&tpl, Summary{status, percentStr, "", durString, etaString, "", "", stepString, errorString})
 
 	// calculate a space buffer to push the eta to the right
 	terminalWidth, _ := terminal.Width()
@@ -163,7 +174,7 @@ func footer(status, finalStatus string) string {
 	}
 
 	tpl.Reset()
-	SummaryTemplate.Execute(&tpl, Summary{status, percentStr, "", bold(durString), bold(etaString), strings.Repeat(" ", splitWidth), finalStatus})
+	SummaryTemplate.Execute(&tpl, Summary{status, percentStr, "", bold(durString), bold(etaString), strings.Repeat(" ", splitWidth), finalStatus, bold(stepString), bold(errorString)})
 
 	return tpl.String()
 }
@@ -201,7 +212,10 @@ func main() {
 	fmt.Print("\033[?25l") // hide cursor
 	MainLogChan <- LogItem{"[Main]", boldcyan("Running " + os.Args[1])}
 	for index := range conf.Tasks {
-		failedTasks = append(failedTasks, conf.Tasks[index].process(index+1, len(conf.Tasks))...)
+		newFailedTasks := conf.Tasks[index].process(index+1, len(conf.Tasks))
+		TotalFailedTasks += len(newFailedTasks)
+
+		failedTasks = append(failedTasks, newFailedTasks...)
 
 		if ExitSignaled {
 			break
