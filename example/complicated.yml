@@ -9,7 +9,7 @@ config:
   # replica-replace-pattern: '?'
   # show-summary-times: false
   # show-task-times: false
-  collapse-on-completion: true
+  # collapse-on-completion: true
   # show-summary-steps: false
   # show-summary-errors: false
   # show-task-output: false
