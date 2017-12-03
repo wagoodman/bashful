@@ -6,52 +6,53 @@ import (
 	"html/template"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/k0kubun/go-ansi"
-	//"github.com/k0kubun/pp"
-
 	color "github.com/mgutz/ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
 
 var (
-	Options                     OptionsConfig
-	logCachePath                string
-	cachePath                   string
-	etaCachePath                string
-	exitSignaled                bool                     = false
-	startTime                   time.Time                = time.Now()
-	purple                      func(string) string      = color.ColorFunc("magenta+h")
-	red                         func(string) string      = color.ColorFunc("red+h")
-	yellow                      func(string) string      = color.ColorFunc("yellow+h")
-	boldyellow                  func(string) string      = color.ColorFunc("yellow+b")
-	boldcyan                    func(string) string      = color.ColorFunc("cyan+b")
-	bold                        func(string) string      = color.ColorFunc("default+b")
-	lineDefaultTemplate, _                               = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	lineParallelTemplate, _                              = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	lineLastParallelTemplate, _                          = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} └─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	summaryTemplate, _                                   = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
-	totalTasks                  int                      = 0
-	completedTasks              int                      = 0
-	totalFailedTasks            int                      = 0
-	mainLogChan                 chan LogItem             = make(chan LogItem)
-	mainLogConcatChan           chan LogConcat           = make(chan LogConcat)
-	commandTimeCache            map[string]time.Duration = make(map[string]time.Duration)
-	totalEtaSeconds             float64
+	exitSignaled     bool      = false
+	startTime        time.Time = time.Now()
+	totalTasks       int       = 0
+	completedTasks   int       = 0
+	totalFailedTasks int       = 0
+
+	purple                      func(string) string = color.ColorFunc("magenta+h")
+	red                         func(string) string = color.ColorFunc("red+h")
+	yellow                      func(string) string = color.ColorFunc("yellow+h")
+	boldyellow                  func(string) string = color.ColorFunc("yellow+b")
+	boldcyan                    func(string) string = color.ColorFunc("cyan+b")
+	bold                        func(string) string = color.ColorFunc("default+b")
+	lineDefaultTemplate, _                          = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineParallelTemplate, _                         = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineLastParallelTemplate, _                     = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} └─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	summaryTemplate, _                              = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 
 type Summary struct {
-	Status           string
-	Percent          string
-	Msg              string
-	Runtime          string
-	Eta              string
-	Split            string
-	Steps            string
-	Errors           string
+	Status  string
+	Percent string
+	Msg     string
+	Runtime string
+	Eta     string
+	Split   string
+	Steps   string
+	Errors  string
+}
+
+func CheckError(err error, message string) {
+	if err != nil {
+		fmt.Println(message)
+		_, file, line, _ := runtime.Caller(1)
+		fmt.Println(line, "\t", file, "\n", err)
+		os.Exit(1)
+	}
 }
 
 func visualLength(str string) int {
@@ -116,11 +117,11 @@ func footer(status CommandStatus) string {
 	var tpl bytes.Buffer
 	var durString, etaString, stepString, errorString string
 
-	if Options.ShowSummaryTimes {
+	if config.Options.ShowSummaryTimes {
 		duration := time.Since(startTime)
 		durString = fmt.Sprintf(" Runtime[%s]", showDuration(duration))
 
-		totalEta := time.Duration(totalEtaSeconds) * time.Second
+		totalEta := time.Duration(config.totalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
 		etaString = fmt.Sprintf(" ETA[%s]", showDuration(remainingEta))
 	}
@@ -129,11 +130,11 @@ func footer(status CommandStatus) string {
 		etaString = ""
 	}
 
-	if Options.ShowStepSummary {
+	if config.Options.ShowStepSummary {
 		stepString = fmt.Sprintf(" Tasks[%d/%d]", completedTasks, totalTasks)
 	}
 
-	if Options.ShowErrorSummary {
+	if config.Options.ShowErrorSummary {
 		errorString = fmt.Sprintf(" Errors[%d]", totalFailedTasks)
 	}
 
@@ -172,30 +173,30 @@ func doesFileExist(name string) bool {
 }
 
 func main() {
-
-	var conf RunConfig
 	var err error
-	conf.read()
+	readConfig()
 
 	rand.Seed(time.Now().UnixNano())
 
-	if Options.LogPath != "" {
+	if config.Options.LogPath != "" {
 		// fmt.Println("Logging is not supported yet!")
 		// os.Exit(1)
 		setupLogging()
 	}
 
-	if Options.Vintage {
-		Options.MaxParallelCmds = 1
-		Options.ShowSummaryFooter = false
-		Options.ShowFailureReport = false
+	if config.Options.Vintage {
+		config.Options.MaxParallelCmds = 1
+		config.Options.ShowSummaryFooter = false
+		config.Options.ShowFailureReport = false
+		ticker.Stop()
+
 	}
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
 	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + os.Args[1])}
-	for index := range conf.Tasks {
-		newFailedTasks := conf.Tasks[index].Process()
+	for index := range config.Tasks {
+		newFailedTasks := config.Tasks[index].Process()
 		totalFailedTasks += len(newFailedTasks)
 
 		failedTasks = append(failedTasks, newFailedTasks...)
@@ -206,12 +207,12 @@ func main() {
 	}
 	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Finished " + os.Args[1])}
 
-	err = Save(etaCachePath, &commandTimeCache)
-	Check(err)
+	err = Save(config.etaCachePath, &config.commandTimeCache)
+	CheckError(err, "Unable to save command eta cache.")
 
 	var curLine int
 
-	if Options.ShowSummaryFooter {
+	if config.Options.ShowSummaryFooter {
 		if len(failedTasks) > 0 {
 			display(footer(StatusError), &curLine, 0)
 		} else {
@@ -219,7 +220,7 @@ func main() {
 		}
 	}
 
-	if Options.ShowFailureReport && len(failedTasks) > 0 {
+	if config.Options.ShowFailureReport && len(failedTasks) > 0 {
 		var buffer bytes.Buffer
 		buffer.WriteString(red(" ...Some tasks failed, see below for details.\n"))
 

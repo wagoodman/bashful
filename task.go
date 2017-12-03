@@ -16,16 +16,21 @@ import (
 	"syscall"
 	"time"
 
-	ansi "github.com/k0kubun/go-ansi"
+	"github.com/k0kubun/go-ansi"
 	"github.com/lunixbochs/vtclean"
-	spin "github.com/tj/go-spin"
+	"github.com/tj/go-spin"
 	color "github.com/mgutz/ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
 
+var (
+	ticker  *time.Ticker  = time.NewTicker(150 * time.Millisecond)
+	spinner *spin.Spinner = spin.New()
+)
+
 type Task struct {
-	Name           string `yaml:"name"`
-	CmdString      string `yaml:"cmd"`
+	Name           string   `yaml:"name"`
+	CmdString      string   `yaml:"cmd"`
 	Display        TaskDisplay
 	Command        TaskCommand
 	StopOnFailure  bool     `yaml:"stop-on-failure"`
@@ -66,16 +71,16 @@ const (
 func (status CommandStatus) Color(attributes string) string {
 	switch status {
 	case StatusRunning:
-		return color.ColorCode("28+"+attributes)
+		return color.ColorCode("28+" + attributes)
 
 	case StatusPending:
-		return color.ColorCode("22+"+attributes)
+		return color.ColorCode("22+" + attributes)
 
 	case StatusSuccess:
-		return color.ColorCode("green+h"+attributes)
+		return color.ColorCode("green+h" + attributes)
 
 	case StatusError:
-		return color.ColorCode("red+h"+attributes)
+		return color.ColorCode("red+h" + attributes)
 
 	}
 	return "INVALID COMMAND STATUS"
@@ -102,8 +107,8 @@ type LineInfo struct {
 func (task *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type defaults Task
 	var defaultValues defaults
-	defaultValues.StopOnFailure = Options.StopOnFailure
-	defaultValues.ShowTaskOutput = Options.ShowTaskOutput
+	defaultValues.StopOnFailure = config.Options.StopOnFailure
+	defaultValues.ShowTaskOutput = config.Options.ShowTaskOutput
 
 	if err := unmarshal(&defaultValues); err != nil {
 		return err
@@ -162,12 +167,12 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	name := task.Name
 
 	if replicaValue != "" {
-		cmdString = strings.Replace(cmdString, Options.ReplicaReplaceString, replicaValue, -1)
+		cmdString = strings.Replace(cmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
 	}
 
 	task.CmdString = cmdString
 
-	if eta, ok := commandTimeCache[task.CmdString]; ok {
+	if eta, ok := config.commandTimeCache[task.CmdString]; ok {
 		task.Command.EstimatedRuntime = eta
 	} else {
 		task.Command.EstimatedRuntime = time.Duration(-1)
@@ -185,7 +190,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 		task.Name = cmdString
 	} else {
 		if replicaValue != "" {
-			name = strings.Replace(name, Options.ReplicaReplaceString, replicaValue, -1)
+			name = strings.Replace(name, config.Options.ReplicaReplaceString, replicaValue, -1)
 		}
 		task.Name = name
 	}
@@ -258,6 +263,58 @@ func (task *Task) display(curLine *int) {
 	display(task.String(), curLine, task.Display.Index)
 }
 
+func (task *Task) EstimatedRuntime() float64 {
+	var etaSeconds float64
+	// finalize task by appending to the set of final tasks
+	if task.CmdString != "" && task.Command.EstimatedRuntime != -1 {
+		etaSeconds += task.Command.EstimatedRuntime.Seconds()
+	}
+
+	var maxParallelEstimatedRuntime float64
+	var taskEndSecond []float64
+	var currentSecond float64
+	var remainingParallelTasks = config.Options.MaxParallelCmds
+
+	for subIndex := range task.ParallelTasks {
+		subTask := &task.ParallelTasks[subIndex]
+		if subTask.CmdString != "" && subTask.Command.EstimatedRuntime != -1 {
+			// this is a sub task with an eta
+			if remainingParallelTasks == 0 {
+
+				// we've started all possible tasks, now they should stop...
+				// select the first task to stop
+				remainingParallelTasks++
+				minEndSecond, _ := MinMax(taskEndSecond)
+				taskEndSecond = remove(taskEndSecond, minEndSecond)
+				currentSecond = minEndSecond
+			}
+
+			// we are still starting tasks
+			taskEndSecond = append(taskEndSecond, currentSecond+subTask.Command.EstimatedRuntime.Seconds())
+			remainingParallelTasks--
+
+			_, maxEndSecond := MinMax(taskEndSecond)
+			maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, maxEndSecond)
+		}
+
+	}
+	etaSeconds += maxParallelEstimatedRuntime
+	return etaSeconds
+}
+
+func (task *Task) CurrentEta() string {
+	var eta, etaValue string
+
+	if config.Options.ShowTaskEta {
+		running := time.Since(task.Command.StartTime)
+		etaValue = "?"
+		if task.Command.EstimatedRuntime > 0 {
+			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
+		}
+		eta = fmt.Sprintf(bold("[%s]"), etaValue)
+	}
+	return eta
+}
 
 func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 
@@ -292,14 +349,14 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 	return
 }
 
-func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	task.Command.StartTime = time.Now()
 	mainLogChan <- LogItem{Name: task.Name, Message: boldyellow("Started Task: " + task.Name)}
 	resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
 	waiter.Add(1)
 	defer waiter.Done()
 
-	tempFile, _ := ioutil.TempFile(logCachePath, "")
+	tempFile, _ := ioutil.TempFile(config.logCachePath, "")
 	task.LogFile = tempFile
 	task.LogChan = make(chan LogItem)
 	go SingleLogger(task.LogChan, task.Name, tempFile.Name())
@@ -370,59 +427,6 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	}
 }
 
-func (task *Task) EstimatedRuntime() float64 {
-	var etaSeconds float64
-	// finalize task by appending to the set of final tasks
-	if task.CmdString != "" && task.Command.EstimatedRuntime != -1 {
-		etaSeconds += task.Command.EstimatedRuntime.Seconds()
-	}
-
-	var maxParallelEstimatedRuntime float64
-	var taskEndSecond []float64
-	var currentSecond float64
-	var remainingParallelTasks = Options.MaxParallelCmds
-
-	for subIndex := range task.ParallelTasks {
-		subTask := &task.ParallelTasks[subIndex]
-		if subTask.CmdString != "" && subTask.Command.EstimatedRuntime != -1 {
-			// this is a sub task with an eta
-			if remainingParallelTasks == 0 {
-
-				// we've started all possible tasks, now they should stop...
-				// select the first task to stop
-				remainingParallelTasks++
-				minEndSecond, _ := MinMax(taskEndSecond)
-				taskEndSecond = remove(taskEndSecond, minEndSecond)
-				currentSecond = minEndSecond
-			}
-
-			// we are still starting tasks
-			taskEndSecond = append(taskEndSecond, currentSecond+subTask.Command.EstimatedRuntime.Seconds())
-			remainingParallelTasks--
-
-			_, maxEndSecond := MinMax(taskEndSecond)
-			maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, maxEndSecond)
-		}
-
-	}
-	etaSeconds += maxParallelEstimatedRuntime
-	return etaSeconds
-}
-
-func (task *Task) Eta() string {
-	var eta, etaValue string
-
-	if Options.ShowTaskEta {
-		running := time.Since(task.Command.StartTime)
-		etaValue = "?"
-		if task.Command.EstimatedRuntime > 0 {
-			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
-		}
-		eta = fmt.Sprintf(bold("[%s]"), etaValue)
-	}
-	return eta
-}
-
 func (task *Task) Process() []*Task {
 
 	var (
@@ -432,16 +436,11 @@ func (task *Task) Process() []*Task {
 		failedTasks     []*Task
 	)
 
-	spinner := spin.New()
-	ticker := time.NewTicker(150 * time.Millisecond)
-	if Options.Vintage {
-		ticker.Stop()
-	}
-	resultChan := make(chan CmdIR, 10000)
+	resultChan := make(chan CmdIR)
 	tasks := task.Tasks()
 	var waiter sync.WaitGroup
 
-	if !Options.Vintage {
+	if !config.Options.Vintage {
 
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
@@ -459,12 +458,12 @@ func (task *Task) Process() []*Task {
 	}
 
 	var runningCmds int
-	for ; lastStartedTask < Options.MaxParallelCmds && lastStartedTask < len(tasks); lastStartedTask++ {
-		if Options.Vintage {
+	for ; lastStartedTask < config.Options.MaxParallelCmds && lastStartedTask < len(tasks); lastStartedTask++ {
+		if config.Options.Vintage {
 			fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
 			fmt.Println(bold("Command: " + tasks[lastStartedTask].CmdString))
 		}
-		go tasks[lastStartedTask].run(resultChan, &waiter)
+		go tasks[lastStartedTask].runSingleCmd(resultChan, &waiter)
 		tasks[lastStartedTask].Command.Started = true
 		runningCmds++
 	}
@@ -486,7 +485,7 @@ func (task *Task) Process() []*Task {
 			}
 
 			// update the summary line
-			if Options.ShowSummaryFooter {
+			if config.Options.ShowSummaryFooter {
 				display(footer(StatusPending), &curLine, len(tasks))
 			}
 
@@ -500,16 +499,16 @@ func (task *Task) Process() []*Task {
 				eventTask.Command.ReturnCode = msgObj.ReturnCode
 				close(eventTask.LogChan)
 
-				commandTimeCache[eventTask.CmdString] = eventTask.Command.StopTime.Sub(eventTask.Command.StartTime)
+				config.commandTimeCache[eventTask.CmdString] = eventTask.Command.StopTime.Sub(eventTask.Command.StartTime)
 
 				runningCmds--
 				// if a thread has freed up, start the next task (if there are any left)
 				if lastStartedTask < len(tasks) {
-					if Options.Vintage {
+					if config.Options.Vintage {
 						fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
 						fmt.Println("Command: " + bold(tasks[lastStartedTask].CmdString))
 					}
-					go tasks[lastStartedTask].run(resultChan, &waiter)
+					go tasks[lastStartedTask].runSingleCmd(resultChan, &waiter)
 					tasks[lastStartedTask].Command.Started = true
 					runningCmds++
 					lastStartedTask++
@@ -525,7 +524,7 @@ func (task *Task) Process() []*Task {
 			}
 
 			// record in the log
-			if Options.LogPath != "" {
+			if config.Options.LogPath != "" {
 				if msgObj.Stdout != "" {
 					eventTask.LogChan <- LogItem{Name: eventTask.Name, Message: msgObj.Stdout + "\n"}
 				}
@@ -540,7 +539,7 @@ func (task *Task) Process() []*Task {
 			}
 
 			// display...
-			if Options.Vintage {
+			if config.Options.Vintage {
 				if msgObj.Stderr != "" {
 					fmt.Println(red(msgObj.Stderr))
 				} else {
@@ -553,16 +552,16 @@ func (task *Task) Process() []*Task {
 				}
 
 				if msgObj.Stderr != "" {
-					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: red(msgObj.Stderr), Spinner: spinner.Current(), Eta: eventTask.Eta()}
+					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: red(msgObj.Stderr), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				} else {
-					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: yellow(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.Eta()}
+					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: yellow(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				}
 
 				eventTask.display(&curLine)
 			}
 
 			// update the summary line
-			if Options.ShowSummaryFooter {
+			if config.Options.ShowSummaryFooter {
 				display(footer(StatusPending), &curLine, len(tasks))
 			}
 
@@ -578,7 +577,7 @@ func (task *Task) Process() []*Task {
 		waiter.Wait()
 	}
 
-	if !Options.Vintage {
+	if !config.Options.Vintage {
 		// complete the proc group status
 		if len(tasks) > 1 {
 
@@ -598,7 +597,7 @@ func (task *Task) Process() []*Task {
 		}
 
 		// collapse sections or parallel tasks...
-		if Options.CollapseOnCompletion && len(tasks) > 1 {
+		if config.Options.CollapseOnCompletion && len(tasks) > 1 {
 			// erase the lines for this section (except for the header)
 
 			// head to the top of the section
@@ -618,7 +617,7 @@ func (task *Task) Process() []*Task {
 				curLine++
 			}
 			// erase the summary line
-			if Options.ShowSummaryFooter {
+			if config.Options.ShowSummaryFooter {
 				ansi.EraseInLine(2)
 				ansi.CursorDown(1)
 				curLine++
