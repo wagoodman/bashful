@@ -14,7 +14,6 @@ import (
 
 type OptionsConfig struct {
 	StopOnFailure        bool   `yaml:"stop-on-failure"`
-	ShowSteps            bool   `yaml:"show-steps"`
 	ShowStepSummary      bool   `yaml:"show-summary-steps"`
 	ShowErrorSummary     bool   `yaml:"show-summary-errors"`
 	ShowSummaryFooter    bool   `yaml:"show-summary-footer"`
@@ -37,7 +36,6 @@ type RunConfig struct {
 func defaultOptions() OptionsConfig {
 	var defaultValues OptionsConfig
 	defaultValues.StopOnFailure = true
-	defaultValues.ShowSteps = false
 	defaultValues.ShowSummaryFooter = true
 	defaultValues.ShowErrorSummary = true
 	defaultValues.ShowStepSummary = true

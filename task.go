@@ -18,8 +18,8 @@ import (
 
 	ansi "github.com/k0kubun/go-ansi"
 	"github.com/lunixbochs/vtclean"
-	color "github.com/mgutz/ansi"
 	spin "github.com/tj/go-spin"
+	color "github.com/mgutz/ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
 
@@ -40,8 +40,8 @@ type Task struct {
 
 type TaskDisplay struct {
 	Template *template.Template
-	Idx      int
-	Line     Line
+	Index    int
+	Values   LineInfo
 }
 
 type TaskCommand struct {
@@ -54,20 +54,43 @@ type TaskCommand struct {
 	ReturnCode       int
 }
 
+type CommandStatus int32
+
+const (
+	StatusRunning CommandStatus = iota
+	StatusPending
+	StatusSuccess
+	StatusError
+)
+
+func (status CommandStatus) Color(attributes string) string {
+	switch status {
+	case StatusRunning:
+		return color.ColorCode("28+"+attributes)
+
+	case StatusPending:
+		return color.ColorCode("22+"+attributes)
+
+	case StatusSuccess:
+		return color.ColorCode("green+h"+attributes)
+
+	case StatusError:
+		return color.ColorCode("red+h"+attributes)
+
+	}
+	return "INVALID COMMAND STATUS"
+}
+
 type CmdIR struct {
 	Task       *Task
-	Status     string
+	Status     CommandStatus
 	Stdout     string
 	Stderr     string
 	Complete   bool
 	ReturnCode int
 }
 
-type PipeIR struct {
-	message string
-}
-
-type Line struct {
+type LineInfo struct {
 	Status  string
 	Title   string
 	Msg     string
@@ -105,7 +128,6 @@ func (task *Task) Create(displayStartIdx int, replicaValue string) {
 		if len(subTask.ForEach) > 0 {
 			subTaskName, subTaskCmdString := subTask.Name, subTask.CmdString
 			for subReplicaIndex, subReplicaValue := range subTask.ForEach {
-				//subTaskReplica := Task{}
 				subTask.Name = subTaskName
 				subTask.CmdString = subTaskCmdString
 				subTask.Create(subReplicaIndex, subReplicaValue)
@@ -155,7 +177,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	task.Command.Cmd = exec.Command(command[0], command[1:]...)
 	task.Command.ReturnCode = -1
 	task.Display.Template = lineDefaultTemplate
-	task.Display.Idx = displayIdx
+	task.Display.Index = displayIdx
 	task.ErrorBuffer = bytes.NewBufferString("")
 
 	// set the name
@@ -182,11 +204,12 @@ func (task *Task) Tasks() (tasks []*Task) {
 }
 
 func (task *Task) String() string {
+
 	if task.Command.Complete {
-		task.Display.Line.Spinner = ""
-		task.Display.Line.Eta = ""
+		task.Display.Values.Spinner = ""
+		task.Display.Values.Eta = ""
 		if task.Command.ReturnCode != 0 && task.IgnoreFailure == false {
-			task.Display.Line.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
+			task.Display.Values.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
 		}
 	}
 
@@ -204,34 +227,35 @@ func (task *Task) String() string {
 	terminalWidth, _ := terminal.Width()
 
 	// get a string with the summary line without a split gap or message
-	task.Display.Line.Split = ""
-	originalMessage := task.Display.Line.Msg
-	task.Display.Line.Msg = ""
-	task.Display.Template.Execute(&message, task.Display.Line)
+	task.Display.Values.Split = ""
+	originalMessage := task.Display.Values.Msg
+	task.Display.Values.Msg = ""
+	task.Display.Template.Execute(&message, task.Display.Values)
 
 	// calculate the max width of the message and trim it
 	maxMessageWidth := int(terminalWidth) - visualLength(message.String())
-	task.Display.Line.Msg = originalMessage
-	if visualLength(task.Display.Line.Msg) > maxMessageWidth {
-		task.Display.Line.Msg = trimToVisualLength(task.Display.Line.Msg, maxMessageWidth-3) + "..."
+	task.Display.Values.Msg = originalMessage
+	if visualLength(task.Display.Values.Msg) > maxMessageWidth {
+		task.Display.Values.Msg = trimToVisualLength(task.Display.Values.Msg, maxMessageWidth-3) + "..."
 	}
 
 	// calculate a space buffer to push the eta to the right
 	message.Reset()
-	task.Display.Template.Execute(&message, task.Display.Line)
+	task.Display.Template.Execute(&message, task.Display.Values)
 	splitWidth := int(terminalWidth) - visualLength(message.String())
 	if splitWidth < 0 {
 		splitWidth = 0
 	}
 
 	message.Reset()
-	task.Display.Line.Split = strings.Repeat(" ", splitWidth)
-	task.Display.Template.Execute(&message, task.Display.Line)
+	task.Display.Values.Split = strings.Repeat(" ", splitWidth)
+	task.Display.Template.Execute(&message, task.Display.Values)
+
 	return message.String()
 }
 
 func (task *Task) display(curLine *int) {
-	display(task.String(), curLine, task.Display.Idx)
+	display(task.String(), curLine, task.Display.Index)
 }
 
 
@@ -271,7 +295,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	task.Command.StartTime = time.Now()
 	mainLogChan <- LogItem{Name: task.Name, Message: boldyellow("Started Task: " + task.Name)}
-	resultChan <- CmdIR{Task: task, Status: statusRunning, ReturnCode: -1}
+	resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
 	waiter.Add(1)
 	defer waiter.Done()
 
@@ -285,19 +309,19 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	task.Command.Cmd.Start()
 
-	readPipe := func(resultChan chan PipeIR, pipe io.ReadCloser) {
+	readPipe := func(resultChan chan string, pipe io.ReadCloser) {
 		defer close(resultChan)
 
 		scanner := bufio.NewScanner(pipe)
 		scanner.Split(variableSplitFunc)
 		for scanner.Scan() {
 			message := scanner.Text()
-			resultChan <- PipeIR{message: vtclean.Clean(message, false)}
+			resultChan <- vtclean.Clean(message, false)
 		}
 	}
 
-	stdoutChan := make(chan PipeIR)
-	stderrChan := make(chan PipeIR)
+	stdoutChan := make(chan string)
+	stderrChan := make(chan string)
 	go readPipe(stdoutChan, stdoutPipe)
 	go readPipe(stderrChan, stderrPipe)
 
@@ -305,13 +329,13 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		select {
 		case stdoutMsg, ok := <-stdoutChan:
 			if ok {
-				resultChan <- CmdIR{Task: task, Status: statusRunning, Stdout: stdoutMsg.message, ReturnCode: -1}
+				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: stdoutMsg, ReturnCode: -1}
 			} else {
 				stdoutChan = nil
 			}
 		case stderrMsg, ok := <-stderrChan:
 			if ok {
-				resultChan <- CmdIR{Task: task, Status: statusRunning, Stderr: stderrMsg.message, ReturnCode: -1}
+				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: stderrMsg, ReturnCode: -1}
 			} else {
 				stderrChan = nil
 			}
@@ -337,9 +361,9 @@ func (task *Task) run(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	mainLogChan <- LogItem{Name: task.Name, Message: boldyellow("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
 
 	if returnCode == 0 || task.IgnoreFailure {
-		resultChan <- CmdIR{Task: task, Status: statusSuccess, Complete: true, ReturnCode: returnCode}
+		resultChan <- CmdIR{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
 	} else {
-		resultChan <- CmdIR{Task: task, Status: statusError, Complete: true, ReturnCode: returnCode}
+		resultChan <- CmdIR{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
 		if task.StopOnFailure {
 			exitSignaled = true
 		}
@@ -385,7 +409,7 @@ func (task *Task) EstimatedRuntime() float64 {
 	return etaSeconds
 }
 
-func (task *Task) eta() string {
+func (task *Task) Eta() string {
 	var eta, etaValue string
 
 	if Options.ShowTaskEta {
@@ -399,7 +423,7 @@ func (task *Task) eta() string {
 	return eta
 }
 
-func (task *Task) process(step, totalTasks int) []*Task {
+func (task *Task) Process() []*Task {
 
 	var (
 		curLine         int
@@ -418,21 +442,18 @@ func (task *Task) process(step, totalTasks int) []*Task {
 	var waiter sync.WaitGroup
 
 	if !Options.Vintage {
-		if Options.ShowSteps {
-			task.Name += color.ColorCode("reset") + " " + purple("〔"+strconv.Itoa(step)+"/"+strconv.Itoa(totalTasks)+"〕")
-		}
 
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
 			ansi.EraseInLine(2)
-			lineObj := Line{Status: statusRunning, Title: task.Name, Msg: "\n"}
+			lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Name, Msg: "\n"}
 			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
 		for line := 0; line < len(tasks); line++ {
 			ansi.EraseInLine(2)
 			tasks[line].Command.Started = false
-			tasks[line].Display.Line = Line{Status: statusPending, Title: tasks[line].Name}
+			tasks[line].Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: tasks[line].Name}
 			tasks[line].display(&curLine)
 		}
 	}
@@ -447,7 +468,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 		tasks[lastStartedTask].Command.Started = true
 		runningCmds++
 	}
-	groupSuccess := statusSuccess
+	groupSuccess := StatusSuccess
 
 	// just wait for stuff to come back
 	for runningCmds > 0 {
@@ -457,16 +478,16 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			for _, taskObj := range tasks {
 				if taskObj.Command.Complete || !taskObj.Command.Started {
-					taskObj.Display.Line.Spinner = ""
+					taskObj.Display.Values.Spinner = ""
 				} else {
-					taskObj.Display.Line.Spinner = spinner.Current()
+					taskObj.Display.Values.Spinner = spinner.Current()
 				}
 				taskObj.display(&curLine)
 			}
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(summaryPendingArrow, finalStatusPending), &curLine, len(tasks))
+				display(footer(StatusPending), &curLine, len(tasks))
 			}
 
 		case msgObj := <-resultChan:
@@ -494,9 +515,9 @@ func (task *Task) process(step, totalTasks int) []*Task {
 					lastStartedTask++
 				}
 
-				if msgObj.Status == statusError {
+				if msgObj.Status == StatusError {
 					// update the group status to indicate a failed subtask
-					groupSuccess = statusError
+					groupSuccess = StatusError
 
 					// keep note of the failed task for an after task report
 					failedTasks = append(failedTasks, eventTask)
@@ -532,9 +553,9 @@ func (task *Task) process(step, totalTasks int) []*Task {
 				}
 
 				if msgObj.Stderr != "" {
-					eventTask.Display.Line = Line{Status: msgObj.Status, Title: eventTask.Name, Msg: red(msgObj.Stderr), Spinner: spinner.Current(), Eta: eventTask.eta()}
+					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: red(msgObj.Stderr), Spinner: spinner.Current(), Eta: eventTask.Eta()}
 				} else {
-					eventTask.Display.Line = Line{Status: msgObj.Status, Title: eventTask.Name, Msg: yellow(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.eta()}
+					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: yellow(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.Eta()}
 				}
 
 				eventTask.display(&curLine)
@@ -542,7 +563,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 
 			// update the summary line
 			if Options.ShowSummaryFooter {
-				display(footer(summaryPendingArrow, finalStatusPending), &curLine, len(tasks))
+				display(footer(StatusPending), &curLine, len(tasks))
 			}
 
 			if exitSignaled {
@@ -572,7 +593,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			}
 
 			ansi.EraseInLine(2)
-			task.Display.Template.Execute(os.Stdout, Line{Status: groupSuccess, Title: task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)")})
+			task.Display.Template.Execute(os.Stdout, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)")})
 			ansi.CursorHorizontalAbsolute(0)
 		}
 
