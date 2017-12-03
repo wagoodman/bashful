@@ -1,12 +1,14 @@
 config:
   # stop-on-failure: false
   # show-steps: true
-  # show-summary-footer: true
+  # show-summary-footer: false
   # show-failure-summary: false
   max-parallel-commands: 6
   log-path: build.log
-  # vintage: false
+  # vintage: true
   # replica-replace-pattern: '?'
+  # show-summary-times: false
+  # show-task-times: false
 
 x-reference-data:
   all-apps: &all-apps
@@ -21,62 +23,62 @@ x-reference-data:
     - yup-app-7
     - stuff-n-things
 tasks:
-  - name: Quickly do things 
-    parallel-tasks:
-      - name: "do: ?"
-        cmd: example/quick.sh ?
-        for-each: *all-apps
+  # - name: Quickly do things 
+  #   parallel-tasks:
+  #     - name: "do: ?"
+  #       cmd: example/quick.sh ?
+  #       for-each: *all-apps
 
   - name: Show commands
     parallel-tasks:
-      - cmd: example/jitter.sh 5 ?
+      - cmd: example/jitter.sh 8 ?
         for-each: *all-apps
 
-  - name: Verify environment
-    cmd: example/jitter.sh 2
+  # - name: Verify environment
+  #   cmd: example/jitter.sh 2
 
-  - name: Some task ignored error
-    cmd: example/error.sh 1
-    ignore-failure: true
+  # - name: Some task ignored error
+  #   cmd: example/error.sh 1
+  #   ignore-failure: true
 
-  - name: Some task with non stopping error
-    cmd: example/error.sh 1
-    stop-on-failure: false
+  # - name: Some task with non stopping error
+  #   cmd: example/error.sh 1
+  #   stop-on-failure: false
 
   - name: "Anchored loop template: ?"
-    cmd: example/jitter.sh 1 ?
+    cmd: example/jitter.sh 3 ?
     for-each: *all-apps
 
-  - name: Cloning Repos
-    parallel-tasks:
-      - name: "Cloning ?"
-        cmd: example/jitter.sh 4 ?
-        for-each: *all-apps
+  # - name: Cloning Repos
+  #   parallel-tasks:
+  #     - name: "Cloning ?"
+  #       cmd: example/jitter.sh 4 ?
+  #       for-each: *all-apps
 
-  - name: Installing dependencies
-    parallel-tasks:
-      - name: Installing Oracle client
-        cmd: example/jitter.sh 3
-      - name: Installing Google chrome
-        cmd: example/jitter.sh 4
-      - name: Installing MD helper
-        cmd: example/jitter.sh 5
-      - name: Installing Bridgy
-        cmd: example/jitter.sh 6
+  # - name: Installing dependencies
+  #   parallel-tasks:
+  #     - name: Installing Oracle client
+  #       cmd: example/jitter.sh 3
+  #     - name: Installing Google chrome
+  #       cmd: example/jitter.sh 4
+  #     - name: Installing MD helper
+  #       cmd: example/jitter.sh 5
+  #     - name: Installing Bridgy
+  #       cmd: example/jitter.sh 6
 
-  - name: Building Images
-    cmd: example/jitter.sh 3
+  # - name: Building Images
+  #   cmd: example/jitter.sh 3
 
-  - name: Gathering Secrets
-    cmd: example/jitter.sh 3
+  # - name: Gathering Secrets
+  #   cmd: example/jitter.sh 3
 
   # - name: Building and Migrating
   #   parallel-tasks:
   #     - name: app1
   #       cmd: example/jitter.sh 10
   #     - name: another-app2
-  #       cmd: example/error.sh 4
-  #     - name: some-app3
+  #     #   cmd: example/error.sh 4
+  #     # - name: some-app3
   #       cmd: example/jitter.sh 5
   #     - name: some-lib-4
   #       cmd: example/jitter.sh 6

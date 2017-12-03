@@ -199,22 +199,32 @@ func (task *Task) display(curLine *int) {
 
 	// display
 	var message bytes.Buffer
+	terminalWidth, _ := terminal.Width()
 
-	// get a string with the summary line without a split gap (eta floats left)
+	// get a string with the summary line without a split gap or message
 	task.Display.Line.Split = ""
+	originalMessage := task.Display.Line.Msg
+	task.Display.Line.Msg = ""
 	task.Display.Template.Execute(&message, task.Display.Line)
 
-	// // calculate a space buffer to push the eta to the right
-	// terminalWidth, _ := terminal.Width()
-	// splitWidth := int(terminalWidth) - visualLength(message.String())
-	// if splitWidth < 0 {
-	// 	task.Display.Line.Msg = trimToVisualLength(task.Display.Line.Msg, int(terminalWidth)-3) + "..."
-	// 	splitWidth = 0
-	// }
+	// calculate the max width of the message and trim it
+	maxMessageWidth := int(terminalWidth) - visualLength(message.String())
+	task.Display.Line.Msg = originalMessage
+	if visualLength(task.Display.Line.Msg) > maxMessageWidth {
+		task.Display.Line.Msg = trimToVisualLength(task.Display.Line.Msg, maxMessageWidth-3) + "..."
+	}
 
-	// message.Reset()
-	// task.Display.Line.Split = strings.Repeat(" ", splitWidth)
-	// task.Display.Template.Execute(&message, task.Display.Line)
+	// calculate a space buffer to push the eta to the right
+	message.Reset()
+	task.Display.Template.Execute(&message, task.Display.Line)
+	splitWidth := int(terminalWidth) - visualLength(message.String())
+	if splitWidth < 0 {
+		splitWidth = 0
+	}
+
+	message.Reset()
+	task.Display.Line.Split = strings.Repeat(" ", splitWidth)
+	task.Display.Template.Execute(&message, task.Display.Line)
 
 	display(message.String(), curLine, task.Display.Idx)
 
@@ -379,7 +389,7 @@ func (task *Task) eta() string {
 		if task.Command.EstimatedRuntime > 0 {
 			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}
-		eta = fmt.Sprintf(bold("[%s] "), etaValue)
+		eta = fmt.Sprintf(bold("[%s]"), etaValue)
 	}
 	return eta
 }
@@ -514,7 +524,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 				if msgObj.Stderr != "" {
 					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, red(msgObj.Stderr), spinner.Current(), eventTask.eta(), ""}
 				} else {
-					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, msgObj.Stdout, spinner.Current(), eventTask.eta(), ""}
+					eventTask.Display.Line = Line{msgObj.Status, eventTask.Name, yellow(msgObj.Stdout), spinner.Current(), eventTask.eta(), ""}
 				}
 
 				eventTask.display(&curLine)
