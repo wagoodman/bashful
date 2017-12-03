@@ -420,7 +420,7 @@ func (task *Task) process(step, totalTasks int) []*Task {
 		// make room for the title of a parallel proc group
 		if len(tasks) > 1 {
 			ansi.EraseInLine(2)
-			lineObj := Line{StatusRunning, bold(task.Name), "\n", "", "", ""}
+			lineObj := Line{StatusRunning, task.Name, "\n", "", "", ""}
 			task.Display.Template.Execute(os.Stdout, lineObj)
 		}
 
@@ -562,19 +562,60 @@ func (task *Task) process(step, totalTasks int) []*Task {
 			}
 
 			ansi.EraseInLine(2)
-			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, bold(task.Name), "", "", "", ""})
+			task.Display.Template.Execute(os.Stdout, Line{groupSuccess, task.Name + " (" + strconv.Itoa(len(tasks)) + " tasks)", "", "", "", ""})
 			ansi.CursorHorizontalAbsolute(0)
 		}
 
-		// reset the cursor to the bottom of the section
-		moves = curLine - len(tasks)
-		if moves != 0 {
-			if moves < 0 {
-				ansi.CursorDown(moves * -1)
-			} else {
-				ansi.CursorUp(moves)
+		// collapse sections or parallel tasks...
+		if Options.CollapseOnCompletion && len(tasks) > 1 {
+			// erase the lines for this section (except for the header)
+
+			// head to the top of the section
+			moves = curLine
+			if moves != 0 {
+				if moves < 0 {
+					ansi.CursorDown(moves * -1)
+				} else {
+					ansi.CursorUp(moves)
+				}
+				curLine -= moves
 			}
-			curLine -= moves
+			// erase all lines
+			for range tasks {
+				ansi.EraseInLine(2)
+				ansi.CursorDown(1)
+				curLine++
+			}
+			// erase the summary line
+			if Options.ShowSummaryFooter {
+				ansi.EraseInLine(2)
+				ansi.CursorDown(1)
+				curLine++
+			}
+			// head back to the top of the section
+			moves = curLine
+			if moves != 0 {
+				if moves < 0 {
+					ansi.CursorDown(moves * -1)
+				} else {
+					ansi.CursorUp(moves)
+				}
+				curLine -= moves
+			}
+		} else {
+			// ... or this is a single task or configured not to collapse
+
+			// instead, leave all of the text on the screen...
+			// ...reset the cursor to the bottom of the section
+			moves = curLine - len(tasks)
+			if moves != 0 {
+				if moves < 0 {
+					ansi.CursorDown(moves * -1)
+				} else {
+					ansi.CursorUp(moves)
+				}
+				curLine -= moves
+			}
 		}
 	}
 
