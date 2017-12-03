@@ -9,6 +9,9 @@ config:
   # replica-replace-pattern: '?'
   # show-summary-times: false
   # show-task-times: false
+  collapse-on-completion: true
+  show-summary-steps: true
+  show-summary-errors: true
 
 x-reference-data:
   all-apps: &all-apps
