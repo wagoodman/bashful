@@ -18,7 +18,9 @@ To run the example:
 - [x] Summary of the last line from stdout/stderr printed inline with commands
 - [x] A shiny vertical progress bar
 - [x] Optionally stop when a single command fails
-- [ ] Configuration yaml block to control the behavior/look & feel
+- [x] Configuration yaml block to control the behavior/look & feel
 - [x] Show detailed error reports when commands fail
 - [x] Bypass bashful all together and simply run each script/command in series ("vintage" mode)
 - [x] Log all actions taken with all stdout/stderr
+- [x] See an ETA for tasks that have already been run
+- [ ] Interact with the mouse to see more/less tasks (https://godoc.org/github.com/nsf/termbox-go#Event)
