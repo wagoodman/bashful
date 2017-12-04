@@ -24,8 +24,8 @@ var (
 
 	purple                      func(string) string = color.ColorFunc("magenta+h")
 	red                         func(string) string = color.ColorFunc("red+h")
-	yellow                      func(string) string = color.ColorFunc("blue+h")
-	boldyellow                  func(string) string = color.ColorFunc("blue+b")
+	blue                        func(string) string = color.ColorFunc("blue+h")
+	boldblue                    func(string) string = color.ColorFunc("blue+b")
 	boldcyan                    func(string) string = color.ColorFunc("cyan+b")
 	bold                        func(string) string = color.ColorFunc("default+b")
 	lineDefaultTemplate, _                          = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
