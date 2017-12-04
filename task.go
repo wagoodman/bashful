@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/lunixbochs/vtclean"
-	"github.com/tj/go-spin"
 	color "github.com/mgutz/ansi"
+	"github.com/tj/go-spin"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
 
@@ -28,8 +28,8 @@ var (
 )
 
 type Task struct {
-	Name           string   `yaml:"name"`
-	CmdString      string   `yaml:"cmd"`
+	Name           string `yaml:"name"`
+	CmdString      string `yaml:"cmd"`
 	Display        TaskDisplay
 	Command        TaskCommand
 	StopOnFailure  bool     `yaml:"stop-on-failure"`
@@ -70,7 +70,7 @@ const (
 func (status CommandStatus) Color(attributes string) string {
 	switch status {
 	case StatusRunning:
-		return color.ColorCode("28+" + attributes)
+		return color.ColorCode("22+" + attributes) //28
 
 	case StatusPending:
 		return color.ColorCode("22+" + attributes)
@@ -432,7 +432,7 @@ func (task *Task) RunAndDisplay() []*Task {
 		lastStartedTask int
 		failedTasks     []*Task
 		waiter          sync.WaitGroup
-		message bytes.Buffer
+		message         bytes.Buffer
 	)
 
 	resultChan := make(chan CmdIR)

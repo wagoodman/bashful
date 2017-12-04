@@ -24,8 +24,8 @@ var (
 
 	purple                      func(string) string = color.ColorFunc("magenta+h")
 	red                         func(string) string = color.ColorFunc("red+h")
-	yellow                      func(string) string = color.ColorFunc("yellow+h")
-	boldyellow                  func(string) string = color.ColorFunc("yellow+b")
+	yellow                      func(string) string = color.ColorFunc("blue+h")
+	boldyellow                  func(string) string = color.ColorFunc("blue+b")
 	boldcyan                    func(string) string = color.ColorFunc("cyan+b")
 	bold                        func(string) string = color.ColorFunc("default+b")
 	lineDefaultTemplate, _                          = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
@@ -159,6 +159,7 @@ func main() {
 	CheckError(err, "Unable to save command eta cache.")
 
 	if config.Options.ShowSummaryFooter {
+		Screen().ResetFrame(0, false, true)
 		if len(failedTasks) > 0 {
 			Screen().DisplayFooter(footer(StatusError))
 		} else {

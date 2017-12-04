@@ -8,7 +8,7 @@ config:
   # replica-replace-pattern: '?'
   # show-summary-times: false
   # show-task-times: false
-  # collapse-on-completion: true
+  collapse-on-completion: true
   # show-summary-steps: false
   # show-summary-errors: false
   # show-task-output: false
@@ -26,13 +26,13 @@ x-reference-data:
     - yup-app-7
     - stuff-n-things
 tasks:
-  - name: Quickly do things 
+  - name: Validate Environment
     parallel-tasks:
       - name: "do: ?"
         cmd: example/quick.sh ?
         for-each: *all-apps
 
-  - name: Suppress output
+  - name: Suppress jobs
     parallel-tasks:
       - cmd: example/jitter.sh 3 ?
         show-output: false
@@ -40,7 +40,7 @@ tasks:
 
   - name: Show commands
     parallel-tasks:
-      - cmd: example/jitter.sh 8 ?
+      - cmd: example/jitter.sh 4 ?
         for-each: *all-apps
 
   - name: Verify environment
@@ -50,13 +50,13 @@ tasks:
     cmd: example/error.sh 1
     ignore-failure: true
 
-  - name: Some task with non stopping error
-    cmd: example/error.sh 1
-    stop-on-failure: false
+  # - name: Some task with non stopping error
+  #   cmd: example/error.sh 1
+  #   stop-on-failure: false
 
-  - name: "Anchored loop template: ?"
-    cmd: example/jitter.sh 3 ?
-    for-each: *all-apps
+  # - name: "Anchored loop template: ?"
+  #   cmd: example/jitter.sh 3 ?
+  #   for-each: *all-apps
 
   - name: Cloning Repos
     parallel-tasks:
@@ -85,8 +85,8 @@ tasks:
     parallel-tasks:
       - name: Building and migrating app1
         cmd: example/jitter.sh 10
-      - name: Building and migrating another-app2
-        cmd: example/error.sh 4
+      # - name: Building and migrating another-app2
+      #   cmd: example/error.sh 4
       - name: Building and migrating some-app3
         cmd: example/jitter.sh 5
       - name: Building and migrating some-lib-4
