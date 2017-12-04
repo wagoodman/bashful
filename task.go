@@ -350,7 +350,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	task.Command.StartTime = time.Now()
-	mainLogChan <- LogItem{Name: task.Name, Message: boldyellow("Started Task: " + task.Name)}
+	mainLogChan <- LogItem{Name: task.Name, Message: boldblue("Started Task: " + task.Name)}
 	resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
 	waiter.Add(1)
 	defer waiter.Done()
@@ -414,7 +414,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	returnCode := waitStatus.ExitStatus()
 
-	mainLogChan <- LogItem{Name: task.Name, Message: boldyellow("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
+	mainLogChan <- LogItem{Name: task.Name, Message: boldblue("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
 
 	if returnCode == 0 || task.IgnoreFailure {
 		resultChan <- CmdIR{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
@@ -556,7 +556,7 @@ func (task *Task) RunAndDisplay() []*Task {
 				if msgObj.Stderr != "" {
 					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: red(msgObj.Stderr), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				} else {
-					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: yellow(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
+					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: blue(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				}
 
 				eventTask.display()
