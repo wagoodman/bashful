@@ -29,79 +29,79 @@ tasks:
   - name: Validate Environment
     parallel-tasks:
       - name: "do: ?"
-        cmd: example/quick.sh ?
+        cmd: example/scripts/random-worker.sh 1 ?
         for-each: *all-apps
 
   - name: Suppress jobs
     parallel-tasks:
-      - cmd: example/jitter.sh 3 ?
+      - cmd: example/scripts/random-worker.sh 3 ?
         show-output: false
         for-each: *all-apps
 
   - name: Show commands
     parallel-tasks:
-      - cmd: example/jitter.sh 4 ?
+      - cmd: example/scripts/random-worker.sh 4 ?
         for-each: *all-apps
 
   - name: Verify environment
-    cmd: example/jitter.sh 2
+    cmd: example/scripts/random-worker.sh 2
 
   - name: Some task ignored error
-    cmd: example/error.sh 1
+    cmd: example/scripts/random-error.sh 1
     ignore-failure: true
 
   # - name: Some task with non stopping error
-  #   cmd: example/error.sh 1
+  #   cmd: example/scripts/random-error.sh 1
   #   stop-on-failure: false
 
   # - name: "Anchored loop template: ?"
-  #   cmd: example/jitter.sh 3 ?
+  #   cmd: example/scripts/random-worker.sh 3 ?
   #   for-each: *all-apps
 
   - name: Cloning Repos
     parallel-tasks:
       - name: "Cloning ?"
-        cmd: example/jitter.sh 4 ?
+        cmd: example/scripts/random-worker.sh 4 ?
         for-each: *all-apps
 
   - name: Installing dependencies
     parallel-tasks:
       - name: Installing Oracle client
-        cmd: example/jitter.sh 3
+        cmd: example/scripts/random-worker.sh 3
       - name: Installing Google chrome
-        cmd: example/jitter.sh 4
+        cmd: example/scripts/random-worker.sh 4
       - name: Installing MD helper
-        cmd: example/jitter.sh 5
+        cmd: example/scripts/random-worker.sh 5
       - name: Installing Bridgy
-        cmd: example/jitter.sh 6
+        cmd: example/scripts/random-worker.sh 6
 
   - name: Building Images
-    cmd: example/jitter.sh 3
+    cmd: example/scripts/random-worker.sh 3
 
   - name: Gathering Secrets
-    cmd: example/jitter.sh 3
+    cmd: example/scripts/random-worker.sh 3
 
   - name: Building and Migrating
     parallel-tasks:
       - name: Building and migrating app1
-        cmd: example/jitter.sh 10
+        cmd: example/scripts/random-worker.sh 10
       # - name: Building and migrating another-app2
-      #   cmd: example/error.sh 4
+      #   cmd: example/scripts/random-error.sh 4
       - name: Building and migrating some-app3
-        cmd: example/jitter.sh 5
+        cmd: example/scripts/random-worker.sh 5
       - name: Building and migrating some-lib-4
-        cmd: example/jitter.sh 6
+        cmd: example/scripts/random-worker.sh 6
       - name: Building and migrating some-awesome-app-5
-        cmd: example/jitter.sh 7
+        cmd: example/scripts/random-worker.sh 7
       - name: Building and migrating watcher-app
-        cmd: example/jitter.sh 10
+        cmd: example/scripts/random-worker.sh 10
       - name: Building and migrating public-6
-        cmd: example/jitter.sh 9
+        cmd: example/scripts/random-worker.sh 9
       - name: Building and migrating utilities
-        cmd: example/jitter.sh 12
+        cmd: example/scripts/random-worker.sh 12
       - name: Building and migrating important-lib
-        cmd: example/jitter.sh 1
+        cmd: example/scripts/random-worker.sh 1
       - name: Building and migrating yup-app-7
-        cmd: example/jitter.sh 6
+        cmd: example/scripts/random-worker.sh 6
       - name: Building and migrating stuff-n-things
-        cmd: example/jitter.sh 10
+        cmd: example/scripts/random-worker.sh 10

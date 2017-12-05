@@ -1,12 +1,12 @@
 package main
 
 import (
-	"sync/atomic"
-	"sync"
 	"fmt"
+	"sync"
+	"sync/atomic"
 
-	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"github.com/k0kubun/go-ansi"
+	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
 
 var (
@@ -52,8 +52,8 @@ func (o *Once) Do(f func()) {
 }
 
 type screen struct {
-	numLines int
-	curLine int
+	numLines  int
+	curLine   int
 	hasHeader bool
 	hasFooter bool
 }
@@ -63,53 +63,6 @@ func Screen() *screen {
 		instance = &screen{}
 	})
 	return instance
-}
-
-func (scr *screen) ResetFrame(numLines int, hasHeader, hasFooter bool) {
-	scr.curLine = 0
-	scr.numLines = numLines
-	scr.hasFooter = hasFooter
-	scr.hasHeader = hasHeader
-
-	if hasHeader {
-		// note: this index doesn't count!
-		fmt.Println("")
-	}
-	for idx := 0 ; idx < numLines ; idx++ {
-		scr.printLn("")
-	}
-	if hasFooter {
-		scr.printLn("")
-	}
-	scr.MoveCursorToFirstLine()
-}
-
-func (scr *screen) MoveCursor(index int) {
-	moves := scr.curLine - index
-	if moves != 0 {
-		if moves < 0 {
-			ansi.CursorDown(moves * -1)
-		} else {
-			ansi.CursorUp(moves)
-		}
-		scr.curLine -= moves
-	}
-}
-
-func (scr *screen) MoveCursorToFirstLine() {
-	scr.MoveCursor(0)
-}
-
-func (scr *screen) MoveCursorToLastLine() {
-	scr.MoveCursor(scr.numLines-1)
-}
-
-func (scr *screen) MoveCursorToHeader() {
-	scr.MoveCursor(-1)
-}
-
-func (scr *screen) MoveCursorToFooter() {
-	scr.MoveCursor(scr.numLines)
 }
 
 func visualLength(str string) int {
@@ -139,12 +92,59 @@ func trimToVisualLength(message string, length int) string {
 	return message
 }
 
-func (scr *screen) DisplayFooter(message string){
+func (scr *screen) ResetFrame(numLines int, hasHeader, hasFooter bool) {
+	scr.curLine = 0
+	scr.numLines = numLines
+	scr.hasFooter = hasFooter
+	scr.hasHeader = hasHeader
+
+	if hasHeader {
+		// note: this index doesn't count!
+		fmt.Println("")
+	}
+	for idx := 0; idx < numLines; idx++ {
+		scr.printLn("")
+	}
+	if hasFooter {
+		scr.printLn("")
+	}
+	scr.MoveCursorToFirstLine()
+}
+
+func (scr *screen) MoveCursor(index int) {
+	moves := scr.curLine - index
+	if moves != 0 {
+		if moves < 0 {
+			ansi.CursorDown(moves * -1)
+		} else {
+			ansi.CursorUp(moves)
+		}
+		scr.curLine -= moves
+	}
+}
+
+func (scr *screen) MoveCursorToFirstLine() {
+	scr.MoveCursor(0)
+}
+
+func (scr *screen) MoveCursorToLastLine() {
+	scr.MoveCursor(scr.numLines - 1)
+}
+
+func (scr *screen) MoveCursorToHeader() {
+	scr.MoveCursor(-1)
+}
+
+func (scr *screen) MoveCursorToFooter() {
+	scr.MoveCursor(scr.numLines)
+}
+
+func (scr *screen) DisplayFooter(message string) {
 	scr.MoveCursorToFooter()
 	scr.printLn(message)
 }
 
-func (scr *screen) DisplayHeader(message string){
+func (scr *screen) DisplayHeader(message string) {
 	scr.MoveCursorToHeader()
 	scr.printLn(message)
 }
@@ -161,7 +161,7 @@ func (scr *screen) EraseBelowHeader() {
 	}
 }
 
-func (scr *screen) MovePastFrame(keepFooter bool){
+func (scr *screen) MovePastFrame(keepFooter bool) {
 	scr.MoveCursorToFooter()
 	if scr.hasFooter && keepFooter {
 		ansi.CursorDown(1)

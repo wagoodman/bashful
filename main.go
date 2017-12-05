@@ -30,7 +30,7 @@ var (
 	bold                        func(string) string = color.ColorFunc("default+b")
 	lineDefaultTemplate, _                          = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 	lineParallelTemplate, _                         = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	lineLastParallelTemplate, _                     = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} └─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineLastParallelTemplate, _                     = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ╰─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 	summaryTemplate, _                              = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 
@@ -177,7 +177,7 @@ func main() {
 			buffer.WriteString(bold(red("⏺ Failed task: ")) + bold(task.Name) + "\n")
 			buffer.WriteString(red("  ├─ command: ") + task.CmdString + "\n")
 			buffer.WriteString(red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode) + "\n")
-			buffer.WriteString(red("  └─ stderr: \n") + task.ErrorBuffer.String() + "\n")
+			buffer.WriteString(red("  ╰─ stderr: \n") + task.ErrorBuffer.String() + "\n")
 
 		}
 		mainLogChan <- LogItem{Name: "[Main]", Message: buffer.String()}
