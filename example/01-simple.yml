@@ -1,0 +1,16 @@
+# This is a pretty bare-boned example. Only the least amount of information
+# is given for each task.
+tasks:
+  - cmd: example/scripts/random-worker.sh 10
+
+  - name: Compiling source
+    parallel-tasks:
+      - cmd: example/scripts/compile-something.sh 2 
+      - cmd: example/scripts/compile-something.sh 9
+      - cmd: example/scripts/compile-something.sh 6
+      - cmd: example/scripts/compile-something.sh 4
+
+  - cmd: example/scripts/random-worker.sh 2
+
+  - cmd: example/scripts/random-worker.sh 10
+

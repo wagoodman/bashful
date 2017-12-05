@@ -1,0 +1,34 @@
+config:
+  log-path: build.log
+
+# If you have repetative tasks being done with the same commands/scripts
+# but simply different parameters, then you can use yaml anchors to reference
+# the parameters in a separate section.
+x-reference-data:
+  all-apps: &app-names
+    - some-lib-4
+    - utilities-lib
+    - important-lib
+    - some-app1
+    - some-app3
+    - some-awesome-app-5
+    - watcher-app
+    - yup-another-app-7
+
+tasks:
+
+  # The 'for-each' key to replicate this task for each parameter in the 
+  # 'all-apps' section ('app-names' yaml anchor).
+  # Notice that the '?' character is replaced with each referenced item.
+
+  - name: "Cloning ?"
+    cmd: example/scripts/random-worker.sh 4 ?
+    for-each: *app-names
+
+  - name: "Validating ?"
+    cmd: example/scripts/random-worker.sh 1 ?
+    for-each: *app-names
+
+  - name: "Building ?"
+    cmd: example/scripts/compile-something.sh 4 ?
+    for-each: *app-names

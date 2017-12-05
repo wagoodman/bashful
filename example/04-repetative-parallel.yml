@@ -1,0 +1,40 @@
+config:
+  log-path: build.log
+
+  # By default all tasks run are always shown on the screen.
+  # Enable this if you would like to collapse (hide) sections of
+  # parallel tasks after they have been completed (showing only
+  # the title)
+  collapse-on-completion: true
+
+x-reference-data:
+  all-apps: &app-names
+    - some-lib-4
+    - utilities-lib
+    - important-lib
+    - some-app1
+    - some-app3
+    - some-awesome-app-5
+    - watcher-app
+    - yup-another-app-7
+
+tasks:
+  # This is the same example as earlier, but 'for-each' is being
+  # used to replicate all of the parallel tasks in this step.
+  - name: Cloning Repos
+    parallel-tasks:
+      - name: "Cloning ?"
+        cmd: example/scripts/random-worker.sh 4 ?
+        for-each: *app-names
+
+  - name: Validate Environment
+    parallel-tasks:
+      - name: "Validating ?"
+        cmd: example/scripts/random-worker.sh 1 ?
+        for-each: *app-names
+
+  - name: Building and Migrating
+    parallel-tasks:
+      - name: "Building ?"
+        cmd: example/scripts/compile-something.sh 4 ?
+        for-each: *app-names
