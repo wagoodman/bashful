@@ -40,14 +40,14 @@ func defaultOptions() OptionsConfig {
 	var defaultValues OptionsConfig
 	defaultValues.StopOnFailure = true
 	defaultValues.ShowSummaryFooter = true
-	defaultValues.ShowErrorSummary = true
+	defaultValues.ShowErrorSummary = false
 	defaultValues.ShowStepSummary = true
 	defaultValues.ShowTaskOutput = true
 	defaultValues.ShowFailureReport = true
 	defaultValues.ReplicaReplaceString = "?"
 	defaultValues.MaxParallelCmds = 4
 	defaultValues.ShowSummaryTimes = true
-	defaultValues.ShowTaskEta = true
+	defaultValues.ShowTaskEta = false
 	return defaultValues
 }
 

@@ -167,7 +167,7 @@ func main() {
 		}
 	}
 
-	if config.Options.ShowFailureReport && len(failedTasks) > 0 {
+	if len(failedTasks) > 0 {
 		var buffer bytes.Buffer
 		buffer.WriteString(red(" ...Some tasks failed, see below for details.\n"))
 
@@ -181,7 +181,11 @@ func main() {
 
 		}
 		mainLogChan <- LogItem{Name: "[Main]", Message: buffer.String()}
-		fmt.Print(buffer.String())
+
+		// we may not show the error report, but we always log it.
+		if config.Options.ShowFailureReport {
+			fmt.Print(buffer.String())
+		}
 
 	}
 

@@ -1,0 +1,24 @@
+config:
+  log-path: build.log
+
+tasks:
+  - name: Prepping data
+    cmd: example/scripts/random-worker.sh 10
+
+  - name: Compiling source
+    parallel-tasks:
+      - name: Compiling aux libraries
+        cmd: example/scripts/compile-something.sh 2 
+      - name: Compiling app (debug)
+        cmd: example/scripts/compile-something.sh 9
+      - name: Compiling app (release)
+        cmd: example/scripts/compile-something.sh 6
+      - name: Compiling app (with trace)
+        cmd: example/scripts/compile-something.sh 4
+
+  - name: Packaging RPM
+    cmd: example/scripts/random-worker.sh 2
+
+  - name: Cleaning up workspace
+    cmd: example/scripts/random-worker.sh 10
+
