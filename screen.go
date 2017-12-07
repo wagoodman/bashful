@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	instance *screen
-	once     sync.Once
+	instance      *screen
+	once          sync.Once
+	terminalWidth = terminal.Width
 )
 
 // Once is an object that will perform exactly one action.
@@ -112,6 +113,21 @@ func (scr *screen) ResetFrame(numLines int, hasHeader, hasFooter bool) {
 }
 
 func (scr *screen) MoveCursor(index int) {
+	// move to the first possible line (first line or header) if asked to move beyond defined frame
+	if index < 0 && !scr.hasHeader {
+		index = 0
+	}
+	if index < -1 && scr.hasHeader {
+		index = -1
+	}
+	// move to the last possible line (last line or footer) if asked to move beyond defined frame
+	if index > scr.numLines-1 && !scr.hasFooter {
+		index = scr.numLines - 1
+	}
+	if index > scr.numLines && scr.hasFooter {
+		index = scr.numLines
+	}
+
 	moves := scr.curLine - index
 	if moves != 0 {
 		if moves < 0 {
@@ -173,9 +189,10 @@ func (scr *screen) Display(message string, index int) {
 	scr.MoveCursor(index)
 
 	// trim message length if it won't fit on the screen
-	terminalWidth, _ := terminal.Width()
-	for visualLength(message) > int(terminalWidth) {
-		message = trimToVisualLength(message, int(terminalWidth)-3) + "..."
+	width, err := terminalWidth()
+	CheckError(err, "Unable to determine screen width.")
+	for visualLength(message) > int(width) {
+		message = trimToVisualLength(message, int(width)-3) + "..."
 	}
 
 	scr.printLn(message)

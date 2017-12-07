@@ -1,6 +1,6 @@
-.PHONY: vendor build run
+.PHONY: vendor build run clean
 
-all: vendor build run
+all: vendor build run clean
 
 vendor:
 	go get ./...
@@ -8,7 +8,10 @@ vendor:
 build: vendor
 	go build -v
 
-run:
+run: clean
 	#clear
 	#go run *.go example/segexample.yaml 
-	go run *.go example/complicated.yml
+	go build && ./bashful example/08-complicated.yml
+
+clean:
+	rm -f bashful
