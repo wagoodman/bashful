@@ -122,7 +122,7 @@ func doesFileExist(name string) bool {
 
 func main() {
 	var err error
-	readConfig()
+	ReadConfig()
 
 	rand.Seed(time.Now().UnixNano())
 

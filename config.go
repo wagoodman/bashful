@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/gob"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path"
@@ -66,7 +67,10 @@ func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	return nil
 }
 
-func MinMax(array []float64) (float64, float64) {
+func MinMax(array []float64) (float64, float64, error) {
+	if len(array) == 0 {
+		return 0, 0, errors.New("No min/max of empty array!")
+	}
 	var max = array[0]
 	var min = array[0]
 	for _, value := range array {
@@ -77,10 +81,10 @@ func MinMax(array []float64) (float64, float64) {
 			min = value
 		}
 	}
-	return min, max
+	return min, max, nil
 }
 
-func remove(slice []float64, value float64) []float64 {
+func removeOneValue(slice []float64, value float64) []float64 {
 	for index, arrValue := range slice {
 		if arrValue == value {
 			return append(slice[:index], slice[index+1:]...)
@@ -89,7 +93,7 @@ func remove(slice []float64, value float64) []float64 {
 	return slice
 }
 
-func readConfig() {
+func readTimeCache() {
 	// fetch the ETA cache from disk (this must be done before fetching/parsing the run.yaml)...
 	cwd, err := os.Getwd()
 	CheckError(err, "Unable to get CWD.")
@@ -103,7 +107,9 @@ func readConfig() {
 		err := Load(config.etaCachePath, &config.commandTimeCache)
 		CheckError(err, "Unable to load command eta cache.")
 	}
+}
 
+func readRunYaml() {
 	// fetch and parse the run.yaml user file...
 	config.Options = defaultOptions()
 
@@ -113,6 +119,9 @@ func readConfig() {
 	err = yaml.Unmarshal(yamlString, &config)
 	CheckError(err, "Unable to parse yaml config.")
 
+}
+
+func createTasks() {
 	var finalTasks []Task
 
 	// initialize tasks with default values...
@@ -141,6 +150,12 @@ func readConfig() {
 
 	// replace the current config with the inflated list of final tasks
 	config.Tasks = finalTasks
+}
+
+func ReadConfig() {
+	readTimeCache()
+	readRunYaml()
+	createTasks()
 }
 
 // Encode via Gob to file

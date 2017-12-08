@@ -283,8 +283,9 @@ func (task *Task) EstimatedRuntime() float64 {
 				// we've started all possible tasks, now they should stop...
 				// select the first task to stop
 				remainingParallelTasks++
-				minEndSecond, _ := MinMax(taskEndSecond)
-				taskEndSecond = remove(taskEndSecond, minEndSecond)
+				minEndSecond, _, err := MinMax(taskEndSecond)
+				CheckError(err, "No min eta for empty array!")
+				taskEndSecond = removeOneValue(taskEndSecond, minEndSecond)
 				currentSecond = minEndSecond
 			}
 
@@ -292,7 +293,8 @@ func (task *Task) EstimatedRuntime() float64 {
 			taskEndSecond = append(taskEndSecond, currentSecond+subTask.Command.EstimatedRuntime.Seconds())
 			remainingParallelTasks--
 
-			_, maxEndSecond := MinMax(taskEndSecond)
+			_, maxEndSecond, err := MinMax(taskEndSecond)
+			CheckError(err, "No max eta for empty array!")
 			maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, maxEndSecond)
 		}
 
