@@ -71,7 +71,7 @@ func TestRemoveOneValue(t *testing.T) {
 
 }
 
-func TestCreateTasks(t *testing.T) {
+func TestCreateTasks_SuccessfulParse(t *testing.T) {
 	var expStr, actStr string
 	var expOpt, actOpt bool
 	var exNum int
