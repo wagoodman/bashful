@@ -69,7 +69,7 @@ func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 
 func MinMax(array []float64) (float64, float64, error) {
 	if len(array) == 0 {
-		return 0, 0, errors.New("No min/max of empty array!")
+		return 0, 0, errors.New("no min/max of empty array")
 	}
 	var max = array[0]
 	var min = array[0]
