@@ -1,17 +1,13 @@
-.PHONY: vendor build run clean
+.DEFAULT_GOAL := ci
+TARGETS := $(shell ls scripts) 
 
-all: vendor build run clean
+$(TARGETS): 
+	./scripts/$@
 
-vendor:
-	go get ./...
-
-build: vendor
-	go build -v
-
-run: clean
-	#clear
-	#go run *.go example/segexample.yaml 
-	go build && ./bashful example/08-complicated.yml
-
+run: clean build
+	./bin/bashful example/08-complicated.yml
+	
 clean:
-	rm -f bashful
+	rm -f bin/bashful build.log
+
+.PHONY: run clean $(TARGETS)

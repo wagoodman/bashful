@@ -2,7 +2,6 @@
 /.bashful
 bashful*
 /bin
-vendor
 archive
 *.log
 /downloads
