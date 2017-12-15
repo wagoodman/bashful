@@ -134,8 +134,6 @@ func run(userYamlPath string) {
 	rand.Seed(time.Now().UnixNano())
 
 	if config.Options.LogPath != "" {
-		// fmt.Println("Logging is not supported yet!")
-		// exit(1)
 		setupLogging()
 	}
 

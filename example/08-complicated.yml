@@ -12,6 +12,10 @@ config:
   replica-replace-pattern: '%'
   collapse-on-completion: true
 
+  # Show an eta for each task on the screen (being shown on every line 
+  # with a command running)
+  show-task-times: true
+
   log-path: build.log
 
 x-reference-data:
