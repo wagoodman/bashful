@@ -5,7 +5,8 @@ $(TARGETS):
 	./scripts/$@
 
 run: clean build
-	./bin/bashful example/08-complicated.yml
+	#./bin/bashful example/08-complicated.yml
+	./bin/bashful bad.yml
 	
 clean:
 	rm -f bin/bashful build.log

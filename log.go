@@ -45,15 +45,11 @@ func setupLogging() {
 
 	err := os.MkdirAll(config.cachePath, 0755)
 	if err != nil {
-		fmt.Println("Unable to create cache dir!")
-		fmt.Println(err)
-		exit(1)
+		exitWithErrorMessage("\nUnable to create cache dir\n" + err.Error())
 	}
 	err = os.MkdirAll(config.logCachePath, 0755)
 	if err != nil {
-		fmt.Println("Unable to create log dir!")
-		fmt.Println(err)
-		exit(1)
+		exitWithErrorMessage("\nUnable to create log dir\n" + err.Error())
 	}
 
 	removeDirContents(config.logCachePath)
@@ -64,9 +60,7 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 
 	file, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		fmt.Println("Unable to create log!")
-		fmt.Println(err)
-		exit(1)
+		exitWithErrorMessage("\nUnable to create log\n" + err.Error())
 	}
 	defer file.Close()
 	defer func() {
@@ -97,9 +91,7 @@ func MainLogger(logPath string) {
 
 	file, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		fmt.Println("Unable to create main log!")
-		fmt.Println(err)
-		exit(1)
+		exitWithErrorMessage("\nUnable to create main log\n" + err.Error())
 	}
 	defer file.Close()
 
@@ -121,17 +113,13 @@ func MainLogger(logPath string) {
 				out, err := exec.Command("bash", "-c", "cat "+logCmd.File+" >> "+logPath).CombinedOutput()
 
 				if err != nil {
-					fmt.Println("Unable to concat logs!")
-					fmt.Printf("%s", out)
-					fmt.Println(err)
-					exit(1)
+					fmt.Printf("%s\n", out)
+					exitWithErrorMessage("\nUnable to concat logs\n" + err.Error())
 				}
 
 				file, err = os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 				if err != nil {
-					fmt.Println("Unable to create main log!")
-					fmt.Println(err)
-					exit(1)
+					exitWithErrorMessage("\nUnable to create main log\n" + err.Error())
 				}
 				logger = log.New(file, "", log.Ldate|log.Ltime)
 
