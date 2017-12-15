@@ -22,6 +22,12 @@ type LogConcat struct {
 	File string
 }
 
+// func logToMain(msg string) {
+// 	if config.Options.LogPath != "" {
+// 		mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + userYamlPath)}
+// 	}
+// }
+
 func removeDirContents(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
