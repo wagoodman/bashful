@@ -5,7 +5,7 @@ Because your bash script should be quiet and shy-like (...and not such a loud mo
 
 ![Image](demo.gif)
 
-Use a yaml file to stich together commands and bash snippits and run them with style!
+Use a yaml file to stitch together commands and bash snippits and run them with style!
 
 *"But why would you make this monstrosity?"* you ask...
 because I could. And because ` &>/dev/null` or ` | tee -a some.log` or `set -e; do something; set +e` is getting annoying.
