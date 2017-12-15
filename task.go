@@ -165,6 +165,10 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	cmdString := task.CmdString
 	name := task.Name
 
+	if cmdString == "" && len(task.ParallelTasks) == 0 {
+		exitWithErrorMessage("Task '" + name + "' misconfigured (A configured task must have at least either 'cmd' or 'parallel-tasks' configured)")
+	}
+
 	if replicaValue != "" {
 		cmdString = strings.Replace(cmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
 	}
@@ -403,20 +407,22 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		}
 	}
 
-	var waitStatus syscall.WaitStatus
-
-	err := task.Command.Cmd.Wait()
+	returnCode := 0
+	returnCodeMsg := "unknown"
+	if err := task.Command.Cmd.Wait(); err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			// The program has exited with an exit code != 0
+			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				returnCode = status.ExitStatus()
+			}
+		} else {
+			returnCode = -1
+			returnCodeMsg = "Failed to run: " + err.Error()
+		}
+	}
 	task.Command.StopTime = time.Now()
 
-	if exitError, ok := err.(*exec.ExitError); ok {
-		waitStatus = exitError.Sys().(syscall.WaitStatus)
-	} else {
-		waitStatus = task.Command.Cmd.ProcessState.Sys().(syscall.WaitStatus)
-	}
-
-	returnCode := waitStatus.ExitStatus()
-
-	mainLogChan <- LogItem{Name: task.Name, Message: boldblue("Completed Task: " + task.Name + " (rc: " + strconv.Itoa(returnCode) + ")")}
+	mainLogChan <- LogItem{Name: task.Name, Message: boldblue("Completed Task: " + task.Name + " (rc: " + returnCodeMsg + ")")}
 
 	if returnCode == 0 || task.IgnoreFailure {
 		resultChan <- CmdIR{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}

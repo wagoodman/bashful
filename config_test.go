@@ -193,3 +193,31 @@ tasks:
 	}
 
 }
+
+// TODO: learn mocking in go... which framework?
+
+// func TestNoCmdGiven(t *testing.T) {
+// 	simpleYamlStr := `
+// tasks:
+//   - name: woops
+// `
+// 	// load test time cache (empty)
+// 	config.commandTimeCache = make(map[string]time.Duration)
+
+// 	// load test config yaml
+// 	config.Options = defaultOptions()
+// 	err := yaml.Unmarshal([]byte(simpleYamlStr), &config)
+// 	if err != nil {
+// 		t.Error("Expected no error, got error:", err)
+// 	}
+
+// 	// create and inflate tasks
+// 	createTasks()
+
+// 	// validate test task yaml
+// 	expStr, actStr := "Compiling source", config.Tasks[1].Name
+// 	if actStr != expStr {
+// 		t.Error("Expected name:", expStr, "got name:", actStr)
+// 	}
+
+// }

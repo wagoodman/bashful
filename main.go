@@ -54,10 +54,10 @@ type Summary struct {
 
 func CheckError(err error, message string) {
 	if err != nil {
-		fmt.Println(message)
+		fmt.Println("Traceback")
 		_, file, line, _ := runtime.Caller(1)
 		fmt.Println(line, "\t", file, "\n", err)
-		exit(1)
+		exitWithErrorMessage(message)
 	}
 }
 
@@ -201,6 +201,11 @@ func run(userYamlPath string) {
 	cleanup()
 }
 
+func exitWithErrorMessage(msg string) {
+	fmt.Println(red(msg))
+	exit(1)
+}
+
 func exit(rc int) {
 	cleanup()
 	os.Exit(rc)
@@ -217,19 +222,24 @@ func main() {
 	app.Usage = "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar."
 	app.Action = func(cliCtx *cli.Context) error {
 		if cliCtx.NArg() < 1 {
-			fmt.Println("Must provide the path to a bashful yaml file")
-			exit(1)
+			exitWithErrorMessage("Must provide the path to a bashful yaml file")
 		} else if cliCtx.NArg() > 1 {
-			fmt.Println("Only one bashful yaml file can be provided at a time")
-			exit(1)
+			exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
 		}
 		userYamlPath := cliCtx.Args().Get(0)
 
 		sigChannel := make(chan os.Signal, 2)
-		signal.Notify(sigChannel, os.Interrupt, syscall.SIGTERM)
+		signal.Notify(sigChannel, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
-			for range sigChannel {
-				exit(0)
+			for sig := range sigChannel {
+				if sig == syscall.SIGINT {
+					fmt.Println(red("Keyboard Interrupt"))
+					exit(0)
+				} else if sig == syscall.SIGTERM {
+					exit(0)
+				} else {
+					exitWithErrorMessage("Unknown Signal: " + sig.String())
+				}
 			}
 		}()
 
