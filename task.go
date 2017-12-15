@@ -418,6 +418,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		} else {
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
+			resultChan <- CmdIR{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
 		}
 	}
 	task.Command.StopTime = time.Now()

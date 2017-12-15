@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -114,11 +115,15 @@ func readRunYaml(userYamlPath string) {
 	config.Options = defaultOptions()
 
 	yamlString, err := ioutil.ReadFile(userYamlPath)
+
 	CheckError(err, "Unable to read yaml config.")
 
 	err = yaml.Unmarshal(yamlString, &config)
-	CheckError(err, "Unable to parse yaml config.")
-
+	if err != nil {
+		fmt.Println(red("Error: Unable to parse '" + userYamlPath + "'"))
+		fmt.Println(err)
+		exit(1)
+	}
 }
 
 func createTasks() {
