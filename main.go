@@ -54,9 +54,9 @@ type Summary struct {
 
 func CheckError(err error, message string) {
 	if err != nil {
-		fmt.Println("Traceback")
+		fmt.Println(red("Error:"))
 		_, file, line, _ := runtime.Caller(1)
-		fmt.Println(line, "\t", file, "\n", err)
+		fmt.Println("Line:", line, "\tFile:", file, "\n", err)
 		exitWithErrorMessage(message)
 	}
 }
@@ -184,7 +184,7 @@ func run(userYamlPath string) {
 			buffer.WriteString(bold(red("⏺ Failed task: ")) + bold(task.Name) + "\n")
 			buffer.WriteString(red("  ├─ command: ") + task.CmdString + "\n")
 			buffer.WriteString(red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode) + "\n")
-			buffer.WriteString(red("  ╰─ stderr: \n") + task.ErrorBuffer.String() + "\n")
+			buffer.WriteString(red("  ╰─ stderr: ") + task.ErrorBuffer.String() + "\n")
 
 		}
 		mainLogChan <- LogItem{Name: "[Main]", Message: buffer.String()}
