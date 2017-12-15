@@ -109,11 +109,11 @@ func readTimeCache() {
 	}
 }
 
-func readRunYaml() {
+func readRunYaml(userYamlPath string) {
 	// fetch and parse the run.yaml user file...
 	config.Options = defaultOptions()
 
-	yamlString, err := ioutil.ReadFile(os.Args[1])
+	yamlString, err := ioutil.ReadFile(userYamlPath)
 	CheckError(err, "Unable to read yaml config.")
 
 	err = yaml.Unmarshal(yamlString, &config)
@@ -152,9 +152,9 @@ func createTasks() {
 	config.Tasks = finalTasks
 }
 
-func ReadConfig() {
+func ReadConfig(userYamlPath string) {
 	readTimeCache()
-	readRunYaml()
+	readRunYaml(userYamlPath)
 	createTasks()
 }
 

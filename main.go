@@ -6,32 +6,39 @@ import (
 	"html/template"
 	"math/rand"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	color "github.com/mgutz/ansi"
+	"github.com/urfave/cli"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
 
-var (
-	exitSignaled     bool      = false
-	startTime        time.Time = time.Now()
-	totalTasks       int       = 0
-	completedTasks   int       = 0
-	totalFailedTasks int       = 0
+const (
+	VERSION = "v0.0.0-dev"
+)
 
-	purple                      func(string) string = color.ColorFunc("magenta+h")
-	red                         func(string) string = color.ColorFunc("red+h")
-	blue                        func(string) string = color.ColorFunc("blue+h")
-	boldblue                    func(string) string = color.ColorFunc("blue+b")
-	boldcyan                    func(string) string = color.ColorFunc("cyan+b")
-	bold                        func(string) string = color.ColorFunc("default+b")
-	lineDefaultTemplate, _                          = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	lineParallelTemplate, _                         = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	lineLastParallelTemplate, _                     = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ╰─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	summaryTemplate, _                              = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
+var (
+	exitSignaled     = false
+	startTime        = time.Now()
+	totalTasks       = 0
+	completedTasks   = 0
+	totalFailedTasks = 0
+
+	purple                      = color.ColorFunc("magenta+h")
+	red                         = color.ColorFunc("red+h")
+	blue                        = color.ColorFunc("blue+h")
+	boldblue                    = color.ColorFunc("blue+b")
+	boldcyan                    = color.ColorFunc("cyan+b")
+	bold                        = color.ColorFunc("default+b")
+	lineDefaultTemplate, _      = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineParallelTemplate, _     = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ╰─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	summaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 
 type Summary struct {
@@ -50,7 +57,7 @@ func CheckError(err error, message string) {
 		fmt.Println(message)
 		_, file, line, _ := runtime.Caller(1)
 		fmt.Println(line, "\t", file, "\n", err)
-		os.Exit(1)
+		exit(1)
 	}
 }
 
@@ -120,15 +127,15 @@ func doesFileExist(name string) bool {
 	return true
 }
 
-func main() {
+func run(userYamlPath string) {
 	var err error
-	ReadConfig()
+	ReadConfig(userYamlPath)
 
 	rand.Seed(time.Now().UnixNano())
 
 	if config.Options.LogPath != "" {
 		// fmt.Println("Logging is not supported yet!")
-		// os.Exit(1)
+		// exit(1)
 		setupLogging()
 	}
 
@@ -142,7 +149,7 @@ func main() {
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
-	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + os.Args[1])}
+	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + userYamlPath)}
 	for index := range config.Tasks {
 		newFailedTasks := config.Tasks[index].RunAndDisplay()
 		totalFailedTasks += len(newFailedTasks)
@@ -153,7 +160,7 @@ func main() {
 			break
 		}
 	}
-	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Finished " + os.Args[1])}
+	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Finished " + userYamlPath)}
 
 	err = Save(config.etaCachePath, &config.commandTimeCache)
 	CheckError(err, "Unable to save command eta cache.")
@@ -191,6 +198,45 @@ func main() {
 
 	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Exiting")}
 
+	cleanup()
+}
+
+func exit(rc int) {
+	cleanup()
+	os.Exit(rc)
+}
+
+func cleanup() {
 	fmt.Print("\033[?25h") // show cursor
+}
+
+func main() {
+	app := cli.NewApp()
+	app.Name = "bashful"
+	app.Version = VERSION
+	app.Usage = "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar."
+	app.Action = func(cliCtx *cli.Context) error {
+		if cliCtx.NArg() < 1 {
+			fmt.Println("Must provide the path to a bashful yaml file")
+			exit(1)
+		} else if cliCtx.NArg() > 1 {
+			fmt.Println("Only one bashful yaml file can be provided at a time")
+			exit(1)
+		}
+		userYamlPath := cliCtx.Args().Get(0)
+
+		sigChannel := make(chan os.Signal, 2)
+		signal.Notify(sigChannel, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			for range sigChannel {
+				exit(0)
+			}
+		}()
+
+		run(userYamlPath)
+		return nil
+	}
+
+	app.Run(os.Args)
 
 }
