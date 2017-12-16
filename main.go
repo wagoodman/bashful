@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	VERSION      = "v0.0.0-dev"
+	VERSION      = "v0.0.5"
 	MAJOR_FORMAT = "cyan+b"
 	INFO_FORMAT  = "blue+b"
 )
