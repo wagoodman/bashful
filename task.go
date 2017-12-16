@@ -355,8 +355,10 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 }
 
 func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+	logToMain("Started Task: "+task.Name, INFO_FORMAT)
+
 	task.Command.StartTime = time.Now()
-	mainLogChan <- LogItem{Name: task.Name, Message: boldblue("Started Task: " + task.Name)}
+
 	resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
 	waiter.Add(1)
 	defer waiter.Done()
@@ -423,7 +425,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	}
 	task.Command.StopTime = time.Now()
 
-	mainLogChan <- LogItem{Name: task.Name, Message: boldblue("Completed Task: " + task.Name + " (rc: " + returnCodeMsg + ")")}
+	logToMain("Completed Task: "+task.Name+" (rc: "+returnCodeMsg+")", INFO_FORMAT)
 
 	if returnCode == 0 || task.IgnoreFailure {
 		resultChan <- CmdIR{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
@@ -574,6 +576,8 @@ func (task *Task) RunAndDisplay() []*Task {
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
 				scr.DisplayFooter(footer(StatusPending))
+			} else {
+				scr.MovePastFrame(false)
 			}
 
 			if exitSignaled {

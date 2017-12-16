@@ -1,6 +1,4 @@
 config:
-  log-path: build.log
-
   # By default all tasks run are always shown on the screen.
   # Enable this if you would like to collapse (hide) sections of
   # parallel tasks after they have been completed (showing only

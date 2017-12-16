@@ -19,7 +19,9 @@ import (
 )
 
 const (
-	VERSION = "v0.0.0-dev"
+	VERSION      = "v0.0.0-dev"
+	MAJOR_FORMAT = "cyan+b"
+	INFO_FORMAT  = "blue+b"
 )
 
 var (
@@ -147,7 +149,7 @@ func run(userYamlPath string) {
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
-	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + userYamlPath)}
+	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
 	for index := range config.Tasks {
 		newFailedTasks := config.Tasks[index].RunAndDisplay()
 		totalFailedTasks += len(newFailedTasks)
@@ -158,7 +160,7 @@ func run(userYamlPath string) {
 			break
 		}
 	}
-	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Finished " + userYamlPath)}
+	logToMain("Finished "+userYamlPath, MAJOR_FORMAT)
 
 	err = Save(config.etaCachePath, &config.commandTimeCache)
 	CheckError(err, "Unable to save command eta cache.")
@@ -185,7 +187,7 @@ func run(userYamlPath string) {
 			buffer.WriteString(red("  ╰─ stderr: ") + task.ErrorBuffer.String() + "\n")
 
 		}
-		mainLogChan <- LogItem{Name: "[Main]", Message: buffer.String()}
+		logToMain(buffer.String(), "")
 
 		// we may not show the error report, but we always log it.
 		if config.Options.ShowFailureReport {
@@ -194,7 +196,7 @@ func run(userYamlPath string) {
 
 	}
 
-	mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Exiting")}
+	logToMain("Exiting", "")
 
 	cleanup()
 }

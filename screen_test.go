@@ -170,13 +170,13 @@ func TestMovePastFrame(t *testing.T) {
 		keepHeader     bool
 		expectedOutput string
 	}{
-		{false, false, false, "\x1b[3B"},
+		{false, false, false, "\x1b[3B\x1b[1B"},
 		{false, true, false, "\x1b[4B"},
-		{true, false, false, "\x1b[3B"},
+		{true, false, false, "\x1b[3B\x1b[1B"},
 		{true, true, false, "\x1b[4B"},
-		{false, false, true, "\x1b[3B"},
+		{false, false, true, "\x1b[3B\x1b[1B"},
 		{false, true, true, "\x1b[4B\x1b[1B"},
-		{true, false, true, "\x1b[3B"},
+		{true, false, true, "\x1b[3B\x1b[1B"},
 		{true, true, true, "\x1b[4B\x1b[1B"},
 	}
 
@@ -185,7 +185,7 @@ func TestMovePastFrame(t *testing.T) {
 		scr.curLine = 1
 		testOutput = captureBoolStdout(scr.MovePastFrame, testObj.keepHeader)
 		if testObj.expectedOutput != testOutput {
-			t.Error("MovePastFrame (-header, -footer, keep header): Expected", repr.String(testObj.expectedOutput), "got", repr.String(testOutput))
+			t.Error("MovePastFrame (header:", testObj.hasHeader, ", footer:", testObj.hasFooter, ", keepheader:", testObj.keepHeader, "): Expected", repr.String(testObj.expectedOutput), "got", repr.String(testOutput))
 		}
 	}
 }
