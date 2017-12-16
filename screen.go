@@ -179,7 +179,7 @@ func (scr *screen) EraseBelowHeader() {
 
 func (scr *screen) MovePastFrame(keepFooter bool) {
 	scr.MoveCursorToFooter()
-	if scr.hasFooter && keepFooter {
+	if scr.hasFooter && keepFooter || !scr.hasFooter {
 		ansi.CursorDown(1)
 		scr.curLine++
 	}

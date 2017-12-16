@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	color "github.com/mgutz/ansi"
 )
 
 var (
@@ -22,11 +24,15 @@ type LogConcat struct {
 	File string
 }
 
-// func logToMain(msg string) {
-// 	if config.Options.LogPath != "" {
-// 		mainLogChan <- LogItem{Name: "[Main]", Message: boldcyan("Running " + userYamlPath)}
-// 	}
-// }
+func logToMain(msg, format string) {
+	if config.Options.LogPath != "" {
+		if format != "" {
+			mainLogChan <- LogItem{Name: "[Main]", Message: color.Color(msg, format)}
+		} else {
+			mainLogChan <- LogItem{Name: "[Main]", Message: msg}
+		}
+	}
+}
 
 func removeDirContents(dir string) error {
 	d, err := os.Open(dir)

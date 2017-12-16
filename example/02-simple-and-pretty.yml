@@ -1,4 +1,6 @@
 config:
+  # You can optionally log all output from each process
+  # to the given file here
   log-path: build.log
 
 tasks:

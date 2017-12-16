@@ -1,6 +1,4 @@
 config:
-  log-path: build.log
-
   # Wanna take your awesome/parallel/nicely-formatted 
   # bashful run.yml and make it run one task at a time
   # noisily showing you everything?... for some reason you can!

@@ -16,8 +16,6 @@ config:
   # with a command running)
   show-task-times: true
 
-  log-path: build.log
-
 x-reference-data:
   all-apps: &app-names
     - some-lib-4
