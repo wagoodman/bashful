@@ -1,0 +1,24 @@
+tasks:
+
+  - name: Line stresser
+    parallel-tasks:
+      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 100000
+
+  - name: Character stresser
+    parallel-tasks:
+      - cmd: example/scripts/stress-char.sh 10000
+      - cmd: example/scripts/stress-char.sh 10000
+      - cmd: example/scripts/stress-char.sh 10000
+      - cmd: example/scripts/stress-char.sh 10000
+      - cmd: example/scripts/stress-char.sh 10000
+      - cmd: example/scripts/stress-char.sh 10000
+      - cmd: example/scripts/stress-char.sh 10000
+      - cmd: example/scripts/stress-char.sh 10000
+

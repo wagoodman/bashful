@@ -384,8 +384,8 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		}
 	}
 
-	stdoutChan := make(chan string)
-	stderrChan := make(chan string)
+	stdoutChan := make(chan string, 1000)
+	stderrChan := make(chan string, 1000)
 	go readPipe(stdoutChan, stdoutPipe)
 	go readPipe(stderrChan, stderrPipe)
 
@@ -393,6 +393,10 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		select {
 		case stdoutMsg, ok := <-stdoutChan:
 			if ok {
+				// it seems that we are getting a bit behind... burn off elements without showing them on the screen
+				if len(stdoutChan) > 100 {
+					continue
+				}
 				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: stdoutMsg, ReturnCode: -1}
 			} else {
 				stdoutChan = nil
