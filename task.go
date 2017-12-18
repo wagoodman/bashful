@@ -1,22 +1,18 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"html/template"
-	"io"
 	"io/ioutil"
 	"math"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
-	"github.com/lunixbochs/vtclean"
+	cmd "github.com/go-cmd/cmd"
 	color "github.com/mgutz/ansi"
 	"github.com/tj/go-spin"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
@@ -49,7 +45,7 @@ type TaskDisplay struct {
 }
 
 type TaskCommand struct {
-	Cmd              *exec.Cmd
+	Cmd              *cmd.Cmd
 	StartTime        time.Time
 	StopTime         time.Time
 	EstimatedRuntime time.Duration
@@ -182,7 +178,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	}
 
 	command := strings.Split(cmdString, " ")
-	task.Command.Cmd = exec.Command(command[0], command[1:]...)
+	task.Command.Cmd = cmd.NewCmd(command[0], command[1:]...)
 	task.Command.ReturnCode = -1
 	task.Display.Template = lineDefaultTemplate
 	task.Display.Index = displayIdx
@@ -355,87 +351,126 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 }
 
 func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
-	logToMain("Started Task: "+task.Name, INFO_FORMAT)
-
-	task.Command.StartTime = time.Now()
-
-	resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
 	waiter.Add(1)
-	defer waiter.Done()
+	resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
+	ticker := time.NewTicker(250 * time.Millisecond)
+
+	logToMain("Started Task: "+task.Name, INFO_FORMAT)
 
 	tempFile, _ := ioutil.TempFile(config.logCachePath, "")
 	task.LogFile = tempFile
 	task.LogChan = make(chan LogItem)
 	go SingleLogger(task.LogChan, task.Name, tempFile.Name())
 
-	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
-	stderrPipe, _ := task.Command.Cmd.StderrPipe()
+	task.Command.StartTime = time.Now()
+	statusChan := task.Command.Cmd.Start()
+	running := true
 
-	task.Command.Cmd.Start()
-
-	readPipe := func(resultChan chan string, pipe io.ReadCloser) {
-		defer close(resultChan)
-
-		scanner := bufio.NewScanner(pipe)
-		scanner.Split(variableSplitFunc)
-		for scanner.Scan() {
-			message := scanner.Text()
-			resultChan <- vtclean.Clean(message, false)
-		}
-	}
-
-	stdoutChan := make(chan string)
-	stderrChan := make(chan string)
-	go readPipe(stdoutChan, stdoutPipe)
-	go readPipe(stderrChan, stderrPipe)
-
-	for {
+	for running {
 		select {
-		case stdoutMsg, ok := <-stdoutChan:
-			if ok {
-				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: stdoutMsg, ReturnCode: -1}
-			} else {
-				stdoutChan = nil
-			}
-		case stderrMsg, ok := <-stderrChan:
-			if ok {
-				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: stderrMsg, ReturnCode: -1}
-			} else {
-				stderrChan = nil
-			}
-		}
-		if stdoutChan == nil && stderrChan == nil {
-			break
-		}
-	}
 
-	returnCode := 0
-	returnCodeMsg := "unknown"
-	if err := task.Command.Cmd.Wait(); err != nil {
-		if exiterr, ok := err.(*exec.ExitError); ok {
-			// The program has exited with an exit code != 0
-			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-				returnCode = status.ExitStatus()
+		case <-ticker.C:
+			status := task.Command.Cmd.Status()
+
+			resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: strconv.Itoa(len(status.Stdout)) + " : " + status.Stdout[len(status.Stdout)-1], ReturnCode: -1}
+
+		case finalStatus := <-statusChan:
+			// the subprocess has completeds
+			ticker.Stop()
+			running = false
+			finalStatusStr := StatusSuccess
+			if finalStatus.Exit != 0 {
+				finalStatusStr = StatusError
+				if task.StopOnFailure {
+					exitSignaled = true
+				}
 			}
-		} else {
-			returnCode = -1
-			returnCodeMsg = "Failed to run: " + err.Error()
-			resultChan <- CmdIR{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
+			resultChan <- CmdIR{Task: task, Status: finalStatusStr, ReturnCode: task.Command.Cmd.Status().Exit, Complete: true}
 		}
+
 	}
 	task.Command.StopTime = time.Now()
-
-	logToMain("Completed Task: "+task.Name+" (rc: "+returnCodeMsg+")", INFO_FORMAT)
-
-	if returnCode == 0 || task.IgnoreFailure {
-		resultChan <- CmdIR{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
-	} else {
-		resultChan <- CmdIR{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
-		if task.StopOnFailure {
-			exitSignaled = true
-		}
-	}
+	//logToMain("Completed Task: "+task.Name+" (rc: "+returnCodeMsg+")", INFO_FORMAT)
+	waiter.Done()
 }
+
+// func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+// logToMain("Started Task: "+task.Name, INFO_FORMAT)
+
+// task.Command.StartTime = time.Now()
+
+// resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
+// waiter.Add(1)
+// defer waiter.Done()
+
+// tempFile, _ := ioutil.TempFile(config.logCachePath, "")
+// task.LogFile = tempFile
+// task.LogChan = make(chan LogItem)
+// go SingleLogger(task.LogChan, task.Name, tempFile.Name())
+
+// 	task.Command.Cmd.Start()
+
+// 	readPipe := func(resultChan chan string, pipe io.ReadCloser) {
+// 		defer close(resultChan)
+
+// 		scanner := bufio.NewScanner(pipe)
+// 		scanner.Split(variableSplitFunc)
+// 		for scanner.Scan() {
+// 			message := scanner.Text()
+// 			resultChan <- vtclean.Clean(message, false)
+// 		}
+// 	}
+
+// 	stderrChan := make(chan string)
+// 	go readPipe(stderrChan, stderrPipe)
+
+// 	for {
+// 		select {
+// 		case stdoutMsg, ok := <-stdoutChan:
+// 			if ok {
+// 				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: stdoutMsg, ReturnCode: -1}
+// 			} else {
+// 				stdoutChan = nil
+// 			}
+// 		case stderrMsg, ok := <-stderrChan:
+// 			if ok {
+// 				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: stderrMsg, ReturnCode: -1}
+// 			} else {
+// 				stderrChan = nil
+// 			}
+// 		}
+// 		if stdoutChan == nil && stderrChan == nil {
+// 			break
+// 		}
+// 	}
+
+// 	returnCode := 0
+// 	returnCodeMsg := "unknown"
+// 	if err := task.Command.Cmd.Wait(); err != nil {
+// 		if exiterr, ok := err.(*exec.ExitError); ok {
+// 			// The program has exited with an exit code != 0
+// 			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+// 				returnCode = status.ExitStatus()
+// 			}
+// 		} else {
+// 			returnCode = -1
+// 			returnCodeMsg = "Failed to run: " + err.Error()
+// 			resultChan <- CmdIR{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
+// 		}
+// 	}
+// 	task.Command.StopTime = time.Now()
+
+// 	logToMain("Completed Task: "+task.Name+" (rc: "+returnCodeMsg+")", INFO_FORMAT)
+
+// 	if returnCode == 0 || task.IgnoreFailure {
+// 		resultChan <- CmdIR{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
+// 	} else {
+// 		resultChan <- CmdIR{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
+// 		if task.StopOnFailure {
+// 			exitSignaled = true
+// 		}
+// 	}
+// }
 
 func (task *Task) RunAndDisplay() []*Task {
 
