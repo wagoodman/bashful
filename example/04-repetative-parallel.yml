@@ -31,7 +31,10 @@ tasks:
         cmd: example/scripts/random-worker.sh 1 ?
         for-each: *app-names
 
+  # You can also set the collapse (hide) feature on each section
+  # of parallel tasks
   - name: Building and Migrating
+    collapse-on-completion: false
     parallel-tasks:
       - name: "Building ?"
         cmd: example/scripts/compile-something.sh 4 ?

@@ -28,19 +28,20 @@ var (
 )
 
 type Task struct {
-	Name           string `yaml:"name"`
-	CmdString      string `yaml:"cmd"`
-	Display        TaskDisplay
-	Command        TaskCommand
-	StopOnFailure  bool     `yaml:"stop-on-failure"`
-	EventDriven    bool     `yaml:"event-driven"`
-	ShowTaskOutput bool     `yaml:"show-output"`
-	IgnoreFailure  bool     `yaml:"ignore-failure"`
-	ParallelTasks  []Task   `yaml:"parallel-tasks"`
-	ForEach        []string `yaml:"for-each"`
-	LogChan        chan LogItem
-	LogFile        *os.File
-	ErrorBuffer    *bytes.Buffer
+	Name                 string `yaml:"name"`
+	CmdString            string `yaml:"cmd"`
+	Display              TaskDisplay
+	Command              TaskCommand
+	StopOnFailure        bool     `yaml:"stop-on-failure"`
+	CollapseOnCompletion bool     `yaml:"collapse-on-completion"`
+	EventDriven          bool     `yaml:"event-driven"`
+	ShowTaskOutput       bool     `yaml:"show-output"`
+	IgnoreFailure        bool     `yaml:"ignore-failure"`
+	ParallelTasks        []Task   `yaml:"parallel-tasks"`
+	ForEach              []string `yaml:"for-each"`
+	LogChan              chan LogItem
+	LogFile              *os.File
+	ErrorBuffer          *bytes.Buffer
 }
 
 type TaskDisplay struct {
@@ -110,6 +111,7 @@ func (task *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	defaultValues.StopOnFailure = config.Options.StopOnFailure
 	defaultValues.ShowTaskOutput = config.Options.ShowTaskOutput
 	defaultValues.EventDriven = config.Options.EventDriven
+	defaultValues.CollapseOnCompletion = config.Options.CollapseOnCompletion
 
 	if err := unmarshal(&defaultValues); err != nil {
 		return err
@@ -627,13 +629,16 @@ func (task *Task) RunAndDisplay() []*Task {
 		// complete the proc group status
 		if hasHeader {
 			message.Reset()
-			task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + purple(" ("+strconv.Itoa(len(tasks))+" tasks)")})
+			collapseSummary := ""
+			if task.CollapseOnCompletion && len(tasks) > 1 {
+				collapseSummary = purple(" (" + strconv.Itoa(len(tasks)) + " tasks)")
+			}
+			task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + collapseSummary})
 			scr.DisplayHeader(message.String())
 		}
 
 		// collapse sections or parallel tasks...
-		if config.Options.CollapseOnCompletion && len(tasks) > 1 {
-			// erase the lines for this section (except for the header)
+		if task.CollapseOnCompletion && len(tasks) > 1 {
 
 			// head to the top of the section (below the header) and erase all lines
 			scr.EraseBelowHeader()
