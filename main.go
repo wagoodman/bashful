@@ -208,8 +208,9 @@ func run(userYamlPath string) {
 }
 
 func exitWithErrorMessage(msg string) {
+	cleanup()
 	fmt.Println(red(msg))
-	exit(1)
+	os.Exit(1)
 }
 
 func exit(rc int) {
@@ -218,6 +219,15 @@ func exit(rc int) {
 }
 
 func cleanup() {
+	// stop any running tasks
+	for _, task := range config.Tasks {
+		task.Kill()
+	}
+
+	// move the cursor past the used screen realestate
+	Screen().MovePastFrame(true)
+
+	// show the cursor again
 	fmt.Print("\033[?25h") // show cursor
 }
 
@@ -239,8 +249,7 @@ func main() {
 		go func() {
 			for sig := range sigChannel {
 				if sig == syscall.SIGINT {
-					fmt.Println(red("Keyboard Interrupt"))
-					exit(0)
+					exitWithErrorMessage(red("Keyboard Interrupt"))
 				} else if sig == syscall.SIGTERM {
 					exit(0)
 				} else {
