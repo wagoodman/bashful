@@ -185,6 +185,10 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 	command := strings.Split(cmdString, " ")
 	task.Command.Cmd = exec.Command(command[0], command[1:]...)
+
+	// set this command as a process group
+	task.Command.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
 	task.Command.ReturnCode = -1
 	task.Display.Template = lineDefaultTemplate
 	task.Display.Index = displayIdx
@@ -198,6 +202,19 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 			name = strings.Replace(name, config.Options.ReplicaReplaceString, replicaValue, -1)
 		}
 		task.Name = name
+	}
+
+}
+
+func (task *Task) Kill() {
+	if task.CmdString != "" && task.Command.Started && !task.Command.Complete {
+		syscall.Kill(-task.Command.Cmd.Process.Pid, syscall.SIGKILL)
+	}
+
+	for _, subTask := range task.ParallelTasks {
+		if subTask.CmdString != "" && subTask.Command.Started && !subTask.Command.Complete {
+			syscall.Kill(-subTask.Command.Cmd.Process.Pid, syscall.SIGKILL)
+		}
 	}
 
 }
