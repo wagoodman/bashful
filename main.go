@@ -158,8 +158,6 @@ func run(userYamlPath string) {
 	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
 	for index := range config.Tasks {
 		newFailedTasks := config.Tasks[index].RunAndDisplay()
-		totalFailedTasks += len(newFailedTasks)
-
 		failedTasks = append(failedTasks, newFailedTasks...)
 
 		if exitSignaled {

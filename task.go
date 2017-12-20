@@ -576,6 +576,7 @@ func (task *Task) RunAndDisplay() []*Task {
 				if msgObj.Status == StatusError {
 					// update the group status to indicate a failed subtask
 					groupSuccess = StatusError
+					totalFailedTasks++
 
 					// keep note of the failed task for an after task report
 					failedTasks = append(failedTasks, eventTask)
