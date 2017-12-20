@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	ticker  *time.Ticker  = time.NewTicker(150 * time.Millisecond)
+	ticker  *time.Ticker
 	spinner *spin.Spinner = spin.New()
 )
 
@@ -33,6 +33,7 @@ type Task struct {
 	Display        TaskDisplay
 	Command        TaskCommand
 	StopOnFailure  bool     `yaml:"stop-on-failure"`
+	EventDriven    bool     `yaml:"event-driven"`
 	ShowTaskOutput bool     `yaml:"show-output"`
 	IgnoreFailure  bool     `yaml:"ignore-failure"`
 	ParallelTasks  []Task   `yaml:"parallel-tasks"`
@@ -108,6 +109,7 @@ func (task *Task) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var defaultValues defaults
 	defaultValues.StopOnFailure = config.Options.StopOnFailure
 	defaultValues.ShowTaskOutput = config.Options.ShowTaskOutput
+	defaultValues.EventDriven = config.Options.EventDriven
 
 	if err := unmarshal(&defaultValues); err != nil {
 		return err
@@ -373,7 +375,9 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 	task.Command.Cmd.Start()
 
-	readPipe := func(resultChan chan string, pipe io.ReadCloser) {
+	var readPipe func(chan string, io.ReadCloser)
+
+	readPipe = func(resultChan chan string, pipe io.ReadCloser) {
 		defer close(resultChan)
 
 		scanner := bufio.NewScanner(pipe)
@@ -397,16 +401,32 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 				if len(stdoutChan) > 100 {
 					continue
 				}
-				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: stdoutMsg, ReturnCode: -1}
-				task.LogChan <- LogItem{Name: task.Name, Message: stdoutMsg + "\n"}
+
+				if task.EventDriven {
+					// this is event driven... (signal this event)
+					resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
+					task.LogChan <- LogItem{Name: task.Name, Message: stdoutMsg + "\n"}
+				} else {
+					// on a polling interval... (do not create an event)
+					task.Display.Values.Msg = blue(stdoutMsg)
+				}
+
 			} else {
 				stdoutChan = nil
 			}
 		case stderrMsg, ok := <-stderrChan:
 			if ok {
-				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: stderrMsg, ReturnCode: -1}
-				task.LogChan <- LogItem{Name: task.Name, Message: red(stderrMsg) + "\n"}
-				task.ErrorBuffer.WriteString(stderrMsg + "\n")
+
+				if task.EventDriven {
+					// either this is event driven... (signal this event)
+					resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
+					task.LogChan <- LogItem{Name: task.Name, Message: red(stderrMsg) + "\n"}
+					task.ErrorBuffer.WriteString(stderrMsg + "\n")
+				} else {
+					// or on a polling interval... (do not create an event)
+					task.Display.Values.Msg = red(stderrMsg)
+				}
+
 			} else {
 				stderrChan = nil
 			}
@@ -559,9 +579,9 @@ func (task *Task) RunAndDisplay() []*Task {
 				}
 
 				if msgObj.Stderr != "" {
-					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: red(msgObj.Stderr), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
+					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stderr, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				} else {
-					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: blue(msgObj.Stdout), Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
+					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stdout, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				}
 
 				eventTask.display()

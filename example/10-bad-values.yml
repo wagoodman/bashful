@@ -1,0 +1,21 @@
+config:
+  log-path: build.log
+
+tasks:
+  - name: good
+    cmd: true
+
+  # we should be able to handle commands that return a non-zero value
+  - name: bad
+    cmd: false
+    stop-on-failure: false
+
+  # we should be able to gracefully die when a non-existent entry point is given
+  - name: DNE
+    cmd: sdfjsdhkfdhjfskd
+    stop-on-failure: false
+
+
+  # we should be able to gracefully die (before starting) when no entry point is given
+  - name: no command
+    stop-on-failure: false

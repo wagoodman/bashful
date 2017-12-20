@@ -139,13 +139,19 @@ func run(userYamlPath string) {
 		setupLogging()
 	}
 
+	if config.Options.UpdateInterval > 150 {
+		ticker = time.NewTicker(time.Duration(config.Options.UpdateInterval) * time.Millisecond)
+	} else {
+		ticker = time.NewTicker(150 * time.Millisecond)
+	}
+
 	if config.Options.Vintage {
 		config.Options.MaxParallelCmds = 1
 		config.Options.ShowSummaryFooter = false
 		config.Options.ShowFailureReport = false
 		ticker.Stop()
-
 	}
+
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor

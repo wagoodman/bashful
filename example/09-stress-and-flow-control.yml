@@ -1,24 +1,45 @@
+config:
+  # by default the screen is updated when an event occurs (when stdout from
+  # a running process is read). This can be changed to only allow the 
+  # screen to be updated on an interval (to accomodate slower devices).
+  event-driven: false
+
+  # time in milliseconds to update each task on the screen (polling interval)
+  update-interval: 500
+
 tasks:
 
   - name: Line stresser
     parallel-tasks:
+      # You can control this screen update behavior on a per-task basis
       - cmd: example/scripts/stress-line.sh 100000
+        event-driven: true
+
       - cmd: example/scripts/stress-line.sh 100000
+        event-driven: true
+      
       - cmd: example/scripts/stress-line.sh 100000
+      
       - cmd: example/scripts/stress-line.sh 100000
+      
       - cmd: example/scripts/stress-line.sh 100000
+      
       - cmd: example/scripts/stress-line.sh 100000
-      - cmd: example/scripts/stress-line.sh 100000
-      - cmd: example/scripts/stress-line.sh 100000
+
 
   - name: Character stresser
     parallel-tasks:
       - cmd: example/scripts/stress-char.sh 10000
+        event-driven: true
+      
       - cmd: example/scripts/stress-char.sh 10000
+        event-driven: true
+      
       - cmd: example/scripts/stress-char.sh 10000
+      
       - cmd: example/scripts/stress-char.sh 10000
+      
       - cmd: example/scripts/stress-char.sh 10000
+      
       - cmd: example/scripts/stress-char.sh 10000
-      - cmd: example/scripts/stress-char.sh 10000
-      - cmd: example/scripts/stress-char.sh 10000
-
+      
