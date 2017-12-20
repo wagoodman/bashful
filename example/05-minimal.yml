@@ -2,7 +2,7 @@ config:
   collapse-on-completion: true
   show-summary-footer: false
   show-task-output: false
-  # show-task-times: false
+  bullet-char:
 
 tasks:
   - name: Prepping data
