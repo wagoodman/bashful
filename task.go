@@ -398,12 +398,15 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 					continue
 				}
 				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: stdoutMsg, ReturnCode: -1}
+				task.LogChan <- LogItem{Name: task.Name, Message: stdoutMsg + "\n"}
 			} else {
 				stdoutChan = nil
 			}
 		case stderrMsg, ok := <-stderrChan:
 			if ok {
 				resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: stderrMsg, ReturnCode: -1}
+				task.LogChan <- LogItem{Name: task.Name, Message: red(stderrMsg) + "\n"}
+				task.ErrorBuffer.WriteString(stderrMsg + "\n")
 			} else {
 				stderrChan = nil
 			}
@@ -425,6 +428,8 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
 			resultChan <- CmdIR{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
+			task.LogChan <- LogItem{Name: task.Name, Message: red(returnCodeMsg) + "\n"}
+			task.ErrorBuffer.WriteString(returnCodeMsg + "\n")
 		}
 	}
 	task.Command.StopTime = time.Now()
@@ -538,21 +543,6 @@ func (task *Task) RunAndDisplay() []*Task {
 					// keep note of the failed task for an after task report
 					failedTasks = append(failedTasks, eventTask)
 				}
-			}
-
-			// record in the log
-			if config.Options.LogPath != "" {
-				if msgObj.Stdout != "" {
-					eventTask.LogChan <- LogItem{Name: eventTask.Name, Message: msgObj.Stdout + "\n"}
-				}
-				if msgObj.Stderr != "" {
-					eventTask.LogChan <- LogItem{Name: eventTask.Name, Message: red(msgObj.Stderr) + "\n"}
-				}
-			}
-
-			// keep record of all stderr lines for an after task report
-			if msgObj.Stderr != "" {
-				eventTask.ErrorBuffer.WriteString(msgObj.Stderr + "\n")
 			}
 
 			// display...
