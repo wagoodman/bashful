@@ -23,19 +23,21 @@ var config struct {
 }
 
 type OptionsConfig struct {
-	StopOnFailure        bool   `yaml:"stop-on-failure"`
-	ShowStepSummary      bool   `yaml:"show-summary-steps"`
-	ShowErrorSummary     bool   `yaml:"show-summary-errors"`
-	ShowSummaryFooter    bool   `yaml:"show-summary-footer"`
-	ShowFailureReport    bool   `yaml:"show-failure-summary"`
-	LogPath              string `yaml:"log-path"`
-	Vintage              bool   `yaml:"vintage"`
-	MaxParallelCmds      int    `yaml:"max-parallel-commands"`
-	ReplicaReplaceString string `yaml:"replica-replace-pattern"`
-	ShowTaskEta          bool   `yaml:"show-task-times"`
-	ShowTaskOutput       bool   `yaml:"show-task-output"`
-	ShowSummaryTimes     bool   `yaml:"show-summary-times"`
-	CollapseOnCompletion bool   `yaml:"collapse-on-completion"`
+	StopOnFailure        bool    `yaml:"stop-on-failure"`
+	ShowStepSummary      bool    `yaml:"show-summary-steps"`
+	ShowErrorSummary     bool    `yaml:"show-summary-errors"`
+	ShowSummaryFooter    bool    `yaml:"show-summary-footer"`
+	ShowFailureReport    bool    `yaml:"show-failure-summary"`
+	LogPath              string  `yaml:"log-path"`
+	Vintage              bool    `yaml:"vintage"`
+	MaxParallelCmds      int     `yaml:"max-parallel-commands"`
+	ReplicaReplaceString string  `yaml:"replica-replace-pattern"`
+	ShowTaskEta          bool    `yaml:"show-task-times"`
+	ShowTaskOutput       bool    `yaml:"show-task-output"`
+	ShowSummaryTimes     bool    `yaml:"show-summary-times"`
+	CollapseOnCompletion bool    `yaml:"collapse-on-completion"`
+	UpdateInterval       float64 `yaml:"update-interval"`
+	EventDriven          bool    `yaml:"event-driven"`
 }
 
 func defaultOptions() OptionsConfig {
@@ -50,6 +52,8 @@ func defaultOptions() OptionsConfig {
 	defaultValues.MaxParallelCmds = 4
 	defaultValues.ShowSummaryTimes = true
 	defaultValues.ShowTaskEta = false
+	defaultValues.UpdateInterval = -1
+	defaultValues.EventDriven = true
 	return defaultValues
 }
 

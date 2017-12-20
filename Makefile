@@ -9,14 +9,14 @@ TARGETS := $(shell ls scripts)
 # ./bin/bashful example/06-with-errors.yml
 # ./bin/bashful example/07-vintage.yml
 # ./bin/bashful example/08-complicated.yml
-# ./bin/bashful example/09-stress.yml
-# ./bin/bashful bad.yml
+# ./bin/bashful example/09-stress-and-flow-control.yml
+# ./bin/bashful example/10-bad-values.yml
 
 $(TARGETS): 
 	./scripts/$@
 
 run: clean build
-	./bin/bashful example/09-stress.yml
+	./bin/bashful example/09-stress-and-flow-control.yml
 
 clean:
 	rm -f bin/bashful build.log
