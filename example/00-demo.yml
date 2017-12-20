@@ -1,7 +1,7 @@
 config:
 
   # Supress the error summary that follows
-  show-failure-summary: false
+  show-failure-report: false
 
   # Lets run more than the default 4 tasks at a time (for parallel blocks)
   # max-parallel-commands: 6

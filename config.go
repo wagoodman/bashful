@@ -28,7 +28,7 @@ type OptionsConfig struct {
 	ShowStepSummary      bool    `yaml:"show-summary-steps"`
 	ShowErrorSummary     bool    `yaml:"show-summary-errors"`
 	ShowSummaryFooter    bool    `yaml:"show-summary-footer"`
-	ShowFailureReport    bool    `yaml:"show-failure-summary"`
+	ShowFailureReport    bool    `yaml:"show-failure-report"`
 	LogPath              string  `yaml:"log-path"`
 	Vintage              bool    `yaml:"vintage"`
 	MaxParallelCmds      int     `yaml:"max-parallel-commands"`
