@@ -107,6 +107,14 @@ func readTimeCache() {
 	config.logCachePath = path.Join(config.cachePath, "logs")
 	config.etaCachePath = path.Join(config.cachePath, "eta")
 
+	// create the cache path and log dir if they do not already exist
+	if _, err := os.Stat(config.cachePath); os.IsNotExist(err) {
+		os.Mkdir(config.cachePath, 0755)
+	}
+	if _, err := os.Stat(config.logCachePath); os.IsNotExist(err) {
+		os.Mkdir(config.logCachePath, 0755)
+	}
+
 	config.commandTimeCache = make(map[string]time.Duration)
 	if doesFileExist(config.etaCachePath) {
 		err := Load(config.etaCachePath, &config.commandTimeCache)
