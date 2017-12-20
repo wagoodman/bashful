@@ -502,7 +502,6 @@ func (task *Task) RunAndDisplay() []*Task {
 
 		// make room for the title of a parallel proc group
 		if hasHeader {
-
 			message.Reset()
 			lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Name, Msg: ""}
 			task.Display.Template.Execute(&message, lineObj)
