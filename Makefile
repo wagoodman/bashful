@@ -16,7 +16,7 @@ $(TARGETS):
 	./scripts/$@
 
 run: clean build
-	./bin/bashful example/09-stress-and-flow-control.yml
+	./bin/bashful example/02-simple-and-pretty.yml
 
 clean:
 	rm -f bin/bashful build.log
