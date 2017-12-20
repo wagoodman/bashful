@@ -23,6 +23,7 @@ var config struct {
 }
 
 type OptionsConfig struct {
+	BulletChar           string  `yaml:"bullet-char"`
 	StopOnFailure        bool    `yaml:"stop-on-failure"`
 	ShowStepSummary      bool    `yaml:"show-summary-steps"`
 	ShowErrorSummary     bool    `yaml:"show-summary-errors"`
@@ -54,6 +55,7 @@ func defaultOptions() OptionsConfig {
 	defaultValues.ShowTaskEta = false
 	defaultValues.UpdateInterval = -1
 	defaultValues.EventDriven = true
+	defaultValues.BulletChar = "•"
 	return defaultValues
 }
 

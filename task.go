@@ -235,7 +235,6 @@ func (task *Task) Tasks() (tasks []*Task) {
 func (task *Task) String() string {
 
 	if task.Command.Complete {
-		task.Display.Values.Spinner = ""
 		task.Display.Values.Eta = ""
 		if task.Command.ReturnCode != 0 && task.IgnoreFailure == false {
 			task.Display.Values.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
@@ -505,7 +504,7 @@ func (task *Task) RunAndDisplay() []*Task {
 		// make room for the title of a parallel proc group
 		if hasHeader {
 			message.Reset()
-			lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Name, Msg: ""}
+			lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Name, Msg: "", Spinner: config.Options.BulletChar}
 			task.Display.Template.Execute(&message, lineObj)
 			scr.DisplayHeader(message.String())
 		}
@@ -536,9 +535,7 @@ func (task *Task) RunAndDisplay() []*Task {
 			spinner.Next()
 
 			for _, taskObj := range tasks {
-				if taskObj.Command.Complete || !taskObj.Command.Started {
-					taskObj.Display.Values.Spinner = ""
-				} else {
+				if !taskObj.Command.Complete && taskObj.Command.Started {
 					taskObj.Display.Values.Spinner = spinner.Current()
 				}
 				taskObj.display()
@@ -603,6 +600,13 @@ func (task *Task) RunAndDisplay() []*Task {
 					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stdout, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
 				}
 
+				// override the current spinner to empty or a config.Options.BulletChar
+				if (!eventTask.Command.Started || eventTask.Command.Complete) && len(tasks) == 1 {
+					eventTask.Display.Values.Spinner = config.Options.BulletChar
+				} else if eventTask.Command.Complete {
+					eventTask.Display.Values.Spinner = ""
+				}
+
 				eventTask.display()
 			}
 
@@ -631,9 +635,9 @@ func (task *Task) RunAndDisplay() []*Task {
 			message.Reset()
 			collapseSummary := ""
 			if task.CollapseOnCompletion && len(tasks) > 1 {
-				collapseSummary = purple(" (" + strconv.Itoa(len(tasks)) + " tasks)")
+				collapseSummary = purple(" (" + strconv.Itoa(len(tasks)) + " tasks hidden)")
 			}
-			task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + collapseSummary})
+			task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + collapseSummary, Spinner: config.Options.BulletChar})
 			scr.DisplayHeader(message.String())
 		}
 

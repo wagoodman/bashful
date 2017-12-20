@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := ci
 TARGETS := $(shell ls scripts) 
 
+# ./bin/bashful example/00-demo.yml
 # ./bin/bashful example/01-simple.yml
 # ./bin/bashful example/02-simple-and-pretty.yml
 # ./bin/bashful example/03-repetative.yml
@@ -16,7 +17,7 @@ $(TARGETS):
 	./scripts/$@
 
 run: clean build
-	./bin/bashful example/02-simple-and-pretty.yml
+	./bin/bashful example/00-demo.yml
 
 clean:
 	rm -f bin/bashful build.log
