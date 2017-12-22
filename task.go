@@ -23,8 +23,9 @@ import (
 )
 
 var (
-	ticker  *time.Ticker
-	spinner *spin.Spinner = spin.New()
+	ticker         *time.Ticker
+	spinner        *spin.Spinner = spin.New()
+	nextDisplayIdx               = 0
 )
 
 type Task struct {
@@ -129,36 +130,32 @@ func (task *Task) Create(displayStartIdx int, replicaValue string) {
 	}
 
 	var finalTasks []Task
-
 	for subIndex := range task.ParallelTasks {
 		subTask := &task.ParallelTasks[subIndex]
 
 		if len(subTask.ForEach) > 0 {
 			subTaskName, subTaskCmdString := subTask.Name, subTask.CmdString
-			for subReplicaIndex, subReplicaValue := range subTask.ForEach {
+			for _, subReplicaValue := range subTask.ForEach {
 				subTask.Name = subTaskName
 				subTask.CmdString = subTaskCmdString
-				subTask.Create(subReplicaIndex, subReplicaValue)
-
-				if subReplicaIndex == len(subTask.ForEach)-1 {
-					subTask.Display.Template = lineLastParallelTemplate
-				} else {
-					subTask.Display.Template = lineParallelTemplate
-				}
+				subTask.Create(nextDisplayIdx, subReplicaValue)
+				subTask.Display.Template = lineParallelTemplate
 
 				finalTasks = append(finalTasks, *subTask)
+				nextDisplayIdx++
 			}
 		} else {
-			subTask.inflate(subIndex, replicaValue)
+			subTask.inflate(nextDisplayIdx, replicaValue)
+			subTask.Display.Template = lineParallelTemplate
 			totalTasks++
 
-			if subIndex == len(task.ParallelTasks)-1 {
-				subTask.Display.Template = lineLastParallelTemplate
-			} else {
-				subTask.Display.Template = lineParallelTemplate
-			}
 			finalTasks = append(finalTasks, *subTask)
+			nextDisplayIdx++
 		}
+	}
+
+	if len(finalTasks) > 1 {
+		finalTasks[len(finalTasks)-1].Display.Template = lineLastParallelTemplate
 	}
 
 	// replace parallel tasks with the inflated list of final tasks
@@ -185,8 +182,9 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 		task.Command.EstimatedRuntime = time.Duration(-1)
 	}
 
-	command := strings.Split(cmdString, " ")
-	task.Command.Cmd = exec.Command(command[0], command[1:]...)
+	//command := strings.Split(cmdString, " ")
+	// task.Command.Cmd = exec.Command(command[0], command[1:]...)
+	task.Command.Cmd = exec.Command(os.Getenv("SHELL"), "-c", fmt.Sprintf("\"%q\"", cmdString))
 
 	// set this command as a process group
 	task.Command.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -423,11 +421,11 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 				if task.EventDriven {
 					// this is event driven... (signal this event)
 					resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
-					task.LogChan <- LogItem{Name: task.Name, Message: stdoutMsg + "\n"}
 				} else {
 					// on a polling interval... (do not create an event)
 					task.Display.Values.Msg = blue(stdoutMsg)
 				}
+				task.LogChan <- LogItem{Name: task.Name, Message: stdoutMsg + "\n"}
 
 			} else {
 				stdoutChan = nil
@@ -438,13 +436,12 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 				if task.EventDriven {
 					// either this is event driven... (signal this event)
 					resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
-					task.LogChan <- LogItem{Name: task.Name, Message: red(stderrMsg) + "\n"}
-					task.ErrorBuffer.WriteString(stderrMsg + "\n")
 				} else {
 					// or on a polling interval... (do not create an event)
 					task.Display.Values.Msg = red(stderrMsg)
 				}
-
+				task.LogChan <- LogItem{Name: task.Name, Message: red(stderrMsg) + "\n"}
+				task.ErrorBuffer.WriteString(stderrMsg + "\n")
 			} else {
 				stderrChan = nil
 			}
@@ -537,6 +534,7 @@ func (task *Task) RunAndDisplay() []*Task {
 			for _, taskObj := range tasks {
 				if !taskObj.Command.Complete && taskObj.Command.Started {
 					taskObj.Display.Values.Spinner = spinner.Current()
+					taskObj.Display.Values.Eta = taskObj.CurrentEta()
 				}
 				taskObj.display()
 			}
