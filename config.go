@@ -145,6 +145,7 @@ func createTasks() {
 
 	// initialize tasks with default values...
 	for index := range config.Tasks {
+		nextDisplayIdx = 0
 		task := &config.Tasks[index]
 		// finalize task by appending to the set of final tasks
 		if len(task.ForEach) > 0 {
@@ -152,11 +153,11 @@ func createTasks() {
 			for _, replicaValue := range task.ForEach {
 				task.Name = taskName
 				task.CmdString = taskCmdString
-				task.Create(0, replicaValue)
+				task.Create(nextDisplayIdx, replicaValue)
 				finalTasks = append(finalTasks, *task)
 			}
 		} else {
-			task.Create(0, "")
+			task.Create(nextDisplayIdx, "")
 			finalTasks = append(finalTasks, *task)
 		}
 	}
