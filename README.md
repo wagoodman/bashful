@@ -17,7 +17,6 @@ because I could. And because ` &>/dev/null` or ` | tee -a some.log` or `set -e; 
 - [x] Optionally stop when a single command fails
 - [x] Configuration yaml block to control the behavior/look & feel
 - [x] Show detailed error reports when commands fail
-- [x] Bypass bashful all together and simply run each script/command in series ("vintage" mode)
 - [x] Log all actions taken with all stdout/stderr
 - [x] See an ETA for tasks that have already been run
 - [ ] Interact with the mouse to see more/less tasks (https://godoc.org/github.com/nsf/termbox-go#Event)
@@ -89,9 +88,6 @@ config:
 
     # time in milliseconds to update each task on the screen (polling interval)
     update-interval: 250
-
-    # break glass to disable all the nice formatting (boo)
-    vintage: true
 ```
 
 The `tasks` block is an ordered list of processes to run. Each task has several options that can be configured:

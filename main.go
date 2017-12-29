@@ -145,13 +145,6 @@ func run(userYamlPath string) {
 		ticker = time.NewTicker(150 * time.Millisecond)
 	}
 
-	if config.Options.Vintage {
-		config.Options.MaxParallelCmds = 1
-		config.Options.ShowSummaryFooter = false
-		config.Options.ShowFailureReport = false
-		ticker.Stop()
-	}
-
 	var failedTasks []*Task
 
 	fmt.Print("\033[?25l") // hide cursor
