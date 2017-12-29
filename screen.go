@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -182,6 +183,26 @@ func (scr *screen) MovePastFrame(keepFooter bool) {
 	if scr.hasFooter && keepFooter || !scr.hasFooter {
 		ansi.CursorDown(1)
 		scr.curLine++
+	}
+}
+
+func (scr *screen) Pave(parentTask *Task, tasks []*Task) {
+	var message bytes.Buffer
+	hasHeader := len(tasks) > 1
+	scr.ResetFrame(len(tasks), hasHeader, config.Options.ShowSummaryFooter)
+
+	// make room for the title of a parallel proc group
+	if hasHeader {
+		message.Reset()
+		lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: parentTask.Name, Msg: "", Spinner: config.Options.BulletChar}
+		parentTask.Display.Template.Execute(&message, lineObj)
+		scr.DisplayHeader(message.String())
+	}
+
+	for line := 0; line < len(tasks); line++ {
+		tasks[line].Command.Started = false
+		tasks[line].Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: tasks[line].Name}
+		tasks[line].display()
 	}
 }
 

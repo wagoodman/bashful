@@ -274,6 +274,14 @@ func (task *Task) String() string {
 	}
 
 	message.Reset()
+
+	// override the current spinner to empty or a config.Options.BulletChar
+	if (!task.Command.Started || task.Command.Complete) && len(task.ParallelTasks) == 1 {
+		task.Display.Values.Spinner = config.Options.BulletChar
+	} else if task.Command.Complete {
+		task.Display.Values.Spinner = ""
+	}
+
 	task.Display.Values.Split = strings.Repeat(" ", splitWidth)
 	task.Display.Template.Execute(&message, task.Display.Values)
 
@@ -494,32 +502,11 @@ func (task *Task) RunAndDisplay() []*Task {
 	resultChan := make(chan CmdIR)
 	tasks := task.Tasks()
 	scr := Screen()
+	scr.Pave(task, tasks)
 	hasHeader := len(tasks) > 1
-	scr.ResetFrame(len(tasks), hasHeader, config.Options.ShowSummaryFooter)
-
-	if !config.Options.Vintage {
-
-		// make room for the title of a parallel proc group
-		if hasHeader {
-			message.Reset()
-			lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Name, Msg: "", Spinner: config.Options.BulletChar}
-			task.Display.Template.Execute(&message, lineObj)
-			scr.DisplayHeader(message.String())
-		}
-
-		for line := 0; line < len(tasks); line++ {
-			tasks[line].Command.Started = false
-			tasks[line].Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: tasks[line].Name}
-			tasks[line].display()
-		}
-	}
 
 	var runningCmds int
 	for ; lastStartedTask < config.Options.MaxParallelCmds && lastStartedTask < len(tasks); lastStartedTask++ {
-		if config.Options.Vintage {
-			fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
-			fmt.Println(bold("Command: " + tasks[lastStartedTask].CmdString))
-		}
 		go tasks[lastStartedTask].runSingleCmd(resultChan, &waiter)
 		tasks[lastStartedTask].Command.Started = true
 		runningCmds++
@@ -560,10 +547,6 @@ func (task *Task) RunAndDisplay() []*Task {
 				runningCmds--
 				// if a thread has freed up, start the next task (if there are any left)
 				if lastStartedTask < len(tasks) {
-					if config.Options.Vintage {
-						fmt.Println(bold(task.Name + " : " + tasks[lastStartedTask].Name))
-						fmt.Println("Command: " + bold(tasks[lastStartedTask].CmdString))
-					}
 					go tasks[lastStartedTask].runSingleCmd(resultChan, &waiter)
 					tasks[lastStartedTask].Command.Started = true
 					runningCmds++
@@ -580,34 +563,18 @@ func (task *Task) RunAndDisplay() []*Task {
 				}
 			}
 
-			// display...
-			if config.Options.Vintage {
-				if msgObj.Stderr != "" {
-					fmt.Println(red(msgObj.Stderr))
-				} else {
-					fmt.Println(msgObj.Stdout)
-				}
-			} else {
-				if eventTask.ShowTaskOutput == false {
-					msgObj.Stderr = ""
-					msgObj.Stdout = ""
-				}
-
-				if msgObj.Stderr != "" {
-					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stderr, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
-				} else {
-					eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stdout, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
-				}
-
-				// override the current spinner to empty or a config.Options.BulletChar
-				if (!eventTask.Command.Started || eventTask.Command.Complete) && len(tasks) == 1 {
-					eventTask.Display.Values.Spinner = config.Options.BulletChar
-				} else if eventTask.Command.Complete {
-					eventTask.Display.Values.Spinner = ""
-				}
-
-				eventTask.display()
+			if eventTask.ShowTaskOutput == false {
+				msgObj.Stderr = ""
+				msgObj.Stdout = ""
 			}
+
+			if msgObj.Stderr != "" {
+				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stderr, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
+			} else {
+				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stdout, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
+			}
+
+			eventTask.display()
 
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
@@ -628,33 +595,31 @@ func (task *Task) RunAndDisplay() []*Task {
 		waiter.Wait()
 	}
 
-	if !config.Options.Vintage {
-		// complete the proc group status
-		if hasHeader {
-			message.Reset()
-			collapseSummary := ""
-			if task.CollapseOnCompletion && len(tasks) > 1 {
-				collapseSummary = purple(" (" + strconv.Itoa(len(tasks)) + " tasks hidden)")
-			}
-			task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + collapseSummary, Spinner: config.Options.BulletChar})
-			scr.DisplayHeader(message.String())
-		}
-
-		// collapse sections or parallel tasks...
+	// complete the proc group status
+	if hasHeader {
+		message.Reset()
+		collapseSummary := ""
 		if task.CollapseOnCompletion && len(tasks) > 1 {
-
-			// head to the top of the section (below the header) and erase all lines
-			scr.EraseBelowHeader()
-
-			// head back to the top of the section
-			scr.MoveCursorToFirstLine()
-		} else {
-			// ... or this is a single task or configured not to collapse
-
-			// instead, leave all of the text on the screen...
-			// ...reset the cursor to the bottom of the section
-			scr.MovePastFrame(false)
+			collapseSummary = purple(" (" + strconv.Itoa(len(tasks)) + " tasks hidden)")
 		}
+		task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + collapseSummary, Spinner: config.Options.BulletChar})
+		scr.DisplayHeader(message.String())
+	}
+
+	// collapse sections or parallel tasks...
+	if task.CollapseOnCompletion && len(tasks) > 1 {
+
+		// head to the top of the section (below the header) and erase all lines
+		scr.EraseBelowHeader()
+
+		// head back to the top of the section
+		scr.MoveCursorToFirstLine()
+	} else {
+		// ... or this is a single task or configured not to collapse
+
+		// instead, leave all of the text on the screen...
+		// ...reset the cursor to the bottom of the section
+		scr.MovePastFrame(false)
 	}
 
 	return failedTasks
