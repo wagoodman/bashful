@@ -126,7 +126,7 @@ func (task *Task) Create(displayStartIdx int, replicaValue string) {
 	task.inflate(displayStartIdx, replicaValue)
 
 	if task.CmdString != "" {
-		totalTasks++
+		TaskStats.totalTasks++
 	}
 
 	var finalTasks []Task
@@ -147,7 +147,7 @@ func (task *Task) Create(displayStartIdx int, replicaValue string) {
 		} else {
 			subTask.inflate(nextDisplayIdx, replicaValue)
 			subTask.Display.Template = lineParallelTemplate
-			totalTasks++
+			TaskStats.totalTasks++
 
 			finalTasks = append(finalTasks, *subTask)
 			nextDisplayIdx++
@@ -489,138 +489,8 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	}
 }
 
-// TODO: this needs to be split off into more testable parts!
-func (task *Task) RunAndDisplay() []*Task {
-
-	var (
-		lastStartedTask int
-		failedTasks     []*Task
-		waiter          sync.WaitGroup
-		message         bytes.Buffer
-	)
-
-	resultChan := make(chan CmdIR)
-	tasks := task.Tasks()
-	scr := Screen()
-	scr.Pave(task, tasks)
-	hasHeader := len(tasks) > 1
-
-	var runningCmds int
-	for ; lastStartedTask < config.Options.MaxParallelCmds && lastStartedTask < len(tasks); lastStartedTask++ {
-		go tasks[lastStartedTask].runSingleCmd(resultChan, &waiter)
-		tasks[lastStartedTask].Command.Started = true
-		runningCmds++
-	}
-	groupSuccess := StatusSuccess
-
-	// just wait for stuff to come back
-	for runningCmds > 0 {
-		select {
-		case <-ticker.C:
-			spinner.Next()
-
-			for _, taskObj := range tasks {
-				if !taskObj.Command.Complete && taskObj.Command.Started {
-					taskObj.Display.Values.Spinner = spinner.Current()
-					taskObj.Display.Values.Eta = taskObj.CurrentEta()
-				}
-				taskObj.display()
-			}
-
-			// update the summary line
-			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending, ""))
-			}
-
-		case msgObj := <-resultChan:
-			eventTask := msgObj.Task
-
-			// update the state before displaying...
-			if msgObj.Complete {
-				completedTasks++
-				eventTask.Command.Complete = true
-				eventTask.Command.ReturnCode = msgObj.ReturnCode
-				close(eventTask.LogChan)
-
-				config.commandTimeCache[eventTask.CmdString] = eventTask.Command.StopTime.Sub(eventTask.Command.StartTime)
-
-				runningCmds--
-				// if a thread has freed up, start the next task (if there are any left)
-				if lastStartedTask < len(tasks) {
-					go tasks[lastStartedTask].runSingleCmd(resultChan, &waiter)
-					tasks[lastStartedTask].Command.Started = true
-					runningCmds++
-					lastStartedTask++
-				}
-
-				if msgObj.Status == StatusError {
-					// update the group status to indicate a failed subtask
-					groupSuccess = StatusError
-					totalFailedTasks++
-
-					// keep note of the failed task for an after task report
-					failedTasks = append(failedTasks, eventTask)
-				}
-			}
-
-			if eventTask.ShowTaskOutput == false {
-				msgObj.Stderr = ""
-				msgObj.Stdout = ""
-			}
-
-			if msgObj.Stderr != "" {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stderr, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
-			} else {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stdout, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
-			}
-
-			eventTask.display()
-
-			// update the summary line
-			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending, ""))
-			} else {
-				scr.MovePastFrame(false)
-			}
-
-			if exitSignaled {
-				break
-			}
-
-		}
-
-	}
-
-	if !exitSignaled {
-		waiter.Wait()
-	}
-
-	// complete the proc group status
-	if hasHeader {
-		message.Reset()
-		collapseSummary := ""
-		if task.CollapseOnCompletion && len(tasks) > 1 {
-			collapseSummary = purple(" (" + strconv.Itoa(len(tasks)) + " tasks hidden)")
-		}
-		task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + collapseSummary, Spinner: config.Options.BulletChar})
-		scr.DisplayHeader(message.String())
-	}
-
-	// collapse sections or parallel tasks...
-	if task.CollapseOnCompletion && len(tasks) > 1 {
-
-		// head to the top of the section (below the header) and erase all lines
-		scr.EraseBelowHeader()
-
-		// head back to the top of the section
-		scr.MoveCursorToFirstLine()
-	} else {
-		// ... or this is a single task or configured not to collapse
-
-		// instead, leave all of the text on the screen...
-		// ...reset the cursor to the bottom of the section
-		scr.MovePastFrame(false)
-	}
-
-	return failedTasks
+func (task *Task) Completed(rc int) {
+	task.Command.Complete = true
+	task.Command.ReturnCode = rc
+	close(task.LogChan)
 }
