@@ -70,7 +70,7 @@ func showDuration(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 }
 
-func footer(status CommandStatus) string {
+func footer(status CommandStatus, message string) string {
 	var tpl bytes.Buffer
 	var durString, etaString, stepString, errorString string
 
@@ -105,7 +105,7 @@ func footer(status CommandStatus) string {
 		percentStr = color.Color(percentStr, "default+b")
 	}
 
-	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString})
+	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
 
 	// calculate a space buffer to push the eta to the right
 	terminalWidth, _ := terminal.Width()
@@ -115,7 +115,7 @@ func footer(status CommandStatus) string {
 	}
 
 	tpl.Reset()
-	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString)})
+	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString), Msg: message})
 
 	return tpl.String()
 }
@@ -170,11 +170,15 @@ func run(userYamlPath string) {
 	CheckError(err, "Unable to save command eta cache.")
 
 	if config.Options.ShowSummaryFooter {
+		message := ""
 		Screen().ResetFrame(0, false, true)
 		if len(failedTasks) > 0 {
-			Screen().DisplayFooter(footer(StatusError))
+			if config.Options.LogPath != "" {
+				message = bold(" See log for details (" + config.Options.LogPath + ")")
+			}
+			Screen().DisplayFooter(footer(StatusError, message))
 		} else {
-			Screen().DisplayFooter(footer(StatusSuccess))
+			Screen().DisplayFooter(footer(StatusSuccess, message))
 		}
 	}
 

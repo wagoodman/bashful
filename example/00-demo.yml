@@ -3,9 +3,6 @@ config:
   # Supress the error summary that follows
   show-failure-report: false
 
-  # Lets run more than the default 4 tasks at a time (for parallel blocks)
-  # max-parallel-commands: 6
-
   # This is the character/string that is replaced with items listed in the
   # 'for-each' block
   replica-replace-pattern: '%'
@@ -13,6 +10,8 @@ config:
   # Show an eta for each task on the screen (being shown on every line 
   # with a command running)
   show-task-times: true
+
+  log-path: build.log
 
 x-reference-data:
   all-apps: &app-names
@@ -34,14 +33,6 @@ tasks:
         cmd: example/scripts/random-worker.sh 1 %
         ignore-failure: true
         for-each: *app-names
-
-  # You can supress the output of individual tasks instead 
-  # of for all tasks in the run.yml
-  # - name: Validate Environment
-  #   parallel-tasks:
-  #     - cmd: example/scripts/random-worker.sh 3 %
-  #       show-output: false
-  #       for-each: *app-names
 
   - name: Installing dependencies
     parallel-tasks:
@@ -74,11 +65,3 @@ tasks:
         cmd: example/scripts/random-worker.sh 5
       - name: Building public-6
         cmd: example/scripts/random-worker.sh 5
-      # - name: Building and migrating utilities
-      #   cmd: example/scripts/random-worker.sh 12
-      # - name: Building and migrating important-lib
-      #   cmd: example/scripts/random-worker.sh 1
-      # - name: Building and migrating yup-app-7
-      #   cmd: example/scripts/random-worker.sh 6
-      # - name: Building and migrating stuff-n-things
-      #   cmd: example/scripts/random-worker.sh 10

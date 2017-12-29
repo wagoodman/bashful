@@ -481,6 +481,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	}
 }
 
+// TODO: this needs to be split off into more testable parts!
 func (task *Task) RunAndDisplay() []*Task {
 
 	var (
@@ -541,7 +542,7 @@ func (task *Task) RunAndDisplay() []*Task {
 
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending))
+				scr.DisplayFooter(footer(StatusPending, ""))
 			}
 
 		case msgObj := <-resultChan:
@@ -610,7 +611,7 @@ func (task *Task) RunAndDisplay() []*Task {
 
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending))
+				scr.DisplayFooter(footer(StatusPending, ""))
 			} else {
 				scr.MovePastFrame(false)
 			}

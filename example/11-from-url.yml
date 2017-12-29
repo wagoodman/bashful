@@ -1,0 +1,30 @@
+config:
+  collapse-on-completion: true
+
+x-reference-data:
+  all-apps: &app-names
+    - some-lib-4
+    - utilities-lib
+    - some-app1
+    - some-awesome-app-5
+    - watcher-app
+
+tasks:
+
+  # simply run the script from the given url
+  - name: Prep environment
+    url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/compile-something.sh
+
+  # same as before, but we want to control arguments and such (notice the same script is not downloaded again)
+  # Note: the '?exe' reference is replaced with the downloaded scirpt path
+  - name: Quick compile
+    url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/compile-something.sh
+    cmd: ?exe 4
+
+  # the script is downloaded once even when invoking in in parallel (though, different commands)
+  - name: Running worker
+    parallel-tasks:
+      - name: "Running ?"
+        url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/random-worker.sh
+        cmd: ?exe 4 ?
+        for-each: *app-names
