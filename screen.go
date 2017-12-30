@@ -88,7 +88,7 @@ func visualLength(str string) int {
 }
 
 func trimToVisualLength(message string, length int) string {
-	for visualLength(message) > length {
+	for visualLength(message) > length && len(message) > 1 {
 		message = message[:len(message)-1]
 	}
 	return message
