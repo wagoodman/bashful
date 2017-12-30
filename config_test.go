@@ -120,38 +120,38 @@ tasks:
 	// validate test task yaml
 
 	exNum = 5
-	if len(config.Tasks) != exNum {
-		t.Error("Expected", exNum, "tasks got", len(config.Tasks))
+	if len(config.TaskConfigs) != exNum {
+		t.Error("Expected", exNum, "tasks got", len(config.TaskConfigs))
 	}
 
 	exNum = 6
-	if len(config.Tasks[1].ParallelTasks) != exNum {
-		t.Error("Expected", exNum, "parallel tasks got", len(config.Tasks[1].ParallelTasks))
+	if len(config.TaskConfigs[1].ParallelTasks) != exNum {
+		t.Error("Expected", exNum, "parallel tasks got", len(config.TaskConfigs[1].ParallelTasks))
 	}
 
 	// ensure that names are set properly
 
-	expStr, actStr = "Compiling source", config.Tasks[1].Name
+	expStr, actStr = "Compiling source", config.TaskConfigs[1].Name
 	if actStr != expStr {
 		t.Error("Expected name:", expStr, "got name:", actStr)
 	}
 
-	expStr, actStr = "some random task name plug 3", config.Tasks[2].Name
+	expStr, actStr = "some random task name plug 3", config.TaskConfigs[2].Name
 	if actStr != expStr {
 		t.Error("Expected name:", expStr, "got name:", actStr)
 	}
 
 	// check the names of the top task list
 	for _, taskIndex := range []int{0, 3, 4} {
-		expStr, actStr = config.Tasks[taskIndex].CmdString, config.Tasks[taskIndex].Name
+		expStr, actStr = config.TaskConfigs[taskIndex].CmdString, config.TaskConfigs[taskIndex].Name
 		if actStr != expStr {
 			t.Error("Expected name:", expStr, "got name:", actStr)
 		}
 	}
 
 	// check the names of the top parallel list
-	for taskIndex := 0; taskIndex < len(config.Tasks[1].ParallelTasks); taskIndex++ {
-		expStr, actStr = config.Tasks[1].ParallelTasks[taskIndex].CmdString, config.Tasks[1].ParallelTasks[taskIndex].Name
+	for taskIndex := 0; taskIndex < len(config.TaskConfigs[1].ParallelTasks); taskIndex++ {
+		expStr, actStr = config.TaskConfigs[1].ParallelTasks[taskIndex].CmdString, config.TaskConfigs[1].ParallelTasks[taskIndex].Name
 		if actStr != expStr {
 			t.Error("Expected name:", expStr, "got name:", actStr)
 		}
@@ -159,35 +159,35 @@ tasks:
 
 	// ensure that names and commands of for-each tasks fill in the ? character with params
 	for _, taskIndex := range []int{3, 4} {
-		expStr, actStr = config.Tasks[taskIndex].CmdString, config.Tasks[taskIndex].Name
+		expStr, actStr = config.TaskConfigs[taskIndex].CmdString, config.TaskConfigs[taskIndex].Name
 		if actStr != expStr {
 			t.Error("Expected name:", expStr, "got name:", actStr)
 		}
-		if !strings.Contains(config.Tasks[taskIndex].Name, "plug") {
+		if !strings.Contains(config.TaskConfigs[taskIndex].Name, "plug") {
 			t.Error("Expected name to contain 'plug' but got:", actStr)
 		}
-		if !strings.Contains(config.Tasks[taskIndex].CmdString, "plug") {
+		if !strings.Contains(config.TaskConfigs[taskIndex].CmdString, "plug") {
 			t.Error("Expected cmd to contain 'plug' but got:", actStr)
 		}
 	}
 
-	expStr, actStr = "some random task name plug 3", config.Tasks[2].Name
+	expStr, actStr = "some random task name plug 3", config.TaskConfigs[2].Name
 	if actStr != expStr {
 		t.Error("Expected name:", expStr, "got name:", actStr)
 	}
 
-	expStr, actStr = "random-worker.sh 2", config.Tasks[2].CmdString
+	expStr, actStr = "random-worker.sh 2", config.TaskConfigs[2].CmdString
 	if actStr != expStr {
 		t.Error("Expected cmd:", expStr, "got cmd:", actStr)
 	}
 
 	// ensure stop on fail and show output can be overridden to false
-	expOpt, actOpt = false, config.Tasks[1].ParallelTasks[1].ShowTaskOutput
+	expOpt, actOpt = false, config.TaskConfigs[1].ParallelTasks[1].ShowTaskOutput
 	if actOpt != expOpt {
 		t.Error("Expected name:", expOpt, "got name:", actOpt)
 	}
 
-	expOpt, actOpt = false, config.Tasks[1].ParallelTasks[1].StopOnFailure
+	expOpt, actOpt = false, config.TaskConfigs[1].ParallelTasks[1].StopOnFailure
 	if actOpt != expOpt {
 		t.Error("Expected name:", expOpt, "got name:", actOpt)
 	}

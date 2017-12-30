@@ -14,7 +14,7 @@ import (
 
 var config struct {
 	Options          OptionsConfig `yaml:"config"`
-	Tasks            []Task        `yaml:"tasks"`
+	TaskConfigs      []TaskConfig  `yaml:"tasks"`
 	logCachePath     string
 	cachePath        string
 	etaCachePath     string
@@ -70,6 +70,34 @@ func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	*options = OptionsConfig(defaultValues)
 	// the global options must be available when parsing the task yaml (does order matter?)
 	config.Options = *options
+	return nil
+}
+
+type TaskConfig struct {
+	Name                 string       `yaml:"name"`
+	CmdString            string       `yaml:"cmd"`
+	StopOnFailure        bool         `yaml:"stop-on-failure"`
+	CollapseOnCompletion bool         `yaml:"collapse-on-completion"`
+	EventDriven          bool         `yaml:"event-driven"`
+	ShowTaskOutput       bool         `yaml:"show-output"`
+	IgnoreFailure        bool         `yaml:"ignore-failure"`
+	ParallelTasks        []TaskConfig `yaml:"parallel-tasks"`
+	ForEach              []string     `yaml:"for-each"`
+}
+
+func (task *TaskConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type defaults TaskConfig
+	var defaultValues defaults
+	defaultValues.StopOnFailure = config.Options.StopOnFailure
+	defaultValues.ShowTaskOutput = config.Options.ShowTaskOutput
+	defaultValues.EventDriven = config.Options.EventDriven
+	defaultValues.CollapseOnCompletion = config.Options.CollapseOnCompletion
+
+	if err := unmarshal(&defaultValues); err != nil {
+		return err
+	}
+
+	*task = TaskConfig(defaultValues)
 	return nil
 }
 
@@ -139,42 +167,45 @@ func readRunYaml(userYamlPath string) {
 	}
 }
 
-func createTasks() {
-	var finalTasks []Task
+func createTasks() (finalTasks []*Task) {
 
 	// initialize tasks with default values...
-	for index := range config.Tasks {
+	for index := range config.TaskConfigs {
 		nextDisplayIdx = 0
-		task := &config.Tasks[index]
+		taskConfig := &config.TaskConfigs[index]
 		// finalize task by appending to the set of final tasks
-		if len(task.ForEach) > 0 {
-			taskName, taskCmdString := task.Name, task.CmdString
-			for _, replicaValue := range task.ForEach {
-				task.Name = taskName
-				task.CmdString = taskCmdString
-				task.Create(nextDisplayIdx, replicaValue)
-				finalTasks = append(finalTasks, *task)
+		if len(taskConfig.ForEach) > 0 {
+			taskName, taskCmdString := taskConfig.Name, taskConfig.CmdString
+			for _, replicaValue := range taskConfig.ForEach {
+				taskConfig.Name = taskName
+				taskConfig.CmdString = taskCmdString
+				task := NewTask(*taskConfig, nextDisplayIdx, replicaValue)
+				finalTasks = append(finalTasks, &task)
 			}
 		} else {
-			task.Create(nextDisplayIdx, "")
-			finalTasks = append(finalTasks, *task)
+			task := NewTask(*taskConfig, nextDisplayIdx, "")
+			finalTasks = append(finalTasks, &task)
 		}
 	}
 
 	// now that all tasks have been inflated, set the total eta
-	for index := range finalTasks {
-		task := &finalTasks[index]
+	for _, task := range finalTasks {
 		config.totalEtaSeconds += task.EstimatedRuntime()
 	}
 
 	// replace the current config with the inflated list of final tasks
-	config.Tasks = finalTasks
+	return finalTasks
 }
 
-func ReadConfig(userYamlPath string) {
+func ReadConfig(userYamlPath string) []*Task {
 	readTimeCache()
 	readRunYaml(userYamlPath)
-	createTasks()
+
+	if config.Options.LogPath != "" {
+		setupLogging()
+	}
+
+	return createTasks()
 }
 
 // Encode via Gob to file

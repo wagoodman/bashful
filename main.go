@@ -127,13 +127,9 @@ func doesFileExist(name string) bool {
 
 func run(userYamlPath string) {
 	var err error
-	ReadConfig(userYamlPath)
+	tasks := ReadConfig(userYamlPath)
 
 	rand.Seed(time.Now().UnixNano())
-
-	if config.Options.LogPath != "" {
-		setupLogging()
-	}
 
 	if config.Options.UpdateInterval > 150 {
 		ticker = time.NewTicker(time.Duration(config.Options.UpdateInterval) * time.Millisecond)
@@ -145,11 +141,9 @@ func run(userYamlPath string) {
 
 	fmt.Print("\033[?25l") // hide cursor
 	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
-	for index := range config.Tasks {
-		task := &config.Tasks[index]
-		tg := NewTaskGroup(task)
-		tg.Run()
-		failedTasks = append(failedTasks, tg.failedTasks...)
+	for _, task := range tasks {
+		task.Run()
+		failedTasks = append(failedTasks, task.failedTasks...)
 
 		if exitSignaled {
 			break
@@ -180,8 +174,8 @@ func run(userYamlPath string) {
 		for _, task := range failedTasks {
 
 			buffer.WriteString("\n")
-			buffer.WriteString(bold(red("⏺ Failed task: ")) + bold(task.Name) + "\n")
-			buffer.WriteString(red("  ├─ command: ") + task.CmdString + "\n")
+			buffer.WriteString(bold(red("⏺ Failed task: ")) + bold(task.Config.Name) + "\n")
+			buffer.WriteString(red("  ├─ command: ") + task.Config.CmdString + "\n")
 			buffer.WriteString(red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode) + "\n")
 			buffer.WriteString(red("  ╰─ stderr: ") + task.ErrorBuffer.String() + "\n")
 
@@ -213,9 +207,9 @@ func exit(rc int) {
 
 func cleanup() {
 	// stop any running tasks
-	for _, task := range config.Tasks {
-		task.Kill()
-	}
+	//for _, task := range config.TaskConfigs {
+	//	task.Kill()
+	//}
 
 	// move the cursor past the used screen realestate
 	Screen().MovePastFrame(true)
