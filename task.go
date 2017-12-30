@@ -271,7 +271,7 @@ func (task *Task) String(terminalWidth int) string {
 	message.Reset()
 
 	// override the current spinner to empty or a config.Options.BulletChar
-	if (!task.Command.Started || task.Command.Complete) && len(task.Children) == 1 {
+	if (!task.Command.Started || task.Command.Complete) && len(task.Children) == 0 && task.Display.Template == lineDefaultTemplate {
 		task.Display.Values.Spinner = config.Options.BulletChar
 	} else if task.Command.Complete {
 		task.Display.Values.Spinner = ""
