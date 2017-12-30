@@ -83,11 +83,11 @@ func footer(status CommandStatus, message string) string {
 		etaString = ""
 	}
 
-	if config.Options.ShowStepSummary {
+	if config.Options.ShowSummarySteps {
 		stepString = fmt.Sprintf(" Tasks[%d/%d]", TaskStats.completedTasks, TaskStats.totalTasks)
 	}
 
-	if config.Options.ShowErrorSummary {
+	if config.Options.ShowSummaryErrors {
 		errorString = fmt.Sprintf(" Errors[%d]", TaskStats.totalFailedTasks)
 	}
 
