@@ -304,17 +304,6 @@ func (task *Task) Kill() {
 
 }
 
-//func (task *Task) Tasks() (tasks []*Task) {
-//	if task.Config.CmdString != "" {
-//		tasks = append(tasks, task)
-//	} else {
-//		for nestIdx := range task.Children {
-//			tasks = append(tasks, task.Children[nestIdx])
-//		}
-//	}
-//	return tasks
-//}
-
 // String represents the task status and command output in a single line
 func (task *Task) String(terminalWidth int) string {
 

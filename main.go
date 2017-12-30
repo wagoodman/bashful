@@ -25,6 +25,7 @@ const (
 )
 
 var (
+	AllTasks                    []*Task
 	ticker                      *time.Ticker
 	exitSignaled                = false
 	startTime                   = time.Now()
@@ -125,7 +126,7 @@ func doesFileExist(name string) bool {
 
 func run(userYamlPath string) {
 	var err error
-	tasks := ReadConfig(userYamlPath)
+	AllTasks = ReadConfig(userYamlPath)
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -139,7 +140,7 @@ func run(userYamlPath string) {
 
 	fmt.Print("\033[?25l") // hide cursor
 	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
-	for _, task := range tasks {
+	for _, task := range AllTasks {
 		task.Run()
 		failedTasks = append(failedTasks, task.failedTasks...)
 
@@ -205,9 +206,9 @@ func exit(rc int) {
 
 func cleanup() {
 	// stop any running tasks
-	//for _, task := range config.TaskConfigs {
-	//	task.Kill()
-	//}
+	for _, task := range AllTasks {
+		task.Kill()
+	}
 
 	// move the cursor past the used screen realestate
 	Screen().MovePastFrame(true)
