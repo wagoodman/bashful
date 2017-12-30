@@ -269,7 +269,7 @@ func createTasks() (finalTasks []*Task) {
 
 	// now that all tasks have been inflated, set the total eta
 	for _, task := range finalTasks {
-		config.totalEtaSeconds += task.EstimatedRuntime()
+		config.totalEtaSeconds += task.EstimateRuntime()
 	}
 
 	// replace the current config with the inflated list of final tasks

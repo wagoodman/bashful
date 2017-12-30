@@ -25,6 +25,7 @@ const (
 )
 
 var (
+	ticker                      *time.Ticker
 	exitSignaled                = false
 	startTime                   = time.Now()
 	purple                      = color.ColorFunc("magenta+h")
@@ -33,9 +34,6 @@ var (
 	boldblue                    = color.ColorFunc("blue+b")
 	boldcyan                    = color.ColorFunc("cyan+b")
 	bold                        = color.ColorFunc("default+b")
-	lineDefaultTemplate, _      = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	lineParallelTemplate, _     = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
-	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Spinner}} ╰─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 	summaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 

@@ -23,51 +23,113 @@ import (
 )
 
 var (
-	ticker         *time.Ticker
-	spinner        *spin.Spinner = spin.New()
-	nextDisplayIdx               = 0
+	// spinner generates the spin icon character in front of running tasks
+	spinner        = spin.New()
+
+	// nextDisplayIdx is the next available screen row to use based off of the task / sub-task order.
+	nextDisplayIdx = 0
+
+	// lineDefaultTemplate is the string template used to display the status values of a single task with no children
+	lineDefaultTemplate, _      = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+
+	// lineParallelTemplate is the string template used to display the status values of a task that is the child of another task
+	lineParallelTemplate, _     = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+
+	// lineLastParallelTemplate is the string template used to display the status values of a task that is the LAST child of another task
+	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} ╰─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 )
 
+// TaskStats is a global struct keeping track of the number of running tasks, failed tasks, completed tasks, and total tasks
 var TaskStats struct {
+	// runningCmds indicates the number of actively running tasks
 	runningCmds      int
+
+	// completedTasks indicates the number of tasks that have finished execution (regardless of the return code value)
 	completedTasks   int
+
+	// totalFailedTasks indicates the number of tasks that have a non-zero return code
 	totalFailedTasks int
+
+	// totalTasks is the number of tasks that is expected to be run based on the user configuration
 	totalTasks       int
 }
 
-
+// Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to execute, track, and display the task.
 type Task struct {
+	// Config is the user-defined values parsed from the run yaml
 	Config               TaskConfig
+
+	// Display represents all non-config items that control how the task line should be printed to the screen
 	Display              TaskDisplay
+
+	// Command represents all non-config items used to execute and track task progress
 	Command              TaskCommand
+
+	// LogChan is a channel with event log items written to the temporary logfile
 	LogChan              chan LogItem
+
+	// LogFile is the temporary log file where all formatted stdout/stderr events are recorded
 	LogFile              *os.File
+
+	// ErrorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
 	ErrorBuffer          *bytes.Buffer
+
+	// Children is a list of all sub-tasks that should be run concurrently
 	Children             []*Task
+
+	// lastStartedTask is the index of the last child task that was started
 	lastStartedTask int
 
-	resultChan      chan CmdIR
+	// resultChan is a channel where all raw command events are queued to
+	resultChan      chan CmdEvent
+
+	// waiter is a synchronization object which returns when all child task command executions have been completed
 	waiter          sync.WaitGroup
+
+	// status is the last known status value that represents the entire list of child commands
 	status          CommandStatus
+
+	// failedTasks is a list of tasks with a non-zero return value
 	failedTasks     []*Task
 }
 
+// TaskDisplay represents all non-config items that control how the task line should be printed to the screen
 type TaskDisplay struct {
+	// Template is the single-line string template that should be used to display the status of a single task
 	Template *template.Template
+
+	// Index is the row within a screen frame to print the task template
 	Index    int
+
+	// Values holds all template values that represent the task status
 	Values   LineInfo
 }
 
+// TaskCommand represents all non-config items used to execute and track task progress
 type TaskCommand struct {
+	// Cmd is the object used to execute the given user CmdString to a sub-shell
 	Cmd              *exec.Cmd
+
+	// StartTime indicates when the Cmd was started
 	StartTime        time.Time
+
+	// StopTime indicates when the Cmd completed execution
 	StopTime         time.Time
+
+	// EstimatedRuntime indicates the expected runtime for the given command (based off of cached values from previous runs)
 	EstimatedRuntime time.Duration
+
+	// Started indicates whether the Cmd has been attempted to run
 	Started          bool
+
+	// Complete indicates whether the Cmd has been finished execution
 	Complete         bool
+
+	// ReturnCode is simply the value returned from the child process after Cmd execution
 	ReturnCode       int
 }
 
+// CommandStatus represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
 type CommandStatus int32
 
 const (
@@ -77,6 +139,7 @@ const (
 	StatusError
 )
 
+// Color returns the ansi color value represented by the given CommandStatus
 func (status CommandStatus) Color(attributes string) string {
 	switch status {
 	case StatusRunning:
@@ -95,25 +158,49 @@ func (status CommandStatus) Color(attributes string) string {
 	return "INVALID COMMAND STATUS"
 }
 
-type CmdIR struct {
+// CmdEvent represents an output from stdout/stderr during command execution or when a command has completed
+type CmdEvent struct {
+	// Task is the task which the command was run from
 	Task       *Task
+
+	// Status is the current pending/running/error/success status of the command
 	Status     CommandStatus
+
+	// Stdout is a single line from standard out (optional)
 	Stdout     string
+
+	// Stderr is a single line from standard error (optional)
 	Stderr     string
+
+	// Complete indicates if the command has exited
 	Complete   bool
+
+	// ReturnCode is the sub-process return code value upon completion
 	ReturnCode int
 }
 
+// LineInfo represents all template values that represent the task status
 type LineInfo struct {
+	// Status is the current pending/running/error/success status of the command
 	Status  string
+
+	// Title is the display name to use for the task
 	Title   string
+
+	// Msg may show any arbitrary string to the screen (such as stdout or stderr values)
 	Msg     string
-	Spinner string
-	Eta     string
+
+	// Prefix is used to place the spinner or bullet characters before the title
+	Prefix string
+
+	// Eta is the displayed estimated time to completion based on the current time
+	Eta    string
+
+	// Split can be used to "float" values to the right hand side of the screen when printing a single line
 	Split   string
 }
 
-
+// NewTask creates a new task in the context of the user configuration at a particular screen location (row)
 func NewTask(taskConfig TaskConfig, displayStartIdx int, replicaValue string) Task {
 	task := Task{Config: taskConfig}
 	task.inflate(displayStartIdx, replicaValue)
@@ -147,6 +234,7 @@ func NewTask(taskConfig TaskConfig, displayStartIdx int, replicaValue string) Ta
 	return task
 }
 
+// inflate is used by the constructor to finalize task runtime values
 func (task *Task) inflate(displayIdx int, replicaValue string) {
 	cmdString := task.Config.CmdString
 	name := task.Config.Name
@@ -185,7 +273,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 
 
-	task.resultChan= make(chan CmdIR)
+	task.resultChan= make(chan CmdEvent)
 	task.status=     StatusPending
 
 
@@ -202,6 +290,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 }
 
+// Kill will stop any running command (including child tasks) with a -9 signal
 func (task *Task) Kill() {
 	if task.Config.CmdString != "" && task.Command.Started && !task.Command.Complete {
 		syscall.Kill(-task.Command.Cmd.Process.Pid, syscall.SIGKILL)
@@ -226,6 +315,7 @@ func (task *Task) Kill() {
 //	return tasks
 //}
 
+// String represents the task status and command output in a single line
 func (task *Task) String(terminalWidth int) string {
 
 	if task.Command.Complete {
@@ -272,9 +362,9 @@ func (task *Task) String(terminalWidth int) string {
 
 	// override the current spinner to empty or a config.Options.BulletChar
 	if (!task.Command.Started || task.Command.Complete) && len(task.Children) == 0 && task.Display.Template == lineDefaultTemplate {
-		task.Display.Values.Spinner = config.Options.BulletChar
+		task.Display.Values.Prefix = config.Options.BulletChar
 	} else if task.Command.Complete {
-		task.Display.Values.Spinner = ""
+		task.Display.Values.Prefix = ""
 	}
 
 	task.Display.Values.Split = strings.Repeat(" ", splitWidth)
@@ -283,12 +373,15 @@ func (task *Task) String(terminalWidth int) string {
 	return message.String()
 }
 
+// display prints the current task string status to the screen
 func (task *Task) display() {
 	terminalWidth, _ := terminal.Width()
 	Screen().Display(task.String(int(terminalWidth)), task.Display.Index)
 }
 
-func (task *Task) EstimatedRuntime() float64 {
+
+// EstimateRuntime returns the ETA in seconds until command completion
+func (task *Task) EstimateRuntime() float64 {
 	var etaSeconds float64
 	// finalize task by appending to the set of final tasks
 	if task.Config.CmdString != "" && task.Command.EstimatedRuntime != -1 {
@@ -329,6 +422,7 @@ func (task *Task) EstimatedRuntime() float64 {
 	return etaSeconds
 }
 
+// CurrentEta returns a formatted string indicating a countdown until command completion
 func (task *Task) CurrentEta() string {
 	var eta, etaValue string
 
@@ -343,6 +437,7 @@ func (task *Task) CurrentEta() string {
 	return eta
 }
 
+// variableSplitFunc splits a bytestream based on either newline characters or by length (if the string is too long)
 func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
 
 	// Return nothing if at end of file and no data passed
@@ -376,12 +471,13 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 	return
 }
 
-func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
+// runSingleCmd executes a tasks primary command (not child task commands) and monitors command events
+func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup) {
 	logToMain("Started Task: "+task.Config.Name, INFO_FORMAT)
 
 	task.Command.StartTime = time.Now()
 
-	resultChan <- CmdIR{Task: task, Status: StatusRunning, ReturnCode: -1}
+	resultChan <- CmdEvent{Task: task, Status: StatusRunning, ReturnCode: -1}
 	waiter.Add(1)
 	defer waiter.Done()
 
@@ -424,7 +520,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 				if task.Config.EventDriven {
 					// this is event driven... (signal this event)
-					resultChan <- CmdIR{Task: task, Status: StatusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
+					resultChan <- CmdEvent{Task: task, Status: StatusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
 				} else {
 					// on a polling interval... (do not create an event)
 					task.Display.Values.Msg = blue(stdoutMsg)
@@ -439,7 +535,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 
 				if task.Config.EventDriven {
 					// either this is event driven... (signal this event)
-					resultChan <- CmdIR{Task: task, Status: StatusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
+					resultChan <- CmdEvent{Task: task, Status: StatusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
 				} else {
 					// or on a polling interval... (do not create an event)
 					task.Display.Values.Msg = red(stderrMsg)
@@ -466,7 +562,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 		} else {
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
-			resultChan <- CmdIR{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
+			resultChan <- CmdEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
 			task.LogChan <- LogItem{Name: task.Config.Name, Message: red(returnCodeMsg) + "\n"}
 			task.ErrorBuffer.WriteString(returnCodeMsg + "\n")
 		}
@@ -476,16 +572,16 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 	logToMain("Completed Task: "+task.Config.Name+" (rc: "+returnCodeMsg+")", INFO_FORMAT)
 
 	if returnCode == 0 || task.Config.IgnoreFailure {
-		resultChan <- CmdIR{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
+		resultChan <- CmdEvent{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
 	} else {
-		resultChan <- CmdIR{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
+		resultChan <- CmdEvent{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
 		if task.Config.StopOnFailure {
 			exitSignaled = true
 		}
 	}
 }
 
-
+// Pave prints the initial task (and child task) formatted status to the screen using newline characters to advance rows (not ansi control codes)
 func (task *Task) Pave() {
 	logToMain(" Pave Task: "+task.Config.Name, MAJOR_FORMAT)
 	var message bytes.Buffer
@@ -501,7 +597,7 @@ func (task *Task) Pave() {
 	// make room for the title of a parallel proc group
 	if hasHeader {
 		message.Reset()
-		lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Config.Name, Msg: "", Spinner: config.Options.BulletChar}
+		lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Config.Name, Msg: "", Prefix: config.Options.BulletChar}
 		task.Display.Template.Execute(&message, lineObj)
 		scr.DisplayHeader(message.String())
 	}
@@ -517,6 +613,8 @@ func (task *Task) Pave() {
 	}
 }
 
+
+// StartAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
 func (task *Task) StartAvailableTasks() {
 	if task.Config.CmdString != "" && !task.Command.Started && TaskStats.runningCmds < config.Options.MaxParallelCmds {
 		go task.runSingleCmd(task.resultChan, &task.waiter)
@@ -530,6 +628,7 @@ func (task *Task) StartAvailableTasks() {
 	}
 }
 
+// Completed marks a task command as being completed
 func (task *Task) Completed(rc int) {
 	task.Command.Complete = true
 	task.Command.ReturnCode = rc
@@ -540,6 +639,7 @@ func (task *Task) Completed(rc int) {
 	TaskStats.runningCmds--
 }
 
+// listenAndDisplay updates the screen frame with the latest task and child task updates as they occur (either in realtime or in a polling loop). Returns when all child processes have been completed.
 func (task *Task) listenAndDisplay() {
 	scr := Screen()
 	// just wait for stuff to come back
@@ -550,7 +650,7 @@ func (task *Task) listenAndDisplay() {
 
 			if task.Config.CmdString != "" {
 				if !task.Command.Complete && task.Command.Started {
-					task.Display.Values.Spinner = spinner.Current()
+					task.Display.Values.Prefix = spinner.Current()
 					task.Display.Values.Eta = task.CurrentEta()
 				}
 				task.display()
@@ -558,7 +658,7 @@ func (task *Task) listenAndDisplay() {
 
 			for _, taskObj := range task.Children {
 				if !taskObj.Command.Complete && taskObj.Command.Started {
-					taskObj.Display.Values.Spinner = spinner.Current()
+					taskObj.Display.Values.Prefix = spinner.Current()
 					taskObj.Display.Values.Eta = taskObj.CurrentEta()
 				}
 				taskObj.display()
@@ -592,9 +692,9 @@ func (task *Task) listenAndDisplay() {
 			}
 
 			if msgObj.Stderr != "" {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stderr, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
+				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stderr, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
 			} else {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stdout, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
+				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stdout, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
 			}
 
 			eventTask.display()
@@ -620,7 +720,7 @@ func (task *Task) listenAndDisplay() {
 
 }
 
-// TODO: this needs to be split off into more testable parts!
+// Run will run the current tasks primary command and/or all child commands. When execution has completed, the screen frame will advance.
 func (task *Task) Run() {
 
 	var message bytes.Buffer
@@ -639,7 +739,7 @@ func (task *Task) Run() {
 		if task.Config.CollapseOnCompletion && len(task.Children) > 1 {
 			collapseSummary = purple(" (" + strconv.Itoa(len(task.Children)) + " tasks hidden)")
 		}
-		task.Display.Template.Execute(&message, LineInfo{Status: task.status.Color("i"), Title: task.Config.Name + collapseSummary, Spinner: config.Options.BulletChar})
+		task.Display.Template.Execute(&message, LineInfo{Status: task.status.Color("i"), Title: task.Config.Name + collapseSummary, Prefix: config.Options.BulletChar})
 		scr.DisplayHeader(message.String())
 	}
 

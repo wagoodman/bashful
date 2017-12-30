@@ -33,7 +33,7 @@ func TestTaskString(t *testing.T) {
 		CmdString: "/bin/true",
 	}
 	task := NewTask(taskConfig, 1, "2")
-	task.Display.Values = LineInfo{Status: StatusSuccess.Color("i"), Title: task.Config.Name, Msg: "some message", Spinner: "$", Eta: "SOMEETAVALUE"}
+	task.Display.Values = LineInfo{Status: StatusSuccess.Color("i"), Title: task.Config.Name, Msg: "some message", Prefix: "$", Eta: "SOMEETAVALUE"}
 
 	testOutput = task.String(50)
 	expectedOutput = " \x1b[7;92m  \x1b[0m • some name!                som...SOMEETAVALUE"
