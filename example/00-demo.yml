@@ -27,7 +27,7 @@ x-reference-data:
 tasks:
 
   - name: Cloning Repos
-    #collapse-on-completion: true
+    collapse-on-completion: true
     parallel-tasks:
       - name: "Cloning %"
         cmd: example/scripts/random-worker.sh 1 %

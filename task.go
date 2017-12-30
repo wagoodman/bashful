@@ -215,16 +215,16 @@ func (task *Task) Kill() {
 
 }
 
-func (task *Task) Tasks() (tasks []*Task) {
-	if task.Config.CmdString != "" {
-		tasks = append(tasks, task)
-	} else {
-		for nestIdx := range task.Children {
-			tasks = append(tasks, task.Children[nestIdx])
-		}
-	}
-	return tasks
-}
+//func (task *Task) Tasks() (tasks []*Task) {
+//	if task.Config.CmdString != "" {
+//		tasks = append(tasks, task)
+//	} else {
+//		for nestIdx := range task.Children {
+//			tasks = append(tasks, task.Children[nestIdx])
+//		}
+//	}
+//	return tasks
+//}
 
 func (task *Task) String(terminalWidth int) string {
 
@@ -489,9 +489,14 @@ func (task *Task) runSingleCmd(resultChan chan CmdIR, waiter *sync.WaitGroup) {
 func (task *Task) Pave() {
 	logToMain(" Pave Task: "+task.Config.Name, MAJOR_FORMAT)
 	var message bytes.Buffer
+	hasParentCmd := task.Config.CmdString != ""
 	hasHeader := len(task.Children) > 1
+	numTasks := len(task.Children)
+	if hasParentCmd {
+		numTasks++
+	}
 	scr := Screen()
-	scr.ResetFrame(len(task.Children), hasHeader, config.Options.ShowSummaryFooter)
+	scr.ResetFrame(numTasks, hasHeader, config.Options.ShowSummaryFooter)
 
 	// make room for the title of a parallel proc group
 	if hasHeader {
@@ -501,19 +506,23 @@ func (task *Task) Pave() {
 		scr.DisplayHeader(message.String())
 	}
 
-	task.Command.Started = false
-	task.Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: task.Config.Name}
-	task.display()
+	if hasParentCmd {
+		task.Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: task.Config.Name}
+		task.display()
+	}
 
 	for line := 0; line < len(task.Children); line++ {
-		task.Children[line].Command.Started = false
 		task.Children[line].Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: task.Children[line].Config.Name}
 		task.Children[line].display()
 	}
-	time.Sleep(500*time.Millisecond)
 }
 
 func (task *Task) StartAvailableTasks() {
+	if task.Config.CmdString != "" && !task.Command.Started && TaskStats.runningCmds < config.Options.MaxParallelCmds {
+		go task.runSingleCmd(task.resultChan, &task.waiter)
+		task.Command.Started = true
+		TaskStats.runningCmds++
+	}
 	for ; TaskStats.runningCmds < config.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
 		go task.Children[task.lastStartedTask].runSingleCmd(task.resultChan, &task.waiter)
 		task.Children[task.lastStartedTask].Command.Started = true
@@ -521,15 +530,14 @@ func (task *Task) StartAvailableTasks() {
 	}
 }
 
-func (task *Task) Completed(completedTask *Task, rc int) {
-	completedTask.Command.Complete = true
-	completedTask.Command.ReturnCode = rc
-	close(completedTask.LogChan)
+func (task *Task) Completed(rc int) {
+	task.Command.Complete = true
+	task.Command.ReturnCode = rc
+	close(task.LogChan)
 
 	TaskStats.completedTasks++
 	config.commandTimeCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
 	TaskStats.runningCmds--
-	task.StartAvailableTasks()
 }
 
 func (task *Task) listenAndDisplay() {
@@ -539,6 +547,14 @@ func (task *Task) listenAndDisplay() {
 		select {
 		case <-ticker.C:
 			spinner.Next()
+
+			if task.Config.CmdString != "" {
+				if !task.Command.Complete && task.Command.Started {
+					task.Display.Values.Spinner = spinner.Current()
+					task.Display.Values.Eta = task.CurrentEta()
+				}
+				task.display()
+			}
 
 			for _, taskObj := range task.Children {
 				if !taskObj.Command.Complete && taskObj.Command.Started {
@@ -558,7 +574,8 @@ func (task *Task) listenAndDisplay() {
 
 			// update the state before displaying...
 			if msgObj.Complete {
-				task.Completed(eventTask, msgObj.ReturnCode)
+				eventTask.Completed(msgObj.ReturnCode)
+				task.StartAvailableTasks()
 				task.status = msgObj.Status
 				if msgObj.Status == StatusError {
 					// update the group status to indicate a failed subtask
@@ -609,10 +626,10 @@ func (task *Task) Run() {
 	var message bytes.Buffer
 
 	scr := Screen()
-	task.Pave()
-	task.StartAvailableTasks()
 	hasHeader := len(task.Children) > 1
 
+	task.Pave()
+	task.StartAvailableTasks()
 	task.listenAndDisplay()
 
 	// complete the proc group status
