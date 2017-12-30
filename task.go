@@ -230,7 +230,7 @@ func (task *Task) Tasks() (tasks []*Task) {
 	return tasks
 }
 
-func (task *Task) String() string {
+func (task *Task) String(terminalWidth int) string {
 
 	if task.Command.Complete {
 		task.Display.Values.Eta = ""
@@ -250,7 +250,6 @@ func (task *Task) String() string {
 
 	// display
 	var message bytes.Buffer
-	terminalWidth, _ := terminal.Width()
 
 	// get a string with the summary line without a split gap or message
 	task.Display.Values.Split = ""
@@ -259,7 +258,7 @@ func (task *Task) String() string {
 	task.Display.Template.Execute(&message, task.Display.Values)
 
 	// calculate the max width of the message and trim it
-	maxMessageWidth := int(terminalWidth) - visualLength(message.String())
+	maxMessageWidth := terminalWidth - visualLength(message.String())
 	task.Display.Values.Msg = originalMessage
 	if visualLength(task.Display.Values.Msg) > maxMessageWidth {
 		task.Display.Values.Msg = trimToVisualLength(task.Display.Values.Msg, maxMessageWidth-3) + "..."
@@ -268,7 +267,7 @@ func (task *Task) String() string {
 	// calculate a space buffer to push the eta to the right
 	message.Reset()
 	task.Display.Template.Execute(&message, task.Display.Values)
-	splitWidth := int(terminalWidth) - visualLength(message.String())
+	splitWidth := terminalWidth - visualLength(message.String())
 	if splitWidth < 0 {
 		splitWidth = 0
 	}
@@ -289,7 +288,8 @@ func (task *Task) String() string {
 }
 
 func (task *Task) display() {
-	Screen().Display(task.String(), task.Display.Index)
+	terminalWidth, _ := terminal.Width()
+	Screen().Display(task.String(int(terminalWidth)), task.Display.Index)
 }
 
 func (task *Task) EstimatedRuntime() float64 {
