@@ -125,122 +125,6 @@ func doesFileExist(name string) bool {
 	return true
 }
 
-// TODO: this needs to be split off into more testable parts!
-func RunAndDisplay(task *Task) []*Task {
-
-	var (
-		failedTasks []*Task
-		message     bytes.Buffer
-	)
-
-	tasks := task.Tasks()
-	scr := Screen()
-	scr.Pave(task, tasks)
-	taskGroup := NewTaskGroup(task, tasks)
-
-	taskGroup.StartAvailableTasks()
-	hasHeader := len(tasks) > 1
-
-	groupSuccess := StatusSuccess
-
-	// just wait for stuff to come back
-	for TaskStats.runningCmds > 0 {
-		select {
-		case <-ticker.C:
-			spinner.Next()
-
-			for _, taskObj := range tasks {
-				if !taskObj.Command.Complete && taskObj.Command.Started {
-					taskObj.Display.Values.Spinner = spinner.Current()
-					taskObj.Display.Values.Eta = taskObj.CurrentEta()
-				}
-				taskObj.display()
-			}
-
-			// update the summary line
-			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending, ""))
-			}
-
-		case msgObj := <-taskGroup.resultChan:
-			eventTask := msgObj.Task
-
-			// update the state before displaying...
-			if msgObj.Complete {
-				eventTask.Completed(msgObj.ReturnCode)
-				taskGroup.Completed(eventTask)
-				if msgObj.Status == StatusError {
-					// update the group status to indicate a failed subtask
-					groupSuccess = StatusError
-					TaskStats.totalFailedTasks++
-
-					// keep note of the failed task for an after task report
-					failedTasks = append(failedTasks, eventTask)
-				}
-			}
-
-			if eventTask.ShowTaskOutput == false {
-				msgObj.Stderr = ""
-				msgObj.Stdout = ""
-			}
-
-			if msgObj.Stderr != "" {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stderr, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
-			} else {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Name, Msg: msgObj.Stdout, Spinner: spinner.Current(), Eta: eventTask.CurrentEta()}
-			}
-
-			eventTask.display()
-
-			// update the summary line
-			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending, ""))
-			} else {
-				scr.MovePastFrame(false)
-			}
-
-			if exitSignaled {
-				break
-			}
-
-		}
-
-	}
-
-	if !exitSignaled {
-		taskGroup.waiter.Wait()
-	}
-
-	// complete the proc group status
-	if hasHeader {
-		message.Reset()
-		collapseSummary := ""
-		if task.CollapseOnCompletion && len(tasks) > 1 {
-			collapseSummary = purple(" (" + strconv.Itoa(len(tasks)) + " tasks hidden)")
-		}
-		task.Display.Template.Execute(&message, LineInfo{Status: groupSuccess.Color("i"), Title: task.Name + collapseSummary, Spinner: config.Options.BulletChar})
-		scr.DisplayHeader(message.String())
-	}
-
-	// collapse sections or parallel tasks...
-	if task.CollapseOnCompletion && len(tasks) > 1 {
-
-		// head to the top of the section (below the header) and erase all lines
-		scr.EraseBelowHeader()
-
-		// head back to the top of the section
-		scr.MoveCursorToFirstLine()
-	} else {
-		// ... or this is a single task or configured not to collapse
-
-		// instead, leave all of the text on the screen...
-		// ...reset the cursor to the bottom of the section
-		scr.MovePastFrame(false)
-	}
-
-	return failedTasks
-}
-
 func run(userYamlPath string) {
 	var err error
 	ReadConfig(userYamlPath)
@@ -262,8 +146,10 @@ func run(userYamlPath string) {
 	fmt.Print("\033[?25l") // hide cursor
 	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
 	for index := range config.Tasks {
-		newFailedTasks := RunAndDisplay(&config.Tasks[index])
-		failedTasks = append(failedTasks, newFailedTasks...)
+		task := &config.Tasks[index]
+		tg := NewTaskGroup(task)
+		tg.Run()
+		failedTasks = append(failedTasks, tg.failedTasks...)
 
 		if exitSignaled {
 			break
