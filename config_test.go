@@ -115,7 +115,7 @@ tasks:
 	}
 
 	// create and inflate tasks
-	tasks := createTasks()
+	tasks := CreateTasks()
 
 	// validate test task yaml
 
@@ -212,7 +212,7 @@ tasks:
 // 	}
 
 // 	// create and inflate tasks
-// 	createTasks()
+// 	CreateTasks()
 
 // 	// validate test task yaml
 // 	expStr, actStr := "Compiling source", config.Tasks[1].Config.Name

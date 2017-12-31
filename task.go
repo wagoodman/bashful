@@ -110,6 +110,9 @@ type TaskCommand struct {
 	// Cmd is the object used to execute the given user CmdString to a sub-shell
 	Cmd              *exec.Cmd
 
+	// TempExecFromUrl is the path to a temporary file downloaded from a TaskConfig url reference
+	TempExecFromUrl  string
+
 	// StartTime indicates when the Cmd was started
 	StartTime        time.Time
 
@@ -236,23 +239,41 @@ func NewTask(taskConfig TaskConfig, displayStartIdx int, replicaValue string) Ta
 
 // inflate is used by the constructor to finalize task runtime values
 func (task *Task) inflate(displayIdx int, replicaValue string) {
-	cmdString := task.Config.CmdString
-	name := task.Config.Name
 
-	if cmdString != "" {
+	if task.Config.CmdString != "" || task.Config.Url != "" {
 		TaskStats.totalTasks++
 	}
 
-	if cmdString == "" && len(task.Config.ParallelTasks) == 0 {
-		exitWithErrorMessage("Task '" + name + "' misconfigured (A configured task must have at least either 'cmd' or 'parallel-tasks' configured)")
+	if task.Config.CmdString == "" && len(task.Config.ParallelTasks) == 0 && task.Config.Url == "" {
+		exitWithErrorMessage("Task '" + task.Config.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
 	}
 
 	if replicaValue != "" {
-		cmdString = strings.Replace(cmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
+		task.Config.CmdString = strings.Replace(task.Config.CmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
+		task.Config.Url = strings.Replace(task.Config.Url, config.Options.ReplicaReplaceString, replicaValue, -1)
 	}
 
-	task.Config.CmdString = cmdString
+	task.inflateCmd()
 
+	task.Display.Template = lineDefaultTemplate
+	task.Display.Index = displayIdx
+	task.ErrorBuffer = bytes.NewBufferString("")
+
+	task.resultChan = make(chan CmdEvent)
+	task.status = StatusPending
+
+	// set the name
+	if task.Config.Name == "" {
+		task.Config.Name = task.Config.CmdString
+	} else {
+		if replicaValue != "" {
+			task.Config.Name = strings.Replace(task.Config.Name, config.Options.ReplicaReplaceString, replicaValue, -1)
+		}
+	}
+
+}
+
+func (task *Task) inflateCmd() {
 	if eta, ok := config.commandTimeCache[task.Config.CmdString]; ok {
 		task.Command.EstimatedRuntime = eta
 	} else {
@@ -261,33 +282,22 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 	//command := strings.Split(cmdString, " ")
 	// task.Command.Cmd = exec.Command(command[0], command[1:]...)
-	task.Command.Cmd = exec.Command(os.Getenv("SHELL"), "-c", fmt.Sprintf("\"%q\"", cmdString))
+	task.Command.Cmd = exec.Command(os.Getenv("SHELL"), "-c", fmt.Sprintf("\"%q\"", task.Config.CmdString))
 
 	// set this command as a process group
 	task.Command.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	task.Command.ReturnCode = -1
-	task.Display.Template = lineDefaultTemplate
-	task.Display.Index = displayIdx
-	task.ErrorBuffer = bytes.NewBufferString("")
+}
 
-
-
-	task.resultChan= make(chan CmdEvent)
-	task.status=     StatusPending
-
-
-
-	// set the name
-	if name == "" {
-		task.Config.Name = cmdString
-	} else {
-		if replicaValue != "" {
-			name = strings.Replace(name, config.Options.ReplicaReplaceString, replicaValue, -1)
-		}
-		task.Config.Name = name
+func (task *Task) UpdateExec(execpath string) {
+	if task.Config.CmdString == "" {
+		task.Config.CmdString = config.Options.ExecReplaceString
 	}
+	task.Config.CmdString = strings.Replace(task.Config.CmdString, config.Options.ExecReplaceString, execpath, -1)
+	task.Config.Url = strings.Replace(task.Config.Url, config.Options.ExecReplaceString, execpath, -1)
 
+	task.inflateCmd()
 }
 
 // Kill will stop any running command (including child tasks) with a -9 signal

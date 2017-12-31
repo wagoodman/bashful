@@ -84,7 +84,7 @@ config:
     stop-on-failure: true
 
     # This is the character/string that is replaced with items listed in the 'for-each' block
-    replica-replace-pattern: '?'
+    replica-replace-pattern: '<replace>'
 
     # time in milliseconds to update each task on the screen (polling interval)
     update-interval: 250

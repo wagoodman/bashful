@@ -21,13 +21,13 @@ tasks:
   # used to replicate all of the parallel tasks in this step.
   - name: Cloning Repos
     parallel-tasks:
-      - name: "Cloning ?"
+      - name: "Cloning <replace>"
         cmd: example/scripts/random-worker.sh 4 ?
         for-each: *app-names
 
   - name: Validate Environment
     parallel-tasks:
-      - name: "Validating ?"
+      - name: "Validating <replace>"
         cmd: example/scripts/random-worker.sh 1 ?
         for-each: *app-names
 
@@ -36,6 +36,6 @@ tasks:
   - name: Building and Migrating
     collapse-on-completion: false
     parallel-tasks:
-      - name: "Building ?"
+      - name: "Building <replace>"
         cmd: example/scripts/compile-something.sh 4 ?
         for-each: *app-names
