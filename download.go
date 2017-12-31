@@ -12,6 +12,8 @@ import (
 	"strings"
 	"os"
 	"path"
+	"io"
+	"crypto/md5"
 )
 
 var registry struct {
@@ -124,6 +126,18 @@ func AddRequest(task *Task) {
 	}
 }
 
+func md5OfFile(filepath string) string {
+	f, err := os.Open(filepath)
+	CheckError(err, "File does not exist: "+ filepath)
+	defer f.Close()
+
+	h := md5.New()
+	_, err = io.Copy(h, f)
+	CheckError(err, "Could not calculate md5 checksum of "+ filepath)
+
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
 func DownloadAssets(tasks []*Task) {
 	registry.urlToRequest  = make(map[string]*grab.Request)
 	registry.requestToTask = make(map[*grab.Request][]*Task)
@@ -191,6 +205,18 @@ func DownloadAssets(tasks []*Task) {
 	}
 
 	// verify provided md5 checksums are valid
+	for _, response := range responses {
+		for _, task := range registry.requestToTask[response.Request] {
+			if task.Config.Md5 != "" {
+				filename := registry.urltoFilename[response.Request.URL().String()]
+				filepath := path.Join(config.downloadCachePath, filename)
+				actualHash := md5OfFile(filepath)
+				if task.Config.Md5 != actualHash {
+					exitWithErrorMessage("Asset '"+filepath+"' checksum failed. Expected: " +task.Config.Md5+ " Got: "+actualHash)
+				}
+			}
+		}
+	}
 
 	if foundFailedAsset {
 		exitWithErrorMessage("Asset download failed")
