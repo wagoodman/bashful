@@ -16,13 +16,13 @@ x-reference-data:
 tasks:
 
   # simply run the script from the given url
-  - name: Grab Bashful Linux
+  - name: Run Bashful Linux
     url: https://github.com/wagoodman/bashful/releases/download/v0.0.5/bashful_Linux-x86_64
 
-  - name: Grab Bashful Linux
+  - name: Run Bashful Linux
     url: https://github.com/wagoodman/bashful/releases/download/v0.0.5/bashful_Linux-x86_64
 
-  - name: Grab Bashful Mac
+  - name: Run Bashful Mac
     url: https://github.com/wagoodman/bashful/releases/download/<replace>/bashful_Darwin-x86_64
     md5: 569cff0d4b216012bc7dfb9b45c6bc63
     for-each:
@@ -47,3 +47,10 @@ tasks:
         url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/random-worker.sh
         cmd: <exec> 4 <replace>
         for-each: *app-names
+
+  # This will fail to even get past the download stage
+#  - name: BAD CHEKCSUM
+#    url: https://github.com/wagoodman/bashful/releases/download/<replace>/bashful_Darwin-x86_64
+#    md5: 569cff0d4b216012bc7fjskldfsdfskdfsldfklddfsfdjfksdfnsjdkddfb9b45c6bc63
+#    for-each:
+#      - *bashful-version
