@@ -22,6 +22,7 @@ const (
 	VERSION      = "v0.0.5"
 	MAJOR_FORMAT = "cyan+b"
 	INFO_FORMAT  = "blue+b"
+	ERROR_FORMAT  = "red+b"
 )
 
 var (
@@ -126,7 +127,13 @@ func doesFileExist(name string) bool {
 
 func run(userYamlPath string) {
 	var err error
-	AllTasks = ReadConfig(userYamlPath)
+	fmt.Print("\033[?25l") // hide cursor
+
+	ReadConfig(userYamlPath)
+	AllTasks := CreateTasks()
+
+	fmt.Println(bold("Downloading referenced assets"))
+	DownloadAssets(AllTasks)
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -138,8 +145,9 @@ func run(userYamlPath string) {
 
 	var failedTasks []*Task
 
-	fmt.Print("\033[?25l") // hide cursor
+	fmt.Println(bold("Running "+userYamlPath))
 	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
+
 	for _, task := range AllTasks {
 		task.Run()
 		failedTasks = append(failedTasks, task.failedTasks...)

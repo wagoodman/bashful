@@ -29,6 +29,9 @@ var config struct {
 	// etaCachePath is the file path for per-task ETA values (derived from a tasks CmdString)
 	etaCachePath     string
 
+	// downloadCachePath is the dir path to place downloaded resources (from url references)
+	downloadCachePath string
+
 	// totalEtaSeconds is the calculated ETA given the tree of tasks to execute
 	totalEtaSeconds  float64
 
@@ -46,6 +49,9 @@ type OptionsConfig struct {
 
 	// EventDriven indicates if the screen should be updated on any/all task stdout/stderr events or on a polling schedule
 	EventDriven          bool    `yaml:"event-driven"`
+
+	// ExecReplaceString is a char or short string that is replaced with the temporary executable path when using the 'url' task config option
+	ExecReplaceString string  `yaml:"exec-replace-pattern"`
 
 	// IgnoreFailure indicates when no errors should be registered (all task command non-zero return codes will be treated as a zero return code)
 	IgnoreFailure        bool    `yaml:"ignore-failure"`
@@ -91,9 +97,10 @@ type OptionsConfig struct {
 func NewOptionsConfig() (obj OptionsConfig) {
 	obj.BulletChar = "•"
 	obj.EventDriven = true
+	obj.ExecReplaceString = "<exec>"
 	obj.IgnoreFailure = false
 	obj.MaxParallelCmds = 4
-	obj.ReplicaReplaceString = "?"
+	obj.ReplicaReplaceString = "<replace>"
 	obj.ShowFailureReport = true
 	obj.ShowSummaryErrors = false
 	obj.ShowSummaryFooter = true
@@ -142,6 +149,9 @@ type TaskConfig struct {
 	// IgnoreFailure indicates when no errors should be registered (all task command non-zero return codes will be treated as a zero return code)
 	IgnoreFailure        bool         `yaml:"ignore-failure"`
 
+	// Md5 is the expected hash value after digesting a downloaded file from a Url (only used with TaskConfig.Url)
+	Md5                  string       `yaml:"md5"`
+
 	// ParallelTasks is a list of child tasks that should be run in concurrently with one another
 	ParallelTasks        []TaskConfig `yaml:"parallel-tasks"`
 
@@ -150,6 +160,9 @@ type TaskConfig struct {
 
 	// StopOnFailure indicates to halt further program execution if a task command has a non-zero return code
 	StopOnFailure        bool         `yaml:"stop-on-failure"`
+
+	// Url is the http/https link to a bash/executable resource
+	Url                  string       `yaml:"url"`
 }
 
 // NewTaskConfig creates a new TaskConfig populated with sane default values (derived from the global OptionsConfig)
@@ -209,12 +222,16 @@ func readTimeCache() {
 	CheckError(err, "Unable to get CWD.")
 
 	config.cachePath = path.Join(cwd, ".bashful")
+	config.downloadCachePath = path.Join(config.cachePath, "downloads")
 	config.logCachePath = path.Join(config.cachePath, "logs")
 	config.etaCachePath = path.Join(config.cachePath, "eta")
 
-	// create the cache path and log dir if they do not already exist
+	// create the cache dirs if they do not already exist
 	if _, err := os.Stat(config.cachePath); os.IsNotExist(err) {
 		os.Mkdir(config.cachePath, 0755)
+	}
+	if _, err := os.Stat(config.downloadCachePath); os.IsNotExist(err) {
+		os.Mkdir(config.downloadCachePath, 0755)
 	}
 	if _, err := os.Stat(config.logCachePath); os.IsNotExist(err) {
 		os.Mkdir(config.logCachePath, 0755)
@@ -244,8 +261,8 @@ func readRunYaml(userYamlPath string) {
 	}
 }
 
-// createTasks is responsible for reading all parsed TaskConfigs and generating a list of Task runtime objects to later execute
-func createTasks() (finalTasks []*Task) {
+// CreateTasks is responsible for reading all parsed TaskConfigs and generating a list of Task runtime objects to later execute
+func CreateTasks() (finalTasks []*Task) {
 
 	// initialize tasks with default values
 	for index := range config.TaskConfigs {
@@ -277,7 +294,7 @@ func createTasks() (finalTasks []*Task) {
 }
 
 // ReadConfig is the entrypoint for all config fetching and parsing. This returns a list of Task runtime objects to execute.
-func ReadConfig(userYamlPath string) []*Task {
+func ReadConfig(userYamlPath string) {
 	readTimeCache()
 	readRunYaml(userYamlPath)
 
@@ -285,7 +302,6 @@ func ReadConfig(userYamlPath string) []*Task {
 		setupLogging()
 	}
 
-	return createTasks()
 }
 
 // Save encodes a generic object via Gob to the given file path

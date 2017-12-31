@@ -3,10 +3,6 @@ config:
   # Supress the error summary that follows
   show-failure-report: false
 
-  # This is the character/string that is replaced with items listed in the
-  # 'for-each' block
-  replica-replace-pattern: '%'
-
   # Show an eta for each task on the screen (being shown on every line 
   # with a command running)
   show-task-times: true
@@ -29,7 +25,7 @@ tasks:
   - name: Cloning Repos
     collapse-on-completion: true
     parallel-tasks:
-      - name: "Cloning %"
+      - name: "Cloning <replace>"
         cmd: example/scripts/random-worker.sh 1 %
         ignore-failure: true
         for-each: *app-names

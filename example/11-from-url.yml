@@ -1,5 +1,7 @@
 config:
   collapse-on-completion: true
+  log-path: build.log
+  stop-on-failure: false
 
 x-reference-data:
   all-apps: &app-names
@@ -9,22 +11,39 @@ x-reference-data:
     - some-awesome-app-5
     - watcher-app
 
+  bashful-version: &bashful-version v0.0.5
+
 tasks:
 
   # simply run the script from the given url
+  - name: Grab Bashful Linux
+    url: https://github.com/wagoodman/bashful/releases/download/v0.0.5/bashful_Linux-x86_64
+
+  - name: Grab Bashful Linux
+    url: https://github.com/wagoodman/bashful/releases/download/v0.0.5/bashful_Linux-x86_64
+
+  - name: Grab Bashful Mac
+    url: https://github.com/wagoodman/bashful/releases/download/<replace>/bashful_Darwin-x86_64
+    md5: 569cff0d4b216012bc7dfb9b45c6bc63
+    for-each:
+      - *bashful-version
+
   - name: Prep environment
     url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/compile-something.sh
 
+  - name: Run worker
+    url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/random-worker.sh
+
   # same as before, but we want to control arguments and such (notice the same script is not downloaded again)
-  # Note: the '?exe' reference is replaced with the downloaded scirpt path
+  # Note: the '<exec>' reference is replaced with the downloaded script path
   - name: Quick compile
     url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/compile-something.sh
-    cmd: ?exe 4
+    cmd: <exec> 4
 
   # the script is downloaded once even when invoking in in parallel (though, different commands)
   - name: Running worker
     parallel-tasks:
-      - name: "Running ?"
+      - name: "Running <replace>"
         url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/random-worker.sh
-        cmd: ?exe 4 ?
+        cmd: <exec> 4 <replace>
         for-each: *app-names
