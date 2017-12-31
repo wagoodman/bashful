@@ -89,8 +89,7 @@ func monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response
 	}
 
 	// rename file to match the last part of the url
-	expectedFilename := registry.urltoFilename[response.Request.URL().String()]
-	expectedFilepath := path.Join(config.downloadCachePath, expectedFilename)
+	expectedFilepath := registry.urltoFilename[response.Request.URL().String()]
 	if response.Filename != expectedFilepath {
 		err := os.Rename( response.Filename, expectedFilepath)
 		CheckError(err, "Unable to rename downloaded asset: "+response.Filename)
@@ -114,13 +113,30 @@ func AddRequest(task *Task) {
 		request, ok := registry.urlToRequest[task.Config.Url]
 		if !ok {
 			// never seen this url before
-			request, _ = grab.NewRequest(config.downloadCachePath, task.Config.Url)
+			filepath := path.Join(config.downloadCachePath, getFilename(task.Config.Url))
 
-			// workaround for https://github.com/cavaliercoder/grab/issues/25, allow the ability to follow 302s
-			request.IgnoreBadStatusCodes = true
+			if _, err := os.Stat(filepath); err == nil {
+				// the asset already exists, skip (unless it has an unexpected checksum)
+				if task.Config.Md5 != "" {
 
-			registry.urltoFilename[task.Config.Url] = getFilename(task.Config.Url)
-			registry.urlToRequest[task.Config.Url] = request
+					actualHash := md5OfFile(filepath)
+					if task.Config.Md5 != actualHash {
+						exitWithErrorMessage("Already downloaded asset '"+filepath+"' checksum failed. Expected: " +task.Config.Md5+ " Got: "+actualHash)
+					}
+
+				}
+				task.UpdateExec(filepath)
+				return
+			} else {
+				// the asset has not already been downloaded
+				request, _ = grab.NewRequest(filepath, task.Config.Url)
+
+				// workaround for https://github.com/cavaliercoder/grab/issues/25, allow the ability to follow 302s
+				request.IgnoreBadStatusCodes = true
+
+				registry.urltoFilename[task.Config.Url] = filepath
+				registry.urlToRequest[task.Config.Url] = request
+			}
 		}
 		registry.requestToTask[request] = append(registry.requestToTask[request], task)
 	}
@@ -208,8 +224,7 @@ func DownloadAssets(tasks []*Task) {
 	for _, response := range responses {
 		for _, task := range registry.requestToTask[response.Request] {
 			if task.Config.Md5 != "" {
-				filename := registry.urltoFilename[response.Request.URL().String()]
-				filepath := path.Join(config.downloadCachePath, filename)
+				filepath := registry.urltoFilename[response.Request.URL().String()]
 				actualHash := md5OfFile(filepath)
 				if task.Config.Md5 != actualHash {
 					exitWithErrorMessage("Asset '"+filepath+"' checksum failed. Expected: " +task.Config.Md5+ " Got: "+actualHash)
