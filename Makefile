@@ -18,7 +18,7 @@ $(TARGETS):
 	./scripts/$@
 
 run: #clean build
-	./bin/bashful run example/11-from-url.yml
+	./bin/bashful run example/08-complicated.yml
 
 clean:
 	rm -f bin/bashful build.log

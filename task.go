@@ -722,18 +722,19 @@ func (task *Task) Run() {
 
 	var message bytes.Buffer
 
-	scr := Screen()
-	hasHeader := len(task.Children) > 1
-
 	task.Pave()
 	task.StartAvailableTasks()
 	task.listenAndDisplay()
+
+	scr := Screen()
+	hasHeader := len(task.Children) > 1
+	collapseSection := task.Config.CollapseOnCompletion && len(task.Children) > 1 && len(task.failedTasks) == 0
 
 	// complete the proc group status
 	if hasHeader {
 		message.Reset()
 		collapseSummary := ""
-		if task.Config.CollapseOnCompletion && len(task.Children) > 1 {
+		if collapseSection {
 			collapseSummary = purple(" (" + strconv.Itoa(len(task.Children)) + " tasks hidden)")
 		}
 		task.Display.Template.Execute(&message, LineInfo{Status: task.status.Color("i"), Title: task.Config.Name + collapseSummary, Prefix: config.Options.BulletChar})
@@ -741,7 +742,7 @@ func (task *Task) Run() {
 	}
 
 	// collapse sections or parallel tasks...
-	if task.Config.CollapseOnCompletion && len(task.Children) > 1 {
+	if collapseSection {
 
 		// head to the top of the section (below the header) and erase all lines
 		scr.EraseBelowHeader()
