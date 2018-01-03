@@ -19,6 +19,8 @@ because I could. And because ` &>/dev/null` or ` | tee -a some.log` or `set -e; 
 - [x] Show detailed error reports when commands fail
 - [x] Log all actions taken with all stdout/stderr
 - [x] See an ETA for tasks that have already been run
+- [x] Automatically download referenced scripts and executables from urls
+- [x] Bundle set of scripts and listed resources into a single simi-portable executable
 - [ ] Interact with the mouse to see more/less tasks (https://godoc.org/github.com/nsf/termbox-go#Event)
 
 ## Installation & Usage
@@ -52,6 +54,9 @@ config:
     # a running process is read). This can be changed to only allow the 
     # screen to be updated on an interval (to accomodate slower devices).
     event-driven: false
+
+    # This is the character/string that is replaced in the cmd section of a task to reference a downloaded url
+    exec-replace-pattern: '<exec>'
 
     # the number of tasks that can run simultaneously
     max-parallel-commands: 4
@@ -102,6 +107,8 @@ tasks:
       stop-on-failure: true         # indicate if the application should continue if this cmd fails 
       parallel-tasks: ...           # a list of tasks that should be performed concurrently
       for-each: ...                 # a list of parameters used to duplicate this task
+      url: http://github.com/somescript.sh # download this url and execute it
+      md5: ae8abe98aeb389ae8b39e3434bbc    # an expected md5 checksum of the url provided
 ```
 
 **There are a ton of examples in the `examples/` dir.** Go check them out!
