@@ -137,7 +137,7 @@ func bundle(userYamlPath, outputPath string) {
 	DownloadAssets(AllTasks)
 
 	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
-
+	/*  */
 	bashfulPath, err := filepath.Abs(os.Args[0])
 	CheckError(err, "Could not find path to bashful")
 	archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.cachePath})
@@ -269,7 +269,7 @@ func run(userYamlPath string) {
 
 func exitWithErrorMessage(msg string) {
 	cleanup()
-	fmt.Println(red(msg))
+	fmt.Println(os.Stderr, red(msg))
 	os.Exit(1)
 }
 
