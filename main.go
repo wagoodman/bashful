@@ -3,17 +3,20 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"html/template"
+	"io"
 	"math/rand"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+	"text/template"
 	"time"
 
 	color "github.com/mgutz/ansi"
+	"github.com/mholt/archiver"
 	"github.com/urfave/cli"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
@@ -22,21 +25,21 @@ const (
 	VERSION      = "v0.0.5"
 	MAJOR_FORMAT = "cyan+b"
 	INFO_FORMAT  = "blue+b"
-	ERROR_FORMAT  = "red+b"
+	ERROR_FORMAT = "red+b"
 )
 
 var (
-	AllTasks                    []*Task
-	ticker                      *time.Ticker
-	exitSignaled                = false
-	startTime                   = time.Now()
-	purple                      = color.ColorFunc("magenta+h")
-	red                         = color.ColorFunc("red+h")
-	blue                        = color.ColorFunc("blue+h")
-	boldblue                    = color.ColorFunc("blue+b")
-	boldcyan                    = color.ColorFunc("cyan+b")
-	bold                        = color.ColorFunc("default+b")
-	summaryTemplate, _          = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
+	AllTasks           []*Task
+	ticker             *time.Ticker
+	exitSignaled       = false
+	startTime          = time.Now()
+	purple             = color.ColorFunc("magenta+h")
+	red                = color.ColorFunc("red+h")
+	blue               = color.ColorFunc("blue+h")
+	boldblue           = color.ColorFunc("blue+b")
+	boldcyan           = color.ColorFunc("cyan+b")
+	bold               = color.ColorFunc("default+b")
+	summaryTemplate, _ = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 
 type Summary struct {
@@ -125,6 +128,68 @@ func doesFileExist(name string) bool {
 	return true
 }
 
+func bundle(userYamlPath, outputPath string) {
+	archivePath := "bundle.tar.gz"
+	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
+
+	ReadConfig(userYamlPath)
+	AllTasks := CreateTasks()
+
+	DownloadAssets(AllTasks)
+	bashfulPath, err := filepath.Abs(os.Args[0])
+	CheckError(err, "Could not find path to bashful")
+	archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.cachePath})
+
+	execute := `#!/bin/bash
+set -eu
+export TMPDIR=$(mktemp -d /tmp/runner.XXXXXX)
+ARCHIVE=$(awk '/^__BASHFUL_ARCHIVE__/ {print NR + 1; exit 0; }' $0)
+
+tail -n+$ARCHIVE $0 | tar -xz -C $TMPDIR
+
+pushd $TMPDIR > /dev/null
+./bashful run {{.Runyaml}}
+popd > /dev/null
+rm -rf $TMPDIR 
+
+exit 0
+
+__BASHFUL_ARCHIVE__
+`
+	var buff bytes.Buffer
+	var values = struct {
+		Runyaml string
+	}{
+		Runyaml: filepath.Base(userYamlPath),
+	}
+
+	tmpl := template.New("test")
+	tmpl, err = tmpl.Parse(execute)
+	CheckError(err, "Failed to parse execute template")
+	err = tmpl.Execute(&buff, values)
+	CheckError(err, "Failed to render execute template")
+
+	runnerPath := "./runner"
+	runnerFh, err := os.Create(runnerPath)
+	CheckError(err, "Unable to create runner executable file")
+	defer runnerFh.Close()
+
+	_, err = runnerFh.Write(buff.Bytes())
+	CheckError(err, "Unable to write bootstrap script to runner executable file")
+
+	archiveFh, err := os.Open(archivePath)
+	CheckError(err, "Unable to open payload file")
+	defer archiveFh.Close()
+	defer os.Remove(archivePath)
+
+	_, err = io.Copy(runnerFh, archiveFh)
+	CheckError(err, "Unable to write payload to runner executable file")
+
+	err = os.Chmod(runnerPath, 0755)
+	CheckError(err, "Unable to change runner permissions")
+
+}
+
 func run(userYamlPath string) {
 	var err error
 	fmt.Print("\033[?25l") // hide cursor
@@ -132,7 +197,6 @@ func run(userYamlPath string) {
 	ReadConfig(userYamlPath)
 	AllTasks := CreateTasks()
 
-	fmt.Println(bold("Downloading referenced assets"))
 	DownloadAssets(AllTasks)
 
 	rand.Seed(time.Now().UnixNano())
@@ -145,7 +209,7 @@ func run(userYamlPath string) {
 
 	var failedTasks []*Task
 
-	fmt.Println(bold("Running "+userYamlPath))
+	fmt.Println(bold("Running " + userYamlPath))
 	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
 
 	for _, task := range AllTasks {
@@ -225,35 +289,97 @@ func cleanup() {
 	fmt.Print("\033[?25h") // show cursor
 }
 
+func setup() {
+	sigChannel := make(chan os.Signal, 2)
+	signal.Notify(sigChannel, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		for sig := range sigChannel {
+			if sig == syscall.SIGINT {
+				exitWithErrorMessage(red("Keyboard Interrupt"))
+			} else if sig == syscall.SIGTERM {
+				exit(0)
+			} else {
+				exitWithErrorMessage("Unknown Signal: " + sig.String())
+			}
+		}
+	}()
+}
+
 func main() {
+	// var bundlePath string
+	//app := cli.NewApp()
+	//app.Name = "bashful"
+	//app.Version = VERSION
+	//app.Usage = "Takes a yaml file containing commands and bash snipits and executes each command while showing a simple (vertical) progress bar."
+	//app.Flags = []cli.Flag{
+	//	cli.StringFlag{
+	//		Name:  "bundle, b",
+	//		Usage: "Bundle yaml and referenced resources into a single executable `FILE`",
+	//		Destination: &bundlePath,
+	//	},
+	//}
+	//app.Action = func(cliCtx *cli.Context) error {
+	//	setup()
+	//
+	//	userYamlPath := cliCtx.Args().Get(0)
+	//
+	//	fmt.Println(bundlePath)
+	//	if bundlePath != "" {
+	//		bundle(userYamlPath, bundlePath)
+	//	} else {
+	//		//if cliCtx.NArg() < 1 {
+	//		//	exitWithErrorMessage("Must provide the path to a bashful yaml file")
+	//		//} else if cliCtx.NArg() > 1 {
+	//		//	exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
+	//		//}
+	//
+	//		run(userYamlPath)
+	//	}
+	//	return nil
+	//}
+
+	setup()
+
 	app := cli.NewApp()
 	app.Name = "bashful"
 	app.Version = VERSION
 	app.Usage = "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar."
-	app.Action = func(cliCtx *cli.Context) error {
-		if cliCtx.NArg() < 1 {
-			exitWithErrorMessage("Must provide the path to a bashful yaml file")
-		} else if cliCtx.NArg() > 1 {
-			exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
-		}
-		userYamlPath := cliCtx.Args().Get(0)
-
-		sigChannel := make(chan os.Signal, 2)
-		signal.Notify(sigChannel, syscall.SIGINT, syscall.SIGTERM)
-		go func() {
-			for sig := range sigChannel {
-				if sig == syscall.SIGINT {
-					exitWithErrorMessage(red("Keyboard Interrupt"))
-				} else if sig == syscall.SIGTERM {
-					exit(0)
-				} else {
-					exitWithErrorMessage("Unknown Signal: " + sig.String())
+	app.Commands = []cli.Command{
+		{
+			Name:  "bundle",
+			Usage: "Bundle yaml and referenced resources into a single executable",
+			Action: func(cliCtx *cli.Context) error {
+				if cliCtx.NArg() < 1 {
+					exitWithErrorMessage("Must provide the path to a bashful yaml file")
+				} else if cliCtx.NArg() > 1 {
+					exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
 				}
-			}
-		}()
 
-		run(userYamlPath)
-		return nil
+				userYamlPath := cliCtx.Args().Get(0)
+				bundlePath := userYamlPath + ".bundle"
+
+				bundle(userYamlPath, bundlePath)
+
+				return nil
+			},
+		},
+		{
+			Name:  "run",
+			Usage: "Execute the given yaml file with bashful",
+			Action: func(cliCtx *cli.Context) error {
+				if cliCtx.NArg() < 1 {
+					exitWithErrorMessage("Must provide the path to a bashful yaml file")
+				} else if cliCtx.NArg() > 1 {
+					exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
+				}
+
+				userYamlPath := cliCtx.Args().Get(0)
+
+				run(userYamlPath)
+
+				return nil
+			},
+		},
 	}
 
 	app.Run(os.Args)

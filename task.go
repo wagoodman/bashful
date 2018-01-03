@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"math"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/lunixbochs/vtclean"
@@ -24,16 +24,16 @@ import (
 
 var (
 	// spinner generates the spin icon character in front of running tasks
-	spinner        = spin.New()
+	spinner = spin.New()
 
 	// nextDisplayIdx is the next available screen row to use based off of the task / sub-task order.
 	nextDisplayIdx = 0
 
 	// lineDefaultTemplate is the string template used to display the status values of a single task with no children
-	lineDefaultTemplate, _      = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineDefaultTemplate, _ = template.New("default line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 
 	// lineParallelTemplate is the string template used to display the status values of a task that is the child of another task
-	lineParallelTemplate, _     = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineParallelTemplate, _ = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 
 	// lineLastParallelTemplate is the string template used to display the status values of a task that is the LAST child of another task
 	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} ╰─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
@@ -42,55 +42,55 @@ var (
 // TaskStats is a global struct keeping track of the number of running tasks, failed tasks, completed tasks, and total tasks
 var TaskStats struct {
 	// runningCmds indicates the number of actively running tasks
-	runningCmds      int
+	runningCmds int
 
 	// completedTasks indicates the number of tasks that have finished execution (regardless of the return code value)
-	completedTasks   int
+	completedTasks int
 
 	// totalFailedTasks indicates the number of tasks that have a non-zero return code
 	totalFailedTasks int
 
 	// totalTasks is the number of tasks that is expected to be run based on the user configuration
-	totalTasks       int
+	totalTasks int
 }
 
 // Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to execute, track, and display the task.
 type Task struct {
 	// Config is the user-defined values parsed from the run yaml
-	Config               TaskConfig
+	Config TaskConfig
 
 	// Display represents all non-config items that control how the task line should be printed to the screen
-	Display              TaskDisplay
+	Display TaskDisplay
 
 	// Command represents all non-config items used to execute and track task progress
-	Command              TaskCommand
+	Command TaskCommand
 
 	// LogChan is a channel with event log items written to the temporary logfile
-	LogChan              chan LogItem
+	LogChan chan LogItem
 
 	// LogFile is the temporary log file where all formatted stdout/stderr events are recorded
-	LogFile              *os.File
+	LogFile *os.File
 
 	// ErrorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
-	ErrorBuffer          *bytes.Buffer
+	ErrorBuffer *bytes.Buffer
 
 	// Children is a list of all sub-tasks that should be run concurrently
-	Children             []*Task
+	Children []*Task
 
 	// lastStartedTask is the index of the last child task that was started
 	lastStartedTask int
 
 	// resultChan is a channel where all raw command events are queued to
-	resultChan      chan CmdEvent
+	resultChan chan CmdEvent
 
 	// waiter is a synchronization object which returns when all child task command executions have been completed
-	waiter          sync.WaitGroup
+	waiter sync.WaitGroup
 
 	// status is the last known status value that represents the entire list of child commands
-	status          CommandStatus
+	status CommandStatus
 
 	// failedTasks is a list of tasks with a non-zero return value
-	failedTasks     []*Task
+	failedTasks []*Task
 }
 
 // TaskDisplay represents all non-config items that control how the task line should be printed to the screen
@@ -99,37 +99,37 @@ type TaskDisplay struct {
 	Template *template.Template
 
 	// Index is the row within a screen frame to print the task template
-	Index    int
+	Index int
 
 	// Values holds all template values that represent the task status
-	Values   LineInfo
+	Values LineInfo
 }
 
 // TaskCommand represents all non-config items used to execute and track task progress
 type TaskCommand struct {
 	// Cmd is the object used to execute the given user CmdString to a sub-shell
-	Cmd              *exec.Cmd
+	Cmd *exec.Cmd
 
 	// TempExecFromUrl is the path to a temporary file downloaded from a TaskConfig url reference
-	TempExecFromUrl  string
+	TempExecFromUrl string
 
 	// StartTime indicates when the Cmd was started
-	StartTime        time.Time
+	StartTime time.Time
 
 	// StopTime indicates when the Cmd completed execution
-	StopTime         time.Time
+	StopTime time.Time
 
 	// EstimatedRuntime indicates the expected runtime for the given command (based off of cached values from previous runs)
 	EstimatedRuntime time.Duration
 
 	// Started indicates whether the Cmd has been attempted to run
-	Started          bool
+	Started bool
 
 	// Complete indicates whether the Cmd has been finished execution
-	Complete         bool
+	Complete bool
 
 	// ReturnCode is simply the value returned from the child process after Cmd execution
-	ReturnCode       int
+	ReturnCode int
 }
 
 // CommandStatus represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
@@ -164,19 +164,19 @@ func (status CommandStatus) Color(attributes string) string {
 // CmdEvent represents an output from stdout/stderr during command execution or when a command has completed
 type CmdEvent struct {
 	// Task is the task which the command was run from
-	Task       *Task
+	Task *Task
 
 	// Status is the current pending/running/error/success status of the command
-	Status     CommandStatus
+	Status CommandStatus
 
 	// Stdout is a single line from standard out (optional)
-	Stdout     string
+	Stdout string
 
 	// Stderr is a single line from standard error (optional)
-	Stderr     string
+	Stderr string
 
 	// Complete indicates if the command has exited
-	Complete   bool
+	Complete bool
 
 	// ReturnCode is the sub-process return code value upon completion
 	ReturnCode int
@@ -185,22 +185,22 @@ type CmdEvent struct {
 // LineInfo represents all template values that represent the task status
 type LineInfo struct {
 	// Status is the current pending/running/error/success status of the command
-	Status  string
+	Status string
 
 	// Title is the display name to use for the task
-	Title   string
+	Title string
 
 	// Msg may show any arbitrary string to the screen (such as stdout or stderr values)
-	Msg     string
+	Msg string
 
 	// Prefix is used to place the spinner or bullet characters before the title
 	Prefix string
 
 	// Eta is the displayed estimated time to completion based on the current time
-	Eta    string
+	Eta string
 
 	// Split can be used to "float" values to the right hand side of the screen when printing a single line
-	Split   string
+	Split string
 }
 
 // NewTask creates a new task in the context of the user configuration at a particular screen location (row)
@@ -377,7 +377,6 @@ func (task *Task) display() {
 	terminalWidth, _ := terminal.Width()
 	Screen().Display(task.String(int(terminalWidth)), task.Display.Index)
 }
-
 
 // EstimateRuntime returns the ETA in seconds until command completion
 func (task *Task) EstimateRuntime() float64 {
@@ -611,7 +610,6 @@ func (task *Task) Pave() {
 		task.Children[line].display()
 	}
 }
-
 
 // StartAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
 func (task *Task) StartAvailableTasks() {

@@ -1,25 +1,26 @@
 package main
 
 import (
-	"github.com/cavaliercoder/grab"
-	"github.com/gosuri/uiprogress"
-	"github.com/dustin/go-humanize"
-	"github.com/deckarep/golang-set"
+	"crypto/md5"
 	"fmt"
-	"time"
-	"sync"
+	"io"
 	"net/url"
-	"strings"
 	"os"
 	"path"
-	"io"
-	"crypto/md5"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/cavaliercoder/grab"
+	"github.com/deckarep/golang-set"
+	"github.com/dustin/go-humanize"
+	"github.com/gosuri/uiprogress"
 )
 
 var registry struct {
-	urlToRequest   map[string]*grab.Request
-	requestToTask  map[*grab.Request][]*Task
-	urltoFilename  map[string]string
+	urlToRequest  map[string]*grab.Request
+	requestToTask map[*grab.Request][]*Task
+	urltoFilename map[string]string
 }
 
 func getFilename(urlStr string) string {
@@ -50,7 +51,7 @@ func monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response
 			}
 		} else {
 
-			progressValue := 100*response.Progress()
+			progressValue := 100 * response.Progress()
 			var progress string
 			if progressValue > 100 || progressValue < 0 {
 				progress = "???%"
@@ -71,16 +72,17 @@ func monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response
 			urlStr = getFilename(urlStr)
 		}
 		if len(urlStr) > 25 {
-			urlStr = "..."+urlStr[len(urlStr)-20:]
+			urlStr = "..." + urlStr[len(urlStr)-20:]
 		}
 		return fmt.Sprintf("%-25s", urlStr)
 	})
 	t := time.NewTicker(100 * time.Millisecond)
 	defer t.Stop()
-	Loop: for {
+Loop:
+	for {
 		select {
 		case <-t.C:
-			bar.Set(int(100*response.Progress()))
+			bar.Set(int(100 * response.Progress()))
 
 		case <-response.Done:
 			bar.Set(100)
@@ -91,7 +93,7 @@ func monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response
 	// rename file to match the last part of the url
 	expectedFilepath := registry.urltoFilename[response.Request.URL().String()]
 	if response.Filename != expectedFilepath {
-		err := os.Rename( response.Filename, expectedFilepath)
+		err := os.Rename(response.Filename, expectedFilepath)
 		CheckError(err, "Unable to rename downloaded asset: "+response.Filename)
 	}
 
@@ -121,7 +123,7 @@ func AddRequest(task *Task) {
 
 					actualHash := md5OfFile(filepath)
 					if task.Config.Md5 != actualHash {
-						exitWithErrorMessage("Already downloaded asset '"+filepath+"' checksum failed. Expected: " +task.Config.Md5+ " Got: "+actualHash)
+						exitWithErrorMessage("Already downloaded asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
 					}
 
 				}
@@ -132,7 +134,7 @@ func AddRequest(task *Task) {
 				request, _ = grab.NewRequest(filepath, task.Config.Url)
 
 				// workaround for https://github.com/cavaliercoder/grab/issues/25, allow the ability to follow 302s
-				request.IgnoreBadStatusCodes = true
+				//request.IgnoreBadStatusCodes = true
 
 				registry.urltoFilename[task.Config.Url] = filepath
 				registry.urlToRequest[task.Config.Url] = request
@@ -144,18 +146,18 @@ func AddRequest(task *Task) {
 
 func md5OfFile(filepath string) string {
 	f, err := os.Open(filepath)
-	CheckError(err, "File does not exist: "+ filepath)
+	CheckError(err, "File does not exist: "+filepath)
 	defer f.Close()
 
 	h := md5.New()
 	_, err = io.Copy(h, f)
-	CheckError(err, "Could not calculate md5 checksum of "+ filepath)
+	CheckError(err, "Could not calculate md5 checksum of "+filepath)
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func DownloadAssets(tasks []*Task) {
-	registry.urlToRequest  = make(map[string]*grab.Request)
+	registry.urlToRequest = make(map[string]*grab.Request)
 	registry.requestToTask = make(map[*grab.Request][]*Task)
 	registry.urltoFilename = make(map[string]string)
 
@@ -186,6 +188,12 @@ func DownloadAssets(tasks []*Task) {
 		i++
 	}
 
+	if len(allRequests) == 0 {
+		logToMain("No assets to download", MAJOR_FORMAT)
+		return
+	}
+
+	fmt.Println(bold("Downloading referenced assets"))
 	logToMain("Downloading referenced assets", MAJOR_FORMAT)
 
 	uiprogress.Empty = ' '
@@ -199,6 +207,7 @@ func DownloadAssets(tasks []*Task) {
 	var waiter sync.WaitGroup
 	var responses []*grab.Response
 	for response := range respch {
+
 		waiter.Add(1)
 		responses = append(responses, response)
 		go monitorDownload(registry.requestToTask, response, &waiter)
@@ -227,7 +236,7 @@ func DownloadAssets(tasks []*Task) {
 				filepath := registry.urltoFilename[response.Request.URL().String()]
 				actualHash := md5OfFile(filepath)
 				if task.Config.Md5 != actualHash {
-					exitWithErrorMessage("Asset '"+filepath+"' checksum failed. Expected: " +task.Config.Md5+ " Got: "+actualHash)
+					exitWithErrorMessage("Asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
 				}
 			}
 		}
@@ -239,4 +248,3 @@ func DownloadAssets(tasks []*Task) {
 
 	logToMain("Asset download complete", MAJOR_FORMAT)
 }
-
