@@ -130,12 +130,14 @@ func doesFileExist(name string) bool {
 
 func bundle(userYamlPath, outputPath string) {
 	archivePath := "bundle.tar.gz"
-	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
 
 	ReadConfig(userYamlPath)
 	AllTasks := CreateTasks()
 
 	DownloadAssets(AllTasks)
+
+	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
+
 	bashfulPath, err := filepath.Abs(os.Args[0])
 	CheckError(err, "Could not find path to bashful")
 	archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.cachePath})
