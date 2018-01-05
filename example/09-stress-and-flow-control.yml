@@ -12,20 +12,15 @@ tasks:
   - name: Line stresser
     parallel-tasks:
       # You can control this screen update behavior on a per-task basis
-      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 10000
         event-driven: true
 
-      - cmd: example/scripts/stress-line.sh 100000
+      - cmd: example/scripts/stress-line.sh 10000
         event-driven: true
-      
-      - cmd: example/scripts/stress-line.sh 100000
-      
-      - cmd: example/scripts/stress-line.sh 100000
-      
-      - cmd: example/scripts/stress-line.sh 100000
-      
-      - cmd: example/scripts/stress-line.sh 100000
 
+      - cmd: example/scripts/stress-line.sh 10000
+
+      - cmd: example/scripts/stress-line.sh 10000
 
   - name: Character stresser
     parallel-tasks:
@@ -38,8 +33,3 @@ tasks:
       - cmd: example/scripts/stress-char.sh 10000
       
       - cmd: example/scripts/stress-char.sh 10000
-      
-      - cmd: example/scripts/stress-char.sh 10000
-      
-      - cmd: example/scripts/stress-char.sh 10000
-      

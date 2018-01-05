@@ -244,10 +244,6 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 		TaskStats.totalTasks++
 	}
 
-	if task.Config.CmdString == "" && len(task.Config.ParallelTasks) == 0 && task.Config.Url == "" {
-		exitWithErrorMessage("Task '" + task.Config.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
-	}
-
 	if replicaValue != "" {
 		task.Config.CmdString = strings.Replace(task.Config.CmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
 		task.Config.Url = strings.Replace(task.Config.Url, config.Options.ReplicaReplaceString, replicaValue, -1)

@@ -15,25 +15,25 @@ import (
 // config represents a superset of options parsed from the user yaml file (or derived from user values)
 var config struct {
 	// Options is a global set of values to be applied to all tasks
-	Options          OptionsConfig `yaml:"config"`
+	Options OptionsConfig `yaml:"config"`
 
 	// TaskConfigs is a list of task definitions and their metadata
-	TaskConfigs      []TaskConfig  `yaml:"tasks"`
+	TaskConfigs []TaskConfig `yaml:"tasks"`
 
 	// cachePath is the dir path to place any temporary files
-	cachePath        string
+	cachePath string
 
 	// logCachePath is the dir path to place temporary logs
-	logCachePath     string
+	logCachePath string
 
 	// etaCachePath is the file path for per-task ETA values (derived from a tasks CmdString)
-	etaCachePath     string
+	etaCachePath string
 
 	// downloadCachePath is the dir path to place downloaded resources (from url references)
 	downloadCachePath string
 
 	// totalEtaSeconds is the calculated ETA given the tree of tasks to execute
-	totalEtaSeconds  float64
+	totalEtaSeconds float64
 
 	// commandTimeCache is the task CmdString-to-ETASeconds for any previously run command (read from etaCachePath)
 	commandTimeCache map[string]time.Duration
@@ -42,55 +42,55 @@ var config struct {
 // OptionsConfig is the set of values to be applied to all tasks or affect general behavior
 type OptionsConfig struct {
 	// BulletChar is a character (or short string) that should prefix any displayed task name
-	BulletChar           string  `yaml:"bullet-char"`
+	BulletChar string `yaml:"bullet-char"`
 
 	// CollapseOnCompletion indicates when a task with child tasks should be "rolled up" into a single line after all tasks have been executed
-	CollapseOnCompletion bool    `yaml:"collapse-on-completion"`
+	CollapseOnCompletion bool `yaml:"collapse-on-completion"`
 
 	// EventDriven indicates if the screen should be updated on any/all task stdout/stderr events or on a polling schedule
-	EventDriven          bool    `yaml:"event-driven"`
+	EventDriven bool `yaml:"event-driven"`
 
 	// ExecReplaceString is a char or short string that is replaced with the temporary executable path when using the 'url' task config option
-	ExecReplaceString string  `yaml:"exec-replace-pattern"`
+	ExecReplaceString string `yaml:"exec-replace-pattern"`
 
 	// IgnoreFailure indicates when no errors should be registered (all task command non-zero return codes will be treated as a zero return code)
-	IgnoreFailure        bool    `yaml:"ignore-failure"`
+	IgnoreFailure bool `yaml:"ignore-failure"`
 
 	// LogPath is simply the filepath to write all main log entries
-	LogPath              string  `yaml:"log-path"`
+	LogPath string `yaml:"log-path"`
 
 	// MaxParallelCmds indicates the most number of parallel commands that should be run at any one time
-	MaxParallelCmds      int     `yaml:"max-parallel-commands"`
+	MaxParallelCmds int `yaml:"max-parallel-commands"`
 
 	// ReplicaReplaceString is a char or short string that is replaced with values given by a tasks "for-each" configuration
-	ReplicaReplaceString string  `yaml:"replica-replace-pattern"`
+	ReplicaReplaceString string `yaml:"replica-replace-pattern"`
 
 	// ShowSummaryErrors places the total number of errors in the summary footer
-	ShowSummaryErrors bool       `yaml:"show-summary-errors"`
+	ShowSummaryErrors bool `yaml:"show-summary-errors"`
 
 	// ShowSummaryFooter shows or hides the summary footer
-	ShowSummaryFooter    bool    `yaml:"show-summary-footer"`
+	ShowSummaryFooter bool `yaml:"show-summary-footer"`
 
 	// ShowFailureReport shows or hides the detailed report of all failed tasks after program execution
-	ShowFailureReport    bool    `yaml:"show-failure-report"`
+	ShowFailureReport bool `yaml:"show-failure-report"`
 
 	// ShowSummarySteps places the "[ number of steps completed / total steps]" in the summary footer
-	ShowSummarySteps bool        `yaml:"show-summary-steps"`
+	ShowSummarySteps bool `yaml:"show-summary-steps"`
 
 	// ShowSummaryTimes places the Runtime and ETA for the entire program execution in the summary footer
-	ShowSummaryTimes     bool    `yaml:"show-summary-times"`
+	ShowSummaryTimes bool `yaml:"show-summary-times"`
 
 	// ShowTaskEta places the ETA for individual tasks on each task line (only while running)
-	ShowTaskEta          bool    `yaml:"show-task-times"`
+	ShowTaskEta bool `yaml:"show-task-times"`
 
 	// ShowTaskOutput shows or hides a tasks command stdout/stderr while running
-	ShowTaskOutput       bool    `yaml:"show-task-output"`
+	ShowTaskOutput bool `yaml:"show-task-output"`
 
 	// StopOnFailure indicates to halt further program execution if a task command has a non-zero return code
-	StopOnFailure        bool    `yaml:"stop-on-failure"`
+	StopOnFailure bool `yaml:"stop-on-failure"`
 
 	// UpdateInterval is the time in seconds that the screen should be refreshed (only if EventDriven=false)
-	UpdateInterval       float64 `yaml:"update-interval"`
+	UpdateInterval float64 `yaml:"update-interval"`
 }
 
 // NewOptionsConfig creates a new OptionsConfig populated with sane default values
@@ -132,37 +132,37 @@ func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 // TaskConfig represents a task definition and all metadata (Note: this is not the task runtime object)
 type TaskConfig struct {
 	// Name is the display name of the task (if not provided, then CmdString is used)
-	Name                 string       `yaml:"name"`
+	Name string `yaml:"name"`
 
 	// CmdString is the bash command to invoke when "running" this task
-	CmdString            string       `yaml:"cmd"`
+	CmdString string `yaml:"cmd"`
 
 	// CollapseOnCompletion indicates when a task with child tasks should be "rolled up" into a single line after all tasks have been executed
-	CollapseOnCompletion bool         `yaml:"collapse-on-completion"`
+	CollapseOnCompletion bool `yaml:"collapse-on-completion"`
 
 	// EventDriven indicates if the screen should be updated on any/all task stdout/stderr events or on a polling schedule
-	EventDriven          bool         `yaml:"event-driven"`
+	EventDriven bool `yaml:"event-driven"`
 
 	// ForEach is a list of strings that will be used to make replicas if the current task (tailored Name/CmdString replacements are handled via the 'ReplicaReplaceString' option)
-	ForEach              []string     `yaml:"for-each"`
+	ForEach []string `yaml:"for-each"`
 
 	// IgnoreFailure indicates when no errors should be registered (all task command non-zero return codes will be treated as a zero return code)
-	IgnoreFailure        bool         `yaml:"ignore-failure"`
+	IgnoreFailure bool `yaml:"ignore-failure"`
 
 	// Md5 is the expected hash value after digesting a downloaded file from a Url (only used with TaskConfig.Url)
-	Md5                  string       `yaml:"md5"`
+	Md5 string `yaml:"md5"`
 
 	// ParallelTasks is a list of child tasks that should be run in concurrently with one another
-	ParallelTasks        []TaskConfig `yaml:"parallel-tasks"`
+	ParallelTasks []TaskConfig `yaml:"parallel-tasks"`
 
 	// ShowTaskOutput shows or hides a tasks command stdout/stderr while running
-	ShowTaskOutput       bool         `yaml:"show-output"`
+	ShowTaskOutput bool `yaml:"show-output"`
 
 	// StopOnFailure indicates to halt further program execution if a task command has a non-zero return code
-	StopOnFailure        bool         `yaml:"stop-on-failure"`
+	StopOnFailure bool `yaml:"stop-on-failure"`
 
 	// Url is the http/https link to a bash/executable resource
-	Url                  string       `yaml:"url"`
+	Url string `yaml:"url"`
 }
 
 // NewTaskConfig creates a new TaskConfig populated with sane default values (derived from the global OptionsConfig)
@@ -259,15 +259,36 @@ func readRunYaml(userYamlPath string) {
 		fmt.Println(err)
 		exit(1)
 	}
+
+	config.Options.validate()
+}
+
+func (options *OptionsConfig) validate() {
+
+	// ensure not too many nestings of parallel tasks has been configured
+	for _, taskConfig := range config.TaskConfigs {
+		for _, subTaskConfig := range taskConfig.ParallelTasks {
+			if len(subTaskConfig.ParallelTasks) > 0 {
+				exitWithErrorMessage("Nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
+			}
+			subTaskConfig.validate()
+		}
+		taskConfig.validate()
+	}
+}
+
+func (task *TaskConfig) validate() {
+	if task.CmdString == "" && len(task.ParallelTasks) == 0 && task.Url == "" {
+		exitWithErrorMessage("Task '" + task.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
+	}
 }
 
 // CreateTasks is responsible for reading all parsed TaskConfigs and generating a list of Task runtime objects to later execute
 func CreateTasks() (finalTasks []*Task) {
 
 	// initialize tasks with default values
-	for index := range config.TaskConfigs {
+	for _, taskConfig := range config.TaskConfigs {
 		nextDisplayIdx = 0
-		taskConfig := &config.TaskConfigs[index]
 
 		// finalize task by appending to the set of final tasks
 		if len(taskConfig.ForEach) > 0 {
@@ -275,11 +296,11 @@ func CreateTasks() (finalTasks []*Task) {
 			for _, replicaValue := range taskConfig.ForEach {
 				taskConfig.Name = taskName
 				taskConfig.CmdString = taskCmdString
-				task := NewTask(*taskConfig, nextDisplayIdx, replicaValue)
+				task := NewTask(taskConfig, nextDisplayIdx, replicaValue)
 				finalTasks = append(finalTasks, &task)
 			}
 		} else {
-			task := NewTask(*taskConfig, nextDisplayIdx, "")
+			task := NewTask(taskConfig, nextDisplayIdx, "")
 			finalTasks = append(finalTasks, &task)
 		}
 	}

@@ -18,14 +18,14 @@ tasks:
   # 'all-apps' section ('app-names' yaml anchor).
   # Notice that the '?' character is replaced with each referenced item.
 
-  - name: "Cloning ?"
-    cmd: example/scripts/random-worker.sh 4 ?
+  - name: Cloning <replace>
+    cmd: example/scripts/random-worker.sh 4 <replace>
     for-each: *app-names
 
-  - name: "Validating ?"
-    cmd: example/scripts/random-worker.sh 1 ?
+  - name: Validating <replace>
+    cmd: example/scripts/random-worker.sh 1 <replace>
     for-each: *app-names
 
-  - name: "Building ?"
-    cmd: example/scripts/compile-something.sh 4 ?
+  - name: Building <replace>
+    cmd: example/scripts/compile-something.sh 4 <replace>
     for-each: *app-names

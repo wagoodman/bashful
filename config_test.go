@@ -108,7 +108,7 @@ tasks:
 	config.commandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
 
 	// load test config yaml
-	config.Options = defaultOptions()
+	config.Options = NewOptionsConfig()
 	err := yaml.Unmarshal([]byte(simpleYamlStr), &config)
 	if err != nil {
 		t.Error("Expected no error, got error:", err)
