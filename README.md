@@ -1,43 +1,103 @@
 # bashful
-Because your bash script should be quiet and shy-like (...and not such a loud mouth). 
-
 **This is beta quality!** Use at your own risk.
+
+Use a yaml file to stitch together commands and bash snippits and run them with a bit of style. 
+Why? Because your bash script should be quiet and shy-like (...and not such a loud mouth). 
 
 ![Image](demo.gif)
 
-Use a yaml file to stitch together commands and bash snippits and run them with style!
-
-*"But why would you make this monstrosity?"* you ask...
-because I could. And because ` &>/dev/null` or ` | tee -a some.log` or `set -e; do something; set +e` is getting annoying.
+*"But why would you make this monstrosity?"* you ask... because ` &>/dev/null` and ` | tee -a some.log` and `set -e; do something; set +e` and other similar things is getting annoying. And besides... why shouldn't your bash script output look pretty?
 
 **Features:**
-- [x] Optionally run commands in parallel
-- [x] Summary of the last line from stdout/stderr printed inline with commands
-- [x] A shiny vertical progress bar
-- [x] Optionally stop when a single command fails
-- [x] Configuration yaml block to control the behavior/look & feel
-- [x] Show detailed error reports when commands fail
-- [x] Log all actions taken with all stdout/stderr
-- [x] See an ETA for tasks that have already been run
-- [x] Automatically download referenced scripts and executables from urls
+- [x] Run bash snippits ('tasks') in series or parallel
+- [x] A nice vertical progress bar to show current task status (with inline realtime stdout/stderr)
+- [x] Download url references to bash scripts and executables
 - [x] Bundle set of scripts and listed resources into a single simi-portable executable
-- [ ] Interact with the mouse to see more/less tasks (https://godoc.org/github.com/nsf/termbox-go#Event)
+- [x] Log all task stdout/stderr to a log file
+- [x] ETA for running tasks (that have already been run before)
+- [x] Configuration yaml block to control the behavior/look & feel
+- [x] Detailed error reports when commands fail
+- [x] Control which failing command should halt execution
 
 ## Installation & Usage
-```
+```bash
 go get github.com/wagoodman/bashful
-bashful <path-to-yaml-file>
 ```
 
-The contents of the yaml file are detailed in the next sections, but here is a hello world for you:
+**There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir**, but here are a few:
+
+1. The simplest of examples:
 ```yaml
 tasks:
     - cmd: echo "Hello, World!"
 ```
-**There are a ton of examples in the `examples/` dir.** Go check them out!
+To run it:
+```bash
+bashful run hello.yaml
+```
 
+2. A more realistic example: a build and deployment description
+```yaml
+# ci.yaml
+tasks:
+    - name: Building app
+      cmd: go build -ldflags '-linkmode external -extldflags -static -s'
+      tag: build
 
-## Options
+    - name: Packaging app
+      cmd: docker build -t my-awesome-app:v1 .
+      tag: build
+
+    - name: Publishing image
+      cmd: docker push my-awesome-app:v1
+      tag: deploy
+
+    - name: Deploying app
+      cmd: kubectl run my-awesome-app --image=docker.io/wagoodman/my-awesome-app:v1 --pt=80
+      tag: deploy
+```
+
+Run all of the tasks...
+```bash
+bashful run ci.yaml
+```
+
+...Or run just the build steps:
+```bash
+bashful run ci.yaml --tags build
+```
+
+3. Have an installer run things in parallel...
+```yaml
+# install.yaml
+tasks:
+    - name: Installing bridgy
+      parallel-tasks: 
+        - cmd: sudo apt-get install -y tmux sshfs
+        - cmd: pip install --user bridgy
+```
+
+...Or make an installer that downloads and runs everything it needs:
+```yaml
+# install.yaml
+tasks:
+    - name: Installing Cuda and Bazel
+      url: https://raw.githubusercontent.com/jasimpson/tensorflow-on-aws/master/toa_part_1of2.sh
+
+    - name: Installing Tensorflow
+      url: source ~/.bashrc && https://raw.githubusercontent.com/jasimpson/tensorflow-on-aws/master/toa_part_2of2.sh
+```
+
+Package up the installed into a single executable and give it to someone else to run:
+```bash
+bashful bundle install.yaml
+# now you have a new executable called "runner", which can simply be executed
+./runner
+```
+
+**There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir.** Go check them out!
+
+## Configuration Options
 Here is an exhaustive list of all of the config options (in the `config` yaml block). These options
 are global options that apply to all tasks within the yaml file:
 ```yaml
@@ -120,4 +180,35 @@ tasks:
         - else                      #      'bashful run some.yaml --only-tags something'
 ```
 
-**There are a ton of examples in the `examples/` dir.** Go check them out!
+**There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir.** Go check them out!
+
+## Runtime Options
+```
+USAGE:
+   bashful run [options] <path-to-yaml-file>
+   bashful bundle <path-to-yaml-file>
+
+COMMANDS:
+     bundle   Bundle yaml and referenced url resources into a single executable
+     run      Execute the given yaml
+
+BUNDLE OPTIONS:
+    None
+
+RUN OPTIONS:
+   --tags value       A comma delimited list of matching task tags. 
+                      If a task's tag matches *or if it is not tagged* then it will be executed (also see --only-tags).
+   --only-tags value  A comma delimited list of matching task tags. A task will only be executed if it has a matching tag.
+
+GLOBAL OPTIONS:
+   --help, -h     show help
+   --version, -v  print the version
+```
+
+## Wish list
+All feature requests are welcome! 
+- [ ] at least 70% test coverage
+- [ ] Multiple (serial) commands for a single task (`cmd: [run something, run another thing]`)
+- [ ] Multiple url references for a single task (`url: [https://someurl.com/some-script.sh, https://anotherurl.com/another-script.sh]`)
+- [ ] Allow parallel tasks within parallel tasks (really just allow deeper nesting of any kind of task)
+- [ ] Interact with the mouse to see more/less tasks (https://godoc.org/github.com/nsf/termbox-go#Event)
