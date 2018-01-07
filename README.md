@@ -100,15 +100,24 @@ The `tasks` block is an ordered list of processes to run. Each task has several 
 tasks:
     - name: my awesome command      # a title for the task
       cmd: echo "woot"              # the command to be ran (required)
+      
       collapse-on-completion: false # hide all defined 'parallel-tasks' after completion
       event-driven: true            # use a event driven or polling mechanism for displaying task stdout
       ignore-failure: false         # do not register any non-zero return code as a failure (this task will appear to never fail)
       show-output: true             # show task stdout to the screen
       stop-on-failure: true         # indicate if the application should continue if this cmd fails 
+      
       parallel-tasks: ...           # a list of tasks that should be performed concurrently
+      
       for-each: ...                 # a list of parameters used to duplicate this task
+      
       url: http://github.com/somescript.sh # download this url and execute it
       md5: ae8abe98aeb389ae8b39e3434bbc    # an expected md5 checksum of the url provided
+
+      tags: something               # one or more 'tags' that can be used to execute a sub-selection of tasks within a run yaml
+      tags:                         # e.g. 'bashful run some.yaml --tags      something' 
+        - something                 #      'bashful run some.yaml --tags      something,else'
+        - else                      #      'bashful run some.yaml --only-tags something'
 ```
 
 **There are a ton of examples in the `examples/` dir.** Go check them out!
