@@ -213,7 +213,12 @@ func run(userYamlPath string) {
 
 	tagInfo := ""
 	if len(config.Cli.RunTags) > 0 {
-		tagInfo = " with Tags: " + strings.Join(config.Cli.RunTags, ", ")
+		if config.Cli.ExecuteOnlyMatchedTags {
+			tagInfo = " with only matching tags: "
+		} else {
+			tagInfo = " with non-tagged and matching tags: "
+		}
+		tagInfo += strings.Join(config.Cli.RunTags, ", ")
 	}
 
 	fmt.Println(bold("Running " + userYamlPath + tagInfo))
