@@ -81,11 +81,14 @@ tasks:
 ```yaml
 # install.yaml
 tasks:
+    # The given url gets executed by default
     - name: Installing Cuda and Bazel
       url: https://raw.githubusercontent.com/jasimpson/tensorflow-on-aws/master/toa_part_1of2.sh
 
+    # Or you can control how the url asset (<exec>) gets used
     - name: Installing Tensorflow
-      url: source ~/.bashrc && https://raw.githubusercontent.com/jasimpson/tensorflow-on-aws/master/toa_part_2of2.sh
+      url: https://raw.githubusercontent.com/jasimpson/tensorflow-on-aws/master/toa_part_2of2.sh
+      cmd: source ~/.bashrc && <exec>
 ```
 
 Package up the installed into a single executable and give it to someone else to run:
