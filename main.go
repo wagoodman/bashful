@@ -211,8 +211,13 @@ func run(userYamlPath string) {
 
 	var failedTasks []*Task
 
-	fmt.Println(bold("Running " + userYamlPath))
-	logToMain("Running "+userYamlPath, MAJOR_FORMAT)
+	tagInfo := ""
+	if len(config.Cli.RunTags) > 0 {
+		tagInfo = " with Tags: " + strings.Join(config.Cli.RunTags, ", ")
+	}
+
+	fmt.Println(bold("Running " + userYamlPath + tagInfo))
+	logToMain("Running "+userYamlPath+tagInfo, MAJOR_FORMAT)
 
 	for _, task := range AllTasks {
 		task.Run()
@@ -368,6 +373,18 @@ func main() {
 		{
 			Name:  "run",
 			Usage: "Execute the given yaml file with bashful",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "tags",
+					Value: "",
+					Usage: "A comma delimited list of matching task tags. If a task's tag matches *or if it is not tagged* then it will be executed (also see --only-tags).",
+				},
+				cli.StringFlag{
+					Name:  "only-tags",
+					Value: "",
+					Usage: "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag.",
+				},
+			},
 			Action: func(cliCtx *cli.Context) error {
 				if cliCtx.NArg() < 1 {
 					exitWithErrorMessage("Must provide the path to a bashful yaml file")
@@ -376,6 +393,24 @@ func main() {
 				}
 
 				userYamlPath := cliCtx.Args().Get(0)
+
+				if cliCtx.String("tags") != "" && cliCtx.String("only-tags") != "" {
+					exitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
+				}
+
+				for _, value := range strings.Split(cliCtx.String("tags"), ",") {
+					if value != "" {
+						config.Cli.RunTags = append(config.Cli.RunTags, value)
+					}
+				}
+
+				for _, value := range strings.Split(cliCtx.String("only-tags"), ",") {
+					if value != "" {
+						config.Cli.ExecuteOnlyMatchedTags = true
+						config.Cli.RunTags = append(config.Cli.RunTags, value)
+					}
+				}
+				//config.Cli.RunTags = []string{"some-app1"}
 
 				run(userYamlPath)
 

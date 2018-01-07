@@ -1,0 +1,87 @@
+config:
+  collapse-on-completion: true
+
+x-reference-data:
+  all-apps: &app-names
+    - some-lib-4
+    - utilities-lib
+    - important-lib
+    - some-app1
+    - some-app3
+    - some-awesome-app-5
+    - watcher-app
+    - yup-another-app-7
+
+tasks:
+
+  - name: Cloning Repos
+    parallel-tasks:
+      - name: "Cloning <replace>"
+        cmd: example/scripts/random-error.sh 4 <replace>
+        ignore-failure: true
+        tags: <replace>
+        for-each: *app-names
+
+  - name: Validate Environment
+    parallel-tasks:
+      - cmd: example/scripts/random-worker.sh 3 <replace>
+        tags: 
+          - other
+          - <replace>
+        show-output: false
+        for-each: *app-names
+
+  - name: Installing dependencies
+    parallel-tasks:
+      - name: Installing Oracle client
+        cmd: example/scripts/random-worker.sh 3
+      - name: Installing Google chrome
+        cmd: example/scripts/random-worker.sh 4
+      - name: Installing MD helper
+        cmd: example/scripts/random-worker.sh 5
+      - name: Installing Bridgy
+        cmd: example/scripts/random-worker.sh 6
+
+  - name: Building Images
+    cmd: example/scripts/random-worker.sh 3
+
+  - name: Gathering Secrets
+    cmd: example/scripts/random-worker.sh 3
+
+  - name: Building and Migrating
+    tags: 
+      - build
+      - migrate
+    parallel-tasks:
+      - name: Building and migrating app1
+        cmd: example/scripts/random-worker.sh 10
+        tags: some-app1
+
+      - name: Building and migrating some-app3
+        cmd: example/scripts/random-worker.sh 5
+        tags: some-app3
+
+      - name: Building and migrating some-lib-4
+        cmd: example/scripts/random-worker.sh 6
+        tags: some-lib-4
+
+      - name: Building and migrating some-awesome-app-5
+        cmd: example/scripts/random-worker.sh 7
+        tags: some-awesome-app-5
+
+      - name: Building and migrating watcher-app
+        cmd: example/scripts/random-worker.sh 10
+        tags: watcher-app
+
+      - name: Building and migrating utilities-lib
+        cmd: example/scripts/random-worker.sh 12
+        tags: utilities-lib
+
+      - name: Building and migrating important-lib
+        cmd: example/scripts/random-worker.sh 1
+        tags: important-lib
+
+      - name: Building and migrating yup-another-app-7
+        cmd: example/scripts/random-worker.sh 6
+        tags: yup-another-app-7
+

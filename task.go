@@ -211,27 +211,13 @@ func NewTask(taskConfig TaskConfig, displayStartIdx int, replicaValue string) Ta
 	for subIndex := range taskConfig.ParallelTasks {
 		subTaskConfig := &taskConfig.ParallelTasks[subIndex]
 
-		if len(subTaskConfig.ForEach) > 0 {
-			subTaskName, subTaskCmdString := subTaskConfig.Name, subTaskConfig.CmdString
-			for _, subReplicaValue := range subTaskConfig.ForEach {
-				subTaskConfig.Name = subTaskName
-				subTaskConfig.CmdString = subTaskCmdString
-				subTask := NewTask(*subTaskConfig, nextDisplayIdx, subReplicaValue)
-				subTask.Display.Template = lineParallelTemplate
-
-				task.Children = append(task.Children, &subTask)
-				nextDisplayIdx++
-			}
-		} else {
-			subTask := NewTask(*subTaskConfig, nextDisplayIdx, replicaValue)
-			subTask.Display.Template = lineParallelTemplate
-
-			task.Children = append(task.Children, &subTask)
-			nextDisplayIdx++
-		}
+		subTask := NewTask(*subTaskConfig, nextDisplayIdx, replicaValue)
+		subTask.Display.Template = lineParallelTemplate
+		task.Children = append(task.Children, &subTask)
+		nextDisplayIdx++
 	}
 
-	if len(task.Children) > 1 {
+	if len(task.Children) > 0 {
 		task.Children[len(task.Children)-1].Display.Template = lineLastParallelTemplate
 	}
 	return task
@@ -244,11 +230,6 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 		TaskStats.totalTasks++
 	}
 
-	if replicaValue != "" {
-		task.Config.CmdString = strings.Replace(task.Config.CmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
-		task.Config.Url = strings.Replace(task.Config.Url, config.Options.ReplicaReplaceString, replicaValue, -1)
-	}
-
 	task.inflateCmd()
 
 	task.Display.Template = lineDefaultTemplate
@@ -257,16 +238,6 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 
 	task.resultChan = make(chan CmdEvent)
 	task.status = StatusPending
-
-	// set the name
-	if task.Config.Name == "" {
-		task.Config.Name = task.Config.CmdString
-	} else {
-		if replicaValue != "" {
-			task.Config.Name = strings.Replace(task.Config.Name, config.Options.ReplicaReplaceString, replicaValue, -1)
-		}
-	}
-
 }
 
 func (task *Task) inflateCmd() {
@@ -580,7 +551,7 @@ func (task *Task) Pave() {
 	logToMain(" Pave Task: "+task.Config.Name, MAJOR_FORMAT)
 	var message bytes.Buffer
 	hasParentCmd := task.Config.CmdString != ""
-	hasHeader := len(task.Children) > 1
+	hasHeader := len(task.Children) > 0
 	numTasks := len(task.Children)
 	if hasParentCmd {
 		numTasks++
@@ -723,8 +694,8 @@ func (task *Task) Run() {
 	task.listenAndDisplay()
 
 	scr := Screen()
-	hasHeader := len(task.Children) > 1
-	collapseSection := task.Config.CollapseOnCompletion && len(task.Children) > 1 && len(task.failedTasks) == 0
+	hasHeader := len(task.Children) > 0
+	collapseSection := task.Config.CollapseOnCompletion && hasHeader && len(task.failedTasks) == 0
 
 	// complete the proc group status
 	if hasHeader {
