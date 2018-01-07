@@ -22,13 +22,15 @@ import (
 )
 
 const (
-	VERSION      = "v0.0.5"
 	MAJOR_FORMAT = "cyan+b"
 	INFO_FORMAT  = "blue+b"
 	ERROR_FORMAT = "red+b"
 )
 
 var (
+	Version            = "No version provided"
+	GitCommit          = "No commit provided"
+	BuildTime          = "No build timestamp provided"
 	AllTasks           []*Task
 	ticker             *time.Ticker
 	exitSignaled       = false
@@ -351,10 +353,9 @@ func main() {
 	//}
 
 	setup()
-
 	app := cli.NewApp()
 	app.Name = "bashful"
-	app.Version = VERSION
+	app.Version = Version + "\nCommit: " + GitCommit + "\nBuild timestamp: " + BuildTime
 	app.Usage = "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar."
 	app.Commands = []cli.Command{
 		{

@@ -7,4 +7,4 @@ cd $(dirname $0)/..
 
 mkdir -p bin
 [ "$(uname)" != "Darwin" ] && LINKFLAGS="-linkmode external -extldflags -static -s"
-CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$VERSION $LINKFLAGS" -o bin/bashful
+CGO_ENABLED=0 go build -ldflags "-X main.Version=$VERSION -X main.GitCommit=$COMMIT -X main.BuildTime=`date -u '+%Y-%m-%d_%I:%M:%S%p'` $LINKFLAGS" -o bin/bashful
