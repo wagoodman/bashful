@@ -6,3 +6,6 @@ cd $(dirname $0)
 ./build
 ./test
 ./validate
+./tag
+./build
+./publish
