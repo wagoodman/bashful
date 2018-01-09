@@ -154,7 +154,7 @@ tail -n+$ARCHIVE $0 | tar -xz -C $TMPDIR
 pushd $TMPDIR > /dev/null
 ./bashful run {{.Runyaml}}
 popd > /dev/null
-rm -rf $TMPDIR 
+rm -rf $TMPDIR
 
 exit 0
 
@@ -276,7 +276,7 @@ func run(userYamlPath string) {
 
 	logToMain("Exiting", "")
 
-	cleanup()
+	exit(len(failedTasks))
 }
 
 func exitWithErrorMessage(msg string) {
