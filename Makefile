@@ -6,7 +6,7 @@ $(TARGETS):
 	./scripts/$@
 
 run: #clean build
-	./bin/bashful run example/11-tags.yml
+	./bin/bashful run example/11-tags.yml --tags some-app1
 
 examples:
 	./bin/bashful run example/00-demo.yml

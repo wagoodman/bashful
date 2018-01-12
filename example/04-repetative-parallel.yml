@@ -22,13 +22,13 @@ tasks:
   - name: Cloning Repos
     parallel-tasks:
       - name: "Cloning <replace>"
-        cmd: example/scripts/random-worker.sh 4 ?
+        cmd: example/scripts/random-worker.sh 4 <replace>
         for-each: *app-names
 
   - name: Validate Environment
     parallel-tasks:
       - name: "Validating <replace>"
-        cmd: example/scripts/random-worker.sh 1 ?
+        cmd: example/scripts/random-worker.sh 1 <replace>
         for-each: *app-names
 
   # You can also set the collapse (hide) feature on each section
@@ -37,5 +37,5 @@ tasks:
     collapse-on-completion: false
     parallel-tasks:
       - name: "Building <replace>"
-        cmd: example/scripts/compile-something.sh 4 ?
+        cmd: example/scripts/compile-something.sh 4 <replace>
         for-each: *app-names
