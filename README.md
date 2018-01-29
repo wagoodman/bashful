@@ -1,7 +1,7 @@
 # bashful
 **This is beta quality!** Use at your own risk.
 
-Use a yaml file to stitch together commands and bash snippits and run them with a bit of style. 
+Use a yaml file to stitch together commands and bash snippets and run them with a bit of style. 
 Why? Because your bash script should be quiet and shy-like (...and not such a loud mouth). 
 
 ![Image](demo.gif)
