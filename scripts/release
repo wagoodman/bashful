@@ -7,7 +7,8 @@ NORMAL=$(tput sgr0)
 cd $(dirname $0)
 
 ./test
-./validate
+# one day...
+#./validate
 ./tag
 
 echo "${BOLD}Releasing${NORMAL}"

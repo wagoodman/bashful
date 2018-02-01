@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eu
+set -u
 
 BOLD=$(tput bold)
 NORMAL=$(tput sgr0)
