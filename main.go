@@ -358,6 +358,11 @@ func main() {
 					Value: "",
 					Usage: "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag.",
 				},
+				cli.StringFlag{
+					Name:  "args",
+					Value: "",
+					Usage: "A comma delimited list of command-line arguments to be recerenced by commands as $1, $2....",
+				},
 			},
 			Action: func(cliCtx *cli.Context) error {
 				if cliCtx.NArg() < 1 {
@@ -384,7 +389,12 @@ func main() {
 						config.Cli.RunTags = append(config.Cli.RunTags, value)
 					}
 				}
-				//config.Cli.RunTags = []string{"some-app1"}
+
+				for _, value := range strings.Split(cliCtx.String("args"), ",") {
+					if value != "" {
+						config.Cli.Args = append(config.Cli.Args, value)
+					}
+				}
 
 				run(userYamlPath)
 

@@ -69,6 +69,30 @@ func TestRemoveOneValue(t *testing.T) {
 
 }
 
+func TestCommandArguments(t *testing.T) {
+	yamlStr := `
+tasks:
+  - cmd: command-with-args $1 $2
+    name: Arguments task
+  - cmd: all-args $*
+    name: All arguments
+`
+
+	config.Cli.Args = []string{"First", "Second"}
+	parseRunYaml([]byte(yamlStr))
+	tasks := CreateTasks()
+	if len(tasks) != 2 {
+		t.Error("Expected two tasks. Got: ", len(tasks))
+	}
+
+	if tasks[0].Config.CmdString != "command-with-args First Second" {
+		t.Error("Expected arguments to be replaced. Got: ", tasks[0].Config.CmdString)
+	}
+	if tasks[1].Config.CmdString != "all-args First Second" {
+		t.Error("Expected all arguments to be replaced. Got: ", tasks[1].Config.CmdString)
+	}
+}
+
 func TestCreateTasks_SuccessfulParse(t *testing.T) {
 	var expStr, actStr string
 	var expOpt, actOpt bool
