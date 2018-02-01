@@ -12,4 +12,5 @@ cd $(dirname $0)
 ./tag
 
 echo "${BOLD}Releasing${NORMAL}"
+cd ..
 goreleaser --rm-dist
