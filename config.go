@@ -297,13 +297,22 @@ func readTimeCache() {
 	}
 }
 
-func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
+// replaceArguments replaces the command line arguments in the given string
+func replaceArguments(source string) string {
+	replaced := source
 	for i, arg := range config.Cli.Args {
-		taskConfig.CmdString = strings.Replace(taskConfig.CmdString, fmt.Sprintf("$%v", i+1), arg, -1)
+		replaced = strings.Replace(replaced, fmt.Sprintf("$%v", i+1), arg, -1)
 	}
-	taskConfig.CmdString = strings.Replace(taskConfig.CmdString, "$*", strings.Join(config.Cli.Args, " "), -1)
+	replaced = strings.Replace(replaced, "$*", strings.Join(config.Cli.Args, " "), -1)
+	return replaced
+}
+
+func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
+	taskConfig.CmdString = replaceArguments(taskConfig.CmdString)
 	if taskConfig.Name == "" {
 		taskConfig.Name = taskConfig.CmdString
+	} else {
+		taskConfig.Name = replaceArguments(taskConfig.Name)
 	}
 
 	if len(taskConfig.ForEach) > 0 {
