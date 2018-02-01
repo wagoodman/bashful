@@ -20,3 +20,7 @@ fpm:
     - deb
     - rpm
 
+brew:
+  github:
+    owner: wagoodman
+    name: homebrew-bashful
