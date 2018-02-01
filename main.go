@@ -372,7 +372,7 @@ func main() {
 				cli.StringFlag{
 					Name:  "args",
 					Value: "",
-					Usage: "A comma delimited list of command-line arguments to be recerenced by commands as $1, $2....",
+					Usage: "A comma delimited list of command-line arguments to be referenced by commands as $1, $2 or $*",
 				},
 			},
 			Action: func(cliCtx *cli.Context) error {
