@@ -1,10 +1,27 @@
 #!/bin/bash
 set -e
-echo "Building..."
-source $(dirname $0)/version
+
+BOLD=$(tput bold)
+NORMAL=$(tput sgr0)
+
+echo "${BOLD}Building${NORMAL}"
 
 cd $(dirname $0)/..
 
-mkdir -p bin
+
+[ -n "$(git status --porcelain --untracked-files=no)" ] && DIRTY="-dirty"
+
+COMMIT=$(git rev-parse --short HEAD)
+GIT_TAG=$(git tag -l --contains HEAD | head -n 1)
+TARGET=dist/bashful
+
+if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
+    VERSION=$GIT_TAG
+else
+    VERSION="${COMMIT}${DIRTY}"
+fi
+
+mkdir -p dist
 [ "$(uname)" != "Darwin" ] && LINKFLAGS="-linkmode external -extldflags -static -s"
-CGO_ENABLED=0 go build -ldflags "-X main.Version=$VERSION -X main.GitCommit=$COMMIT -X main.BuildTime=`date -u '+%Y-%m-%d_%I:%M:%S%p'` $LINKFLAGS" -o bin/bashful
+CGO_ENABLED=0 go build -ldflags "-X main.Version=$VERSION -X main.GitCommit=$COMMIT -X main.BuildTime=`date -u '+%Y-%m-%d_%I:%M:%S%p'` $LINKFLAGS" -o $TARGET
+echo "successfully built $TARGET"

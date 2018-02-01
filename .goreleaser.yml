@@ -1,0 +1,19 @@
+release:
+  prerelease: true
+
+builds:
+  - binary: bashful
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+    ldflags: -s -w -X main.Version={{.Version}} -X main.GitCommit={{.Commit}} -X main.BuildTime={{.Date}}`.
+
+fpm:
+  license: MIT
+  homepage: https://github.com/wagoodman/bashful/
+  formats:
+    - deb
+    - rpm
+

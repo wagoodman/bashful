@@ -1,20 +1,28 @@
 #!/bin/bash
-set -e
+set -u
+
+BOLD=$(tput bold)
+NORMAL=$(tput sgr0)
+
+echo "${BOLD}Static analysis${NORMAL}"
 
 cd $(dirname $0)/..
 
-echo "Validating..."
-
+FAILED=0
 PACKAGES=". $(find . -name '*.go' | xargs -I{} dirname {} |  cut -f2 -d/ | sort -u | grep -Ev '(^\.$|.git|.trash-cache|vendor|bin)' | sed -e 's!^!./!' -e 's!$!/...!')"
 
-echo Running: go vet
+echo -e "\n${BOLD}Running: go vet${NORMAL}"
 go vet ${PACKAGES}
-echo Running: golint
+[ $? -eq 0 ] || FAILED=1
+
+echo -e "\n${BOLD}Running: golint${NORMAL}"
 for i in ${PACKAGES}; do
     if [ -n "$(golint $i | grep -v 'should have comment.*or be unexported' | tee /dev/stderr)" ]; then
-        failed=true
+        FAILED=1
     fi
 done
-test -z "$failed"
-echo Running: go fmt
+
+echo -e "\n${BOLD}Running: go fmt${NORMAL}"
 test -z "$(go fmt ${PACKAGES} | tee /dev/stderr)"
+
+[ $FAILED -eq 1 ] && exit 1

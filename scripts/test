@@ -1,11 +1,14 @@
 #!/bin/bash
-set -e
+set -eu
+
+BOLD=$(tput bold)
+NORMAL=$(tput sgr0)
+
+echo "${BOLD}Testing${NORMAL}"
 
 cd $(dirname $0)/..
 
-echo "Testing..."
-
 PACKAGES=". $(find . -name '*.go' | xargs -I{} dirname {} |  cut -f2 -d/ | sort -u | grep -Ev '(^\.$|.git|.trash-cache|vendor|bin)' | sed -e 's!^!./!' -e 's!$!/...!')"
 
-[ "${ARCH}" == "amd64" ] && RACE=-race
+[ $(arch) == "x86_64" ] && RACE=-race
 go test ${RACE} -cover -tags=test ${PACKAGES}

@@ -320,42 +320,10 @@ func setup() {
 }
 
 func main() {
-	// var bundlePath string
-	//app := cli.NewApp()
-	//app.Name = "bashful"
-	//app.Version = VERSION
-	//app.Usage = "Takes a yaml file containing commands and bash snipits and executes each command while showing a simple (vertical) progress bar."
-	//app.Flags = []cli.Flag{
-	//	cli.StringFlag{
-	//		Name:  "bundle, b",
-	//		Usage: "Bundle yaml and referenced resources into a single executable `FILE`",
-	//		Destination: &bundlePath,
-	//	},
-	//}
-	//app.Action = func(cliCtx *cli.Context) error {
-	//	setup()
-	//
-	//	userYamlPath := cliCtx.Args().Get(0)
-	//
-	//	fmt.Println(bundlePath)
-	//	if bundlePath != "" {
-	//		bundle(userYamlPath, bundlePath)
-	//	} else {
-	//		//if cliCtx.NArg() < 1 {
-	//		//	exitWithErrorMessage("Must provide the path to a bashful yaml file")
-	//		//} else if cliCtx.NArg() > 1 {
-	//		//	exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
-	//		//}
-	//
-	//		run(userYamlPath)
-	//	}
-	//	return nil
-	//}
-
 	setup()
 	app := cli.NewApp()
 	app.Name = "bashful"
-	app.Version = Version + "\nCommit: " + GitCommit + "\nBuild timestamp: " + BuildTime
+	app.Version = "Version:   " + Version + "\n   Commit:    " + GitCommit + "\n   BuildTime: " + BuildTime
 	app.Usage = "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar."
 	app.Commands = []cli.Command{
 		{
