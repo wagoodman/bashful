@@ -112,12 +112,13 @@ tasks:
       cmd: source ~/.bashrc && <exec>
 ```
 
-Package up the installed into a single executable and give it to someone else to run:
+Package up the installed into a single executable and give it to someone else to run (must be the same architecture and OS type):
 ```bash
 bashful bundle install.yaml
 # now you have a new executable called "runner", which can simply be executed
 ./runner
 ```
+*Note: the bundle feature is pretty experimental right now.*
 
 **There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir.** Go check them out!
 
