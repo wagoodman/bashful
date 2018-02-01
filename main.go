@@ -142,7 +142,7 @@ func bundle(userYamlPath, outputPath string) {
 	/*  */
 	bashfulPath, err := filepath.Abs(os.Args[0])
 	CheckError(err, "Could not find path to bashful")
-	archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.cachePath})
+	archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.CachePath})
 
 	execute := `#!/bin/bash
 set -eu
@@ -325,6 +325,14 @@ func main() {
 	app.Name = "bashful"
 	app.Version = "Version:   " + Version + "\n   Commit:    " + GitCommit + "\n   BuildTime: " + BuildTime
 	app.Usage = "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar."
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:        "cache-path",
+			Value:       "",
+			Usage:       "The path where cached files will be stored. By default '$(pwd)/.bashful' is used.",
+			Destination: &config.CachePath,
+		},
+	}
 	app.Commands = []cli.Command{
 		{
 			Name:  "bundle",
