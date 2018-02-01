@@ -247,9 +247,12 @@ func (task *Task) inflateCmd() {
 		task.Command.EstimatedRuntime = time.Duration(-1)
 	}
 
-	//command := strings.Split(cmdString, " ")
-	// task.Command.Cmd = exec.Command(command[0], command[1:]...)
-	task.Command.Cmd = exec.Command(os.Getenv("SHELL"), "-c", fmt.Sprintf("\"%q\"", task.Config.CmdString))
+	shell := os.Getenv("SHELL")
+	if len(shell) == 0 {
+		shell = "sh"
+	}
+
+	task.Command.Cmd = exec.Command(shell, "-c", fmt.Sprintf("\"%q\"", task.Config.CmdString))
 
 	// set this command as a process group
 	task.Command.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
