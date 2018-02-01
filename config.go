@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -47,6 +48,7 @@ type CliOptions struct {
 	RunTags                []string
 	RunTagSet              mapset.Set
 	ExecuteOnlyMatchedTags bool
+	Args                   []string
 }
 
 // OptionsConfig is the set of values to be applied to all tasks or affect general behavior
@@ -296,6 +298,10 @@ func readTimeCache() {
 }
 
 func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
+	for i, arg := range config.Cli.Args {
+		taskConfig.CmdString = strings.Replace(taskConfig.CmdString, fmt.Sprintf("$%v", i+1), arg, -1)
+	}
+	taskConfig.CmdString = strings.Replace(taskConfig.CmdString, "$*", strings.Join(config.Cli.Args, " "), -1)
 	if taskConfig.Name == "" {
 		taskConfig.Name = taskConfig.CmdString
 	}
