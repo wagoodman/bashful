@@ -19,11 +19,32 @@ Why? Because your bash script should be quiet and shy-like (...and not such a lo
 - [x] Detailed error reports when commands fail
 - [x] Control which failing command should halt execution
 
-## Installation & Usage
+## Installation
+**Go tools**
 ```bash
 go get github.com/wagoodman/bashful
 ```
 
+**Mac**
+```bash
+brew tap wagoodman/bashful
+brew install bashful
+```
+or download a Darwin build from the releases page.
+
+**Ubuntu/Debian**
+```bash
+wget https://github.com/wagoodman/bashful/releases/download/v0.0.10/bashful_0.0.10_linux_amd64.deb
+sudo apt install ./bashful_0.0.10_linux_amd64.deb
+```
+
+**RHEL/Centos**
+```bash
+wget https://github.com/wagoodman/bashful/releases/download/v0.0.10/bashful_0.0.10_linux_amd64.rpm
+rpm -i bashful_0.0.10_linux_amd64.rpm
+```
+
+## Getting Started
 **There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir**, but here are a few:
 
 1. The simplest of examples:
