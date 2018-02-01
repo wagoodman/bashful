@@ -277,10 +277,17 @@ func readTimeCache() {
 }
 
 func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
+	if taskConfig.Name == "" {
+		taskConfig.Name = taskConfig.CmdString
+	}
+
 	if len(taskConfig.ForEach) > 0 {
 		for _, replicaValue := range taskConfig.ForEach {
 			// make replacements of select attributes on a copy of the config
 			newConfig := *taskConfig
+
+			// ensure we don't re-inflate a replica with more replica's of itself
+			newConfig.ForEach = make([]string, 0)
 
 			if newConfig.Name == "" {
 				newConfig.Name = newConfig.CmdString
@@ -302,16 +309,12 @@ func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
 }
 
 // readRunYaml fetches and reads the user given yaml file from disk and populates the global config object
-func readRunYaml(userYamlPath string) {
+func parseRunYaml(yamlString []byte) {
 	// fetch and parse the run.yaml user file...
 	config.Options = NewOptionsConfig()
 
-	yamlString, err := ioutil.ReadFile(userYamlPath)
-
-	CheckError(err, "Unable to read yaml config.")
-
-	err = yaml.Unmarshal(yamlString, &config)
-	CheckError(err, "Error: Unable to parse '"+userYamlPath+"'")
+	err := yaml.Unmarshal(yamlString, &config)
+	CheckError(err, "Error: Unable to parse given yaml")
 
 	config.Options.validate()
 
@@ -323,6 +326,7 @@ func readRunYaml(userYamlPath string) {
 			for _, newConfig := range newTaskConfigs {
 				// insert the copy after current index
 				config.TaskConfigs = append(config.TaskConfigs[:i], append([]TaskConfig{newConfig}, config.TaskConfigs[i:]...)...)
+				i++
 			}
 			// remove current index
 			config.TaskConfigs = append(config.TaskConfigs[:i], config.TaskConfigs[i+1:]...)
@@ -439,7 +443,11 @@ func ReadConfig(userYamlPath string) {
 	}
 
 	readTimeCache()
-	readRunYaml(userYamlPath)
+
+	yamlString, err := ioutil.ReadFile(userYamlPath)
+	CheckError(err, "Unable to read yaml config.")
+
+	parseRunYaml(yamlString)
 
 	if config.Options.LogPath != "" {
 		setupLogging()

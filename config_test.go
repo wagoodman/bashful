@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	yaml "gopkg.in/yaml.v2"
-
 	"github.com/alecthomas/repr"
 )
 
@@ -85,16 +83,16 @@ tasks:
         stop-on-failure: false
         show-output: false
       - cmd: compile-something.sh 6
-      - cmd: compile-something.sh 4 ?
+      - cmd: compile-something.sh 4 <replace>
         for-each:
           - plug 4
           - plug 5
           - plug 6
-  - name: some random task name ?
+  - name: some random task name <replace>
     cmd: random-worker.sh 2
     for-each:
       - plug 3
-  - cmd: random-worker.sh 10 ?
+  - cmd: random-worker.sh 10 <replace>
     for-each:
       - plug 1
       - plug 2
@@ -108,12 +106,7 @@ tasks:
 	config.commandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
 
 	// load test config yaml
-	config.Options = NewOptionsConfig()
-	err := yaml.Unmarshal([]byte(simpleYamlStr), &config)
-	if err != nil {
-		t.Error("Expected no error, got error:", err)
-	}
-
+	parseRunYaml([]byte(simpleYamlStr))
 	// create and inflate tasks
 	tasks := CreateTasks()
 
@@ -142,7 +135,9 @@ tasks:
 	}
 
 	// check the names of the top task list
+
 	for _, taskIndex := range []int{0, 3, 4} {
+		repr.Println(tasks[taskIndex].Config)
 		expStr, actStr = tasks[taskIndex].Config.CmdString, tasks[taskIndex].Config.Name
 		if actStr != expStr {
 			t.Error("Expected name:", expStr, "got name:", actStr)
@@ -193,31 +188,3 @@ tasks:
 	}
 
 }
-
-// TODO: learn mocking in go... which framework?
-
-// func TestNoCmdGiven(t *testing.T) {
-// 	simpleYamlStr := `
-// tasks:
-//   - name: woops
-// `
-// 	// load test time cache (empty)
-// 	config.commandTimeCache = make(map[string]time.Duration)
-
-// 	// load test config yaml
-// 	config.Options = defaultOptions()
-// 	err := yaml.Unmarshal([]byte(simpleYamlStr), &config)
-// 	if err != nil {
-// 		t.Error("Expected no error, got error:", err)
-// 	}
-
-// 	// create and inflate tasks
-// 	CreateTasks()
-
-// 	// validate test task yaml
-// 	expStr, actStr := "Compiling source", config.Tasks[1].Config.Name
-// 	if actStr != expStr {
-// 		t.Error("Expected name:", expStr, "got name:", actStr)
-// 	}
-
-// }
