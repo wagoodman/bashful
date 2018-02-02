@@ -63,19 +63,19 @@ bashful run hello.yaml
 tasks:
     - name: Building app
       cmd: go build -ldflags '-linkmode external -extldflags -static -s'
-      tag: build
+      tags: build
 
     - name: Packaging app
       cmd: docker build -t my-awesome-app:v1 .
-      tag: build
+      tags: build
 
     - name: Publishing image
       cmd: docker push my-awesome-app:v1
-      tag: deploy
+      tags: deploy
 
     - name: Deploying app
       cmd: kubectl run my-awesome-app --image=docker.io/wagoodman/my-awesome-app:v1 --pt=80
-      tag: deploy
+      tags: deploy
 ```
 
 Run all of the tasks...
