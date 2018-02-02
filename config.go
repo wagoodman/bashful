@@ -23,8 +23,8 @@ var config struct {
 	// TaskConfigs is a list of task definitions and their metadata
 	TaskConfigs []TaskConfig `yaml:"tasks"`
 
-	// cachePath is the dir path to place any temporary files
-	cachePath string
+	// CachePath is the dir path to place any temporary files
+	CachePath string
 
 	// logCachePath is the dir path to place temporary logs
 	logCachePath string
@@ -250,17 +250,19 @@ func removeOneValue(slice []float64, value float64) []float64 {
 
 // readTimeCache fetches and reads a cache file from disk containing CmdString-to-ETASeconds. Note: this this must be done before fetching/parsing the run.yaml
 func readTimeCache() {
-	cwd, err := os.Getwd()
-	CheckError(err, "Unable to get CWD.")
+	if config.CachePath == "" {
+		cwd, err := os.Getwd()
+		CheckError(err, "Unable to get CWD.")
+		config.CachePath = path.Join(cwd, ".bashful")
+	}
 
-	config.cachePath = path.Join(cwd, ".bashful")
-	config.downloadCachePath = path.Join(config.cachePath, "downloads")
-	config.logCachePath = path.Join(config.cachePath, "logs")
-	config.etaCachePath = path.Join(config.cachePath, "eta")
+	config.downloadCachePath = path.Join(config.CachePath, "downloads")
+	config.logCachePath = path.Join(config.CachePath, "logs")
+	config.etaCachePath = path.Join(config.CachePath, "eta")
 
 	// create the cache dirs if they do not already exist
-	if _, err := os.Stat(config.cachePath); os.IsNotExist(err) {
-		os.Mkdir(config.cachePath, 0755)
+	if _, err := os.Stat(config.CachePath); os.IsNotExist(err) {
+		os.Mkdir(config.CachePath, 0755)
 	}
 	if _, err := os.Stat(config.downloadCachePath); os.IsNotExist(err) {
 		os.Mkdir(config.downloadCachePath, 0755)

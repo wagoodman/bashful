@@ -55,7 +55,7 @@ func removeDirContents(dir string) error {
 
 func setupLogging() {
 
-	err := os.MkdirAll(config.cachePath, 0755)
+	err := os.MkdirAll(config.CachePath, 0755)
 	if err != nil {
 		exitWithErrorMessage("\nUnable to create cache dir\n" + err.Error())
 	}
