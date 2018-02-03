@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/repr"
 )
@@ -24,7 +25,6 @@ func captureStdout(f func()) string {
 	return buf.String()
 }
 
-// TODO: rewrite this
 func TestTaskString(t *testing.T) {
 	var testOutput, expectedOutput string
 
@@ -49,4 +49,43 @@ func TestTaskString(t *testing.T) {
 		t.Error("TestTaskString (eta, truncate): Expected", repr.String(expectedOutput), "got", repr.String(testOutput))
 	}
 
+}
+
+func TestSerialTaskEnvPersistence(t *testing.T) {
+	var expStr, actStr string
+	simpleYamlStr := `
+tasks:
+  - cmd: export SOMEVAR=this 
+
+  - name: append 'is'
+    cmd: export SOMEVAR=$SOMEVAR:is
+
+  - name: append 'is'
+    parallel-tasks:
+      - cmd: export SOMEVAR=$SOMEVAR:DONTDOIT
+
+  - name: append '<replace>'
+    cmd: export SOMEVAR=$SOMEVAR:<replace>
+    for-each:
+      - working
+      - just
+  - name: append 'is'
+    cmd: eval 'export SOMEVAR=$SOMEVAR:fine'
+`
+
+	ticker = time.NewTicker(150 * time.Millisecond)
+	parseRunYaml([]byte(simpleYamlStr))
+	tasks := CreateTasks()
+	environment := map[string]string{}
+	for _, task := range tasks {
+		task.Run(environment)
+		if len(task.failedTasks) > 0 {
+			t.Error("TestSerialTaskEnvPersistence: Expected no tasks to fail")
+		}
+	}
+
+	expStr, actStr = "this:is:working:just:fine", environment["SOMEVAR"]
+	if expStr != actStr {
+		t.Error("Expected", expStr, "got", actStr)
+	}
 }
