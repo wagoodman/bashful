@@ -139,14 +139,15 @@ func bundle(userYamlPath, outputPath string) {
 	DownloadAssets(AllTasks)
 
 	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
-	/*  */
-	bashfulPath, err := filepath.Abs(os.Args[0])
+
+	bashfulPath, err := os.Executable()
 	CheckError(err, "Could not find path to bashful")
-	archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.CachePath})
+	err = archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.cachePath})
+	CheckError(err, "Unable to create bundle")
 
 	execute := `#!/bin/bash
 set -eu
-export TMPDIR=$(mktemp -d /tmp/runner.XXXXXX)
+export TMPDIR=$(mktemp -d /tmp/bashful.XXXXXX)
 ARCHIVE=$(awk '/^__BASHFUL_ARCHIVE__/ {print NR + 1; exit 0; }' $0)
 
 tail -n+$ARCHIVE $0 | tar -xz -C $TMPDIR
@@ -281,7 +282,7 @@ func run(userYamlPath string) {
 
 func exitWithErrorMessage(msg string) {
 	cleanup()
-	fmt.Println(os.Stderr, red(msg))
+	fmt.Fprintln(os.Stderr, red(msg))
 	os.Exit(1)
 }
 
