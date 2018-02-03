@@ -330,10 +330,8 @@ func main() {
 			Name:  "bundle",
 			Usage: "Bundle yaml and referenced resources into a single executable",
 			Action: func(cliCtx *cli.Context) error {
-				if cliCtx.NArg() < 1 {
+				if cliCtx.NArg() == 1 {
 					exitWithErrorMessage("Must provide the path to a bashful yaml file")
-				} else if cliCtx.NArg() > 1 {
-					exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
 				}
 
 				userYamlPath := cliCtx.Args().Get(0)
@@ -358,17 +356,10 @@ func main() {
 					Value: "",
 					Usage: "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag.",
 				},
-				cli.StringFlag{
-					Name:  "args",
-					Value: "",
-					Usage: "A comma delimited list of command-line arguments to be referenced by commands as $1, $2 or $*",
-				},
 			},
 			Action: func(cliCtx *cli.Context) error {
-				if cliCtx.NArg() < 1 {
+				if cliCtx.NArg() == 0 {
 					exitWithErrorMessage("Must provide the path to a bashful yaml file")
-				} else if cliCtx.NArg() > 1 {
-					exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
 				}
 
 				userYamlPath := cliCtx.Args().Get(0)
@@ -390,11 +381,7 @@ func main() {
 					}
 				}
 
-				for _, value := range strings.Split(cliCtx.String("args"), ",") {
-					if value != "" {
-						config.Cli.Args = append(config.Cli.Args, value)
-					}
-				}
+				config.Cli.Args = cliCtx.Args()[1:]
 
 				run(userYamlPath)
 
