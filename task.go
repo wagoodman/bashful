@@ -36,7 +36,7 @@ var (
 	lineParallelTemplate, _ = template.New("parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} ├─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 
 	// lineLastParallelTemplate is the string template used to display the status values of a task that is the LAST child of another task
-	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} ╰─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
+	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} └─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 )
 
 // TaskStats is a global struct keeping track of the number of running tasks, failed tasks, completed tasks, and total tasks
@@ -130,6 +130,12 @@ type TaskCommand struct {
 
 	// ReturnCode is simply the value returned from the child process after Cmd execution
 	ReturnCode int
+
+	// EnvReadFile is an extra pipe given to the child shell process for exfiltrating env vars back up to bashful (to provide as input for future tasks)
+	EnvReadFile *os.File
+
+	// Environment is a list of env vars from the exited child process
+	Environment map[string]string
 }
 
 // CommandStatus represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
@@ -252,12 +258,20 @@ func (task *Task) inflateCmd() {
 		shell = "sh"
 	}
 
-	task.Command.Cmd = exec.Command(shell, "-c", fmt.Sprintf("\"%q\"", task.Config.CmdString))
+	readFd, writeFd, err := os.Pipe()
+	CheckError(err, "Could not open env pipe for child shell")
+
+	task.Command.Cmd = exec.Command(shell, "-c", task.Config.CmdString+"; env >&3")
+
+	// allow the child process to provide env vars via a pipe (FD3)
+	task.Command.Cmd.ExtraFiles = []*os.File{writeFd}
+	task.Command.EnvReadFile = readFd
 
 	// set this command as a process group
 	task.Command.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	task.Command.ReturnCode = -1
+	task.Command.Environment = map[string]string{}
 }
 
 func (task *Task) UpdateExec(execpath string) {
@@ -440,7 +454,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 }
 
 // runSingleCmd executes a tasks primary command (not child task commands) and monitors command events
-func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup) {
+func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup, environment map[string]string) {
 	logToMain("Started Task: "+task.Config.Name, INFO_FORMAT)
 
 	task.Command.StartTime = time.Now()
@@ -456,6 +470,11 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup)
 
 	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := task.Command.Cmd.StderrPipe()
+
+	// copy env vars into proc
+	for k, v := range environment {
+		task.Command.Cmd.Env = append(task.Command.Cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 
 	task.Command.Cmd.Start()
 
@@ -539,6 +558,23 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup)
 
 	logToMain("Completed Task: "+task.Config.Name+" (rc: "+returnCodeMsg+")", INFO_FORMAT)
 
+	// close the write end of the pipe since the child shell is positively no longer writting to it
+	task.Command.Cmd.ExtraFiles[0].Close()
+	data, err := ioutil.ReadAll(task.Command.EnvReadFile)
+	CheckError(err, "Could not read env vars from child shell")
+
+	if environment != nil {
+		lines := strings.Split(string(data[:]), "\n")
+		for _, line := range lines {
+			fields := strings.SplitN(strings.TrimSpace(line), "=", 2)
+			if len(fields) == 2 {
+				environment[fields[0]] = fields[1]
+			} else if len(fields) == 1 {
+				environment[fields[0]] = ""
+			}
+		}
+	}
+
 	if returnCode == 0 || task.Config.IgnoreFailure {
 		resultChan <- CmdEvent{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
 	} else {
@@ -551,7 +587,6 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup)
 
 // Pave prints the initial task (and child task) formatted status to the screen using newline characters to advance rows (not ansi control codes)
 func (task *Task) Pave() {
-	logToMain(" Pave Task: "+task.Config.Name, MAJOR_FORMAT)
 	var message bytes.Buffer
 	hasParentCmd := task.Config.CmdString != ""
 	hasHeader := len(task.Children) > 0
@@ -582,14 +617,14 @@ func (task *Task) Pave() {
 }
 
 // StartAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
-func (task *Task) StartAvailableTasks() {
+func (task *Task) StartAvailableTasks(environment map[string]string) {
 	if task.Config.CmdString != "" && !task.Command.Started && TaskStats.runningCmds < config.Options.MaxParallelCmds {
-		go task.runSingleCmd(task.resultChan, &task.waiter)
+		go task.runSingleCmd(task.resultChan, &task.waiter, environment)
 		task.Command.Started = true
 		TaskStats.runningCmds++
 	}
 	for ; TaskStats.runningCmds < config.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
-		go task.Children[task.lastStartedTask].runSingleCmd(task.resultChan, &task.waiter)
+		go task.Children[task.lastStartedTask].runSingleCmd(task.resultChan, &task.waiter, nil)
 		task.Children[task.lastStartedTask].Command.Started = true
 		TaskStats.runningCmds++
 	}
@@ -607,7 +642,7 @@ func (task *Task) Completed(rc int) {
 }
 
 // listenAndDisplay updates the screen frame with the latest task and child task updates as they occur (either in realtime or in a polling loop). Returns when all child processes have been completed.
-func (task *Task) listenAndDisplay() {
+func (task *Task) listenAndDisplay(environment map[string]string) {
 	scr := Screen()
 	// just wait for stuff to come back
 	for TaskStats.runningCmds > 0 {
@@ -642,7 +677,7 @@ func (task *Task) listenAndDisplay() {
 			// update the state before displaying...
 			if msgObj.Complete {
 				eventTask.Completed(msgObj.ReturnCode)
-				task.StartAvailableTasks()
+				task.StartAvailableTasks(environment)
 				task.status = msgObj.Status
 				if msgObj.Status == StatusError {
 					// update the group status to indicate a failed subtask
@@ -688,13 +723,13 @@ func (task *Task) listenAndDisplay() {
 }
 
 // Run will run the current tasks primary command and/or all child commands. When execution has completed, the screen frame will advance.
-func (task *Task) Run() {
+func (task *Task) Run(environment map[string]string) {
 
 	var message bytes.Buffer
 
 	task.Pave()
-	task.StartAvailableTasks()
-	task.listenAndDisplay()
+	task.StartAvailableTasks(environment)
+	task.listenAndDisplay(environment)
 
 	scr := Screen()
 	hasHeader := len(task.Children) > 0
