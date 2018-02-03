@@ -1,4 +1,4 @@
-# If you have repetative tasks being done with the same commands/scripts
+# If you have repetitive tasks being done with the same commands/scripts
 # but simply different parameters, then you can use yaml anchors to reference
 # the parameters in a separate section.
 x-reference-data:

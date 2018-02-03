@@ -12,8 +12,8 @@ examples:
 	./bin/bashful run example/00-demo.yml
 	./bin/bashful run example/01-simple.yml
 	./bin/bashful run example/02-simple-and-pretty.yml
-	./bin/bashful run example/03-repetative.yml
-	./bin/bashful run example/04-repetative-parallel.yml
+	./bin/bashful run example/03-repetitive.yml
+	./bin/bashful run example/04-repetitive-parallel.yml
 	./bin/bashful run example/05-minimal.yml
 	./bin/bashful run example/06-with-errors.yml
 	./bin/bashful run example/07-from-url.yml
