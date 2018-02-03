@@ -110,8 +110,8 @@ type TaskCommand struct {
 	// Cmd is the object used to execute the given user CmdString to a sub-shell
 	Cmd *exec.Cmd
 
-	// TempExecFromUrl is the path to a temporary file downloaded from a TaskConfig url reference
-	TempExecFromUrl string
+	// TempExecFromURL is the path to a temporary file downloaded from a TaskConfig url reference
+	TempExecFromURL string
 
 	// StartTime indicates when the Cmd was started
 	StartTime time.Time
@@ -142,25 +142,25 @@ type TaskCommand struct {
 type CommandStatus int32
 
 const (
-	StatusRunning CommandStatus = iota
-	StatusPending
-	StatusSuccess
-	StatusError
+	statusRunning CommandStatus = iota
+	statusPending
+	statusSuccess
+	statusError
 )
 
 // Color returns the ansi color value represented by the given CommandStatus
 func (status CommandStatus) Color(attributes string) string {
 	switch status {
-	case StatusRunning:
+	case statusRunning:
 		return color.ColorCode("22+" + attributes) //28
 
-	case StatusPending:
+	case statusPending:
 		return color.ColorCode("22+" + attributes)
 
-	case StatusSuccess:
+	case statusSuccess:
 		return color.ColorCode("green+h" + attributes)
 
-	case StatusError:
+	case statusError:
 		return color.ColorCode("red+h" + attributes)
 
 	}
@@ -210,7 +210,7 @@ type LineInfo struct {
 }
 
 // NewTask creates a new task in the context of the user configuration at a particular screen location (row)
-func NewTask(taskConfig TaskConfig, displayStartIdx int, replicaValue string) Task {
+func NewTask(taskConfig TaskConfig, displayStartIdx int, replicaValue string) *Task {
 	task := Task{Config: taskConfig}
 	task.inflate(displayStartIdx, replicaValue)
 
@@ -219,20 +219,20 @@ func NewTask(taskConfig TaskConfig, displayStartIdx int, replicaValue string) Ta
 
 		subTask := NewTask(*subTaskConfig, nextDisplayIdx, replicaValue)
 		subTask.Display.Template = lineParallelTemplate
-		task.Children = append(task.Children, &subTask)
+		task.Children = append(task.Children, subTask)
 		nextDisplayIdx++
 	}
 
 	if len(task.Children) > 0 {
 		task.Children[len(task.Children)-1].Display.Template = lineLastParallelTemplate
 	}
-	return task
+	return &task
 }
 
 // inflate is used by the constructor to finalize task runtime values
 func (task *Task) inflate(displayIdx int, replicaValue string) {
 
-	if task.Config.CmdString != "" || task.Config.Url != "" {
+	if task.Config.CmdString != "" || task.Config.URL != "" {
 		TaskStats.totalTasks++
 	}
 
@@ -243,7 +243,7 @@ func (task *Task) inflate(displayIdx int, replicaValue string) {
 	task.ErrorBuffer = bytes.NewBufferString("")
 
 	task.resultChan = make(chan CmdEvent)
-	task.status = StatusPending
+	task.status = statusPending
 }
 
 func (task *Task) inflateCmd() {
@@ -259,7 +259,7 @@ func (task *Task) inflateCmd() {
 	}
 
 	readFd, writeFd, err := os.Pipe()
-	CheckError(err, "Could not open env pipe for child shell")
+	checkError(err, "Could not open env pipe for child shell")
 
 	task.Command.Cmd = exec.Command(shell, "-c", task.Config.CmdString+"; env >&3")
 
@@ -274,12 +274,12 @@ func (task *Task) inflateCmd() {
 	task.Command.Environment = map[string]string{}
 }
 
-func (task *Task) UpdateExec(execpath string) {
+func (task *Task) updateExec(execpath string) {
 	if task.Config.CmdString == "" {
 		task.Config.CmdString = config.Options.ExecReplaceString
 	}
 	task.Config.CmdString = strings.Replace(task.Config.CmdString, config.Options.ExecReplaceString, execpath, -1)
-	task.Config.Url = strings.Replace(task.Config.Url, config.Options.ExecReplaceString, execpath, -1)
+	task.Config.URL = strings.Replace(task.Config.URL, config.Options.ExecReplaceString, execpath, -1)
 
 	task.inflateCmd()
 }
@@ -303,7 +303,7 @@ func (task *Task) String(terminalWidth int) string {
 
 	if task.Command.Complete {
 		task.Display.Values.Eta = ""
-		if task.Command.ReturnCode != 0 && task.Config.IgnoreFailure == false {
+		if task.Command.ReturnCode != 0 && !task.Config.IgnoreFailure {
 			task.Display.Values.Msg = red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
 		}
 	}
@@ -359,7 +359,7 @@ func (task *Task) String(terminalWidth int) string {
 // display prints the current task string status to the screen
 func (task *Task) display() {
 	terminalWidth, _ := terminal.Width()
-	Screen().Display(task.String(int(terminalWidth)), task.Display.Index)
+	newScreen().Display(task.String(int(terminalWidth)), task.Display.Index)
 }
 
 // EstimateRuntime returns the ETA in seconds until command completion
@@ -385,7 +385,7 @@ func (task *Task) EstimateRuntime() float64 {
 				// select the first task to stop
 				remainingParallelTasks++
 				minEndSecond, _, err := MinMax(taskEndSecond)
-				CheckError(err, "No min eta for empty array!")
+				checkError(err, "No min eta for empty array!")
 				taskEndSecond = removeOneValue(taskEndSecond, minEndSecond)
 				currentSecond = minEndSecond
 			}
@@ -395,7 +395,7 @@ func (task *Task) EstimateRuntime() float64 {
 			remainingParallelTasks--
 
 			_, maxEndSecond, err := MinMax(taskEndSecond)
-			CheckError(err, "No max eta for empty array!")
+			checkError(err, "No max eta for empty array!")
 			maxParallelEstimatedRuntime = math.Max(maxParallelEstimatedRuntime, maxEndSecond)
 		}
 
@@ -455,18 +455,18 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 // runSingleCmd executes a tasks primary command (not child task commands) and monitors command events
 func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup, environment map[string]string) {
-	logToMain("Started Task: "+task.Config.Name, INFO_FORMAT)
+	logToMain("Started Task: "+task.Config.Name, infoFormat)
 
 	task.Command.StartTime = time.Now()
 
-	resultChan <- CmdEvent{Task: task, Status: StatusRunning, ReturnCode: -1}
+	resultChan <- CmdEvent{Task: task, Status: statusRunning, ReturnCode: -1}
 	waiter.Add(1)
 	defer waiter.Done()
 
 	tempFile, _ := ioutil.TempFile(config.logCachePath, "")
 	task.LogFile = tempFile
 	task.LogChan = make(chan LogItem)
-	go SingleLogger(task.LogChan, task.Config.Name, tempFile.Name())
+	go singleLogger(task.LogChan, task.Config.Name, tempFile.Name())
 
 	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := task.Command.Cmd.StderrPipe()
@@ -478,9 +478,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 
 	task.Command.Cmd.Start()
 
-	var readPipe func(chan string, io.ReadCloser)
-
-	readPipe = func(resultChan chan string, pipe io.ReadCloser) {
+	readPipe := func(resultChan chan string, pipe io.ReadCloser) {
 		defer close(resultChan)
 
 		scanner := bufio.NewScanner(pipe)
@@ -507,7 +505,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 
 				if task.Config.EventDriven {
 					// this is event driven... (signal this event)
-					resultChan <- CmdEvent{Task: task, Status: StatusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
+					resultChan <- CmdEvent{Task: task, Status: statusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
 				} else {
 					// on a polling interval... (do not create an event)
 					task.Display.Values.Msg = blue(stdoutMsg)
@@ -522,7 +520,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 
 				if task.Config.EventDriven {
 					// either this is event driven... (signal this event)
-					resultChan <- CmdEvent{Task: task, Status: StatusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
+					resultChan <- CmdEvent{Task: task, Status: statusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
 				} else {
 					// or on a polling interval... (do not create an event)
 					task.Display.Values.Msg = red(stderrMsg)
@@ -549,19 +547,19 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 		} else {
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
-			resultChan <- CmdEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
+			resultChan <- CmdEvent{Task: task, Status: statusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
 			task.LogChan <- LogItem{Name: task.Config.Name, Message: red(returnCodeMsg) + "\n"}
 			task.ErrorBuffer.WriteString(returnCodeMsg + "\n")
 		}
 	}
 	task.Command.StopTime = time.Now()
 
-	logToMain("Completed Task: "+task.Config.Name+" (rc: "+returnCodeMsg+")", INFO_FORMAT)
+	logToMain("Completed Task: "+task.Config.Name+" (rc: "+returnCodeMsg+")", infoFormat)
 
 	// close the write end of the pipe since the child shell is positively no longer writting to it
 	task.Command.Cmd.ExtraFiles[0].Close()
 	data, err := ioutil.ReadAll(task.Command.EnvReadFile)
-	CheckError(err, "Could not read env vars from child shell")
+	checkError(err, "Could not read env vars from child shell")
 
 	if environment != nil {
 		lines := strings.Split(string(data[:]), "\n")
@@ -576,9 +574,9 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 	}
 
 	if returnCode == 0 || task.Config.IgnoreFailure {
-		resultChan <- CmdEvent{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
+		resultChan <- CmdEvent{Task: task, Status: statusSuccess, Complete: true, ReturnCode: returnCode}
 	} else {
-		resultChan <- CmdEvent{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
+		resultChan <- CmdEvent{Task: task, Status: statusError, Complete: true, ReturnCode: returnCode}
 		if task.Config.StopOnFailure {
 			exitSignaled = true
 		}
@@ -594,24 +592,24 @@ func (task *Task) Pave() {
 	if hasParentCmd {
 		numTasks++
 	}
-	scr := Screen()
+	scr := newScreen()
 	scr.ResetFrame(numTasks, hasHeader, config.Options.ShowSummaryFooter)
 
 	// make room for the title of a parallel proc group
 	if hasHeader {
 		message.Reset()
-		lineObj := LineInfo{Status: StatusRunning.Color("i"), Title: task.Config.Name, Msg: "", Prefix: config.Options.BulletChar}
+		lineObj := LineInfo{Status: statusRunning.Color("i"), Title: task.Config.Name, Msg: "", Prefix: config.Options.BulletChar}
 		task.Display.Template.Execute(&message, lineObj)
 		scr.DisplayHeader(message.String())
 	}
 
 	if hasParentCmd {
-		task.Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: task.Config.Name}
+		task.Display.Values = LineInfo{Status: statusPending.Color("i"), Title: task.Config.Name}
 		task.display()
 	}
 
 	for line := 0; line < len(task.Children); line++ {
-		task.Children[line].Display.Values = LineInfo{Status: StatusPending.Color("i"), Title: task.Children[line].Config.Name}
+		task.Children[line].Display.Values = LineInfo{Status: statusPending.Color("i"), Title: task.Children[line].Config.Name}
 		task.Children[line].display()
 	}
 }
@@ -643,8 +641,9 @@ func (task *Task) Completed(rc int) {
 
 // listenAndDisplay updates the screen frame with the latest task and child task updates as they occur (either in realtime or in a polling loop). Returns when all child processes have been completed.
 func (task *Task) listenAndDisplay(environment map[string]string) {
-	scr := Screen()
+	scr := newScreen()
 	// just wait for stuff to come back
+WhileRunningCommands:
 	for TaskStats.runningCmds > 0 {
 		select {
 		case <-ticker.C:
@@ -668,7 +667,7 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending, ""))
+				scr.DisplayFooter(footer(statusPending, ""))
 			}
 
 		case msgObj := <-task.resultChan:
@@ -679,7 +678,7 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 				eventTask.Completed(msgObj.ReturnCode)
 				task.StartAvailableTasks(environment)
 				task.status = msgObj.Status
-				if msgObj.Status == StatusError {
+				if msgObj.Status == statusError {
 					// update the group status to indicate a failed subtask
 					TaskStats.totalFailedTasks++
 
@@ -688,7 +687,7 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 				}
 			}
 
-			if eventTask.Config.ShowTaskOutput == false {
+			if !eventTask.Config.ShowTaskOutput {
 				msgObj.Stderr = ""
 				msgObj.Stdout = ""
 			}
@@ -703,13 +702,13 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 
 			// update the summary line
 			if config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(StatusPending, ""))
+				scr.DisplayFooter(footer(statusPending, ""))
 			} else {
 				scr.MovePastFrame(false)
 			}
 
 			if exitSignaled {
-				break
+				break WhileRunningCommands
 			}
 
 		}
@@ -731,7 +730,7 @@ func (task *Task) Run(environment map[string]string) {
 	task.StartAvailableTasks(environment)
 	task.listenAndDisplay(environment)
 
-	scr := Screen()
+	scr := newScreen()
 	hasHeader := len(task.Children) > 0
 	collapseSection := task.Config.CollapseOnCompletion && hasHeader && len(task.failedTasks) == 0
 

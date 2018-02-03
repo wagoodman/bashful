@@ -42,6 +42,7 @@ var config struct {
 	commandTimeCache map[string]time.Duration
 }
 
+// CliOptions is the exhaustive set of all command line options available on bashful
 type CliOptions struct {
 	RunTags                []string
 	RunTagSet              mapset.Set
@@ -171,11 +172,11 @@ type TaskConfig struct {
 	StopOnFailure bool `yaml:"stop-on-failure"`
 
 	// Tags is a list of strings that is used to filter down which task are run at runtime
-	Tags   StringArray `yaml:"tags"`
+	Tags   stringArray `yaml:"tags"`
 	TagSet mapset.Set
 
-	// Url is the http/https link to a bash/executable resource
-	Url string `yaml:"url"`
+	// URL is the http/https link to a bash/executable resource
+	URL string `yaml:"url"`
 }
 
 // NewTaskConfig creates a new TaskConfig populated with sane default values (derived from the global OptionsConfig)
@@ -201,10 +202,10 @@ func (taskConfig *TaskConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	return nil
 }
 
-type StringArray []string
+type stringArray []string
 
 // allow passing a single value or multiple values into a yaml string (e.g. `tags: thing` or `{tags: [thing1, thing2]}`)
-func (a *StringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (a *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var multi []string
 	err := unmarshal(&multi)
 	if err != nil {
@@ -252,7 +253,7 @@ func removeOneValue(slice []float64, value float64) []float64 {
 func readTimeCache() {
 	if config.CachePath == "" {
 		cwd, err := os.Getwd()
-		CheckError(err, "Unable to get CWD.")
+		checkError(err, "Unable to get CWD.")
 		config.CachePath = path.Join(cwd, ".bashful")
 	}
 
@@ -274,7 +275,7 @@ func readTimeCache() {
 	config.commandTimeCache = make(map[string]time.Duration)
 	if doesFileExist(config.etaCachePath) {
 		err := Load(config.etaCachePath, &config.commandTimeCache)
-		CheckError(err, "Unable to load command eta cache.")
+		checkError(err, "Unable to load command eta cache.")
 	}
 }
 
@@ -296,9 +297,9 @@ func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
 			}
 			newConfig.Name = strings.Replace(newConfig.Name, config.Options.ReplicaReplaceString, replicaValue, -1)
 			newConfig.CmdString = strings.Replace(newConfig.CmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
-			newConfig.Url = strings.Replace(newConfig.Url, config.Options.ReplicaReplaceString, replicaValue, -1)
+			newConfig.URL = strings.Replace(newConfig.URL, config.Options.ReplicaReplaceString, replicaValue, -1)
 
-			newConfig.Tags = make(StringArray, len(taskConfig.Tags))
+			newConfig.Tags = make(stringArray, len(taskConfig.Tags))
 			for k := range taskConfig.Tags {
 				newConfig.Tags[k] = strings.Replace(taskConfig.Tags[k], config.Options.ReplicaReplaceString, replicaValue, -1)
 			}
@@ -316,7 +317,7 @@ func parseRunYaml(yamlString []byte) {
 	config.Options = NewOptionsConfig()
 
 	err := yaml.Unmarshal(yamlString, &config)
-	CheckError(err, "Error: Unable to parse given yaml")
+	checkError(err, "Error: Unable to parse given yaml")
 
 	config.Options.validate()
 
@@ -411,7 +412,7 @@ func (options *OptionsConfig) validate() {
 }
 
 func (taskConfig *TaskConfig) validate() {
-	if taskConfig.CmdString == "" && len(taskConfig.ParallelTasks) == 0 && taskConfig.Url == "" {
+	if taskConfig.CmdString == "" && len(taskConfig.ParallelTasks) == 0 && taskConfig.URL == "" {
 		exitWithErrorMessage("Task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
 	}
 }
@@ -425,7 +426,7 @@ func CreateTasks() (finalTasks []*Task) {
 
 		// finalize task by appending to the set of final tasks
 		task := NewTask(taskConfig, nextDisplayIdx, "")
-		finalTasks = append(finalTasks, &task)
+		finalTasks = append(finalTasks, task)
 	}
 
 	// now that all tasks have been inflated, set the total eta
@@ -447,7 +448,7 @@ func ReadConfig(userYamlPath string) {
 	readTimeCache()
 
 	yamlString, err := ioutil.ReadFile(userYamlPath)
-	CheckError(err, "Unable to read yaml config.")
+	checkError(err, "Unable to read yaml config.")
 
 	parseRunYaml(yamlString)
 
