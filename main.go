@@ -227,8 +227,12 @@ func run(userYamlPath string) {
 	fmt.Println(bold("Running " + userYamlPath + tagInfo))
 	logToMain("Running "+userYamlPath+tagInfo, MAJOR_FORMAT)
 
+	// Since this is an empty map, no env vars will be loaded explicitly into the first exec.Command
+	// which will cause the current processes env vars to be loaded instead
+	environment := map[string]string{}
+
 	for _, task := range AllTasks {
-		task.Run()
+		task.Run(environment)
 		failedTasks = append(failedTasks, task.failedTasks...)
 
 		if exitSignaled {
@@ -260,10 +264,10 @@ func run(userYamlPath string) {
 		for _, task := range failedTasks {
 
 			buffer.WriteString("\n")
-			buffer.WriteString(bold(red("⏺ Failed task: ")) + bold(task.Config.Name) + "\n")
+			buffer.WriteString(bold(red("• Failed task: ")) + bold(task.Config.Name) + "\n")
 			buffer.WriteString(red("  ├─ command: ") + task.Config.CmdString + "\n")
 			buffer.WriteString(red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode) + "\n")
-			buffer.WriteString(red("  ╰─ stderr: ") + task.ErrorBuffer.String() + "\n")
+			buffer.WriteString(red("  └─ stderr: ") + task.ErrorBuffer.String() + "\n")
 
 		}
 		logToMain(buffer.String(), "")
