@@ -25,7 +25,7 @@ var registry struct {
 
 func getFilename(urlStr string) string {
 	uri, err := url.Parse(urlStr)
-	CheckError(err, "Unable to parse URI")
+	checkError(err, "Unable to parse URI")
 
 	pathElements := strings.Split(uri.Path, "/")
 
@@ -44,30 +44,27 @@ func monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response
 		if response.IsComplete() {
 			if response.HTTPResponse.StatusCode > 399 || response.HTTPResponse.StatusCode < 200 {
 				return red("Failed!")
-			} else {
-				return fmt.Sprintf("%7s [%v]",
-					"100.00%",
-					humanize.Bytes(uint64(size)))
 			}
-		} else {
-
-			progressValue := 100 * response.Progress()
-			var progress string
-			if progressValue > 100 || progressValue < 0 {
-				progress = "???%"
-			} else {
-				progress = fmt.Sprintf("%.2f%%", progressValue)
-			}
-
-			return fmt.Sprintf("%7s [%v / %v]",
-				progress,
-				humanize.Bytes(uint64(response.BytesComplete())),
+			return fmt.Sprintf("%7s [%v]",
+				"100.00%",
 				humanize.Bytes(uint64(size)))
 		}
 
+		progressValue := 100 * response.Progress()
+		var progress string
+		if progressValue > 100 || progressValue < 0 {
+			progress = "???%"
+		} else {
+			progress = fmt.Sprintf("%.2f%%", progressValue)
+		}
+
+		return fmt.Sprintf("%7s [%v / %v]",
+			progress,
+			humanize.Bytes(uint64(response.BytesComplete())),
+			humanize.Bytes(uint64(size)))
 	})
 	bar.PrependFunc(func(b *uiprogress.Bar) string {
-		urlStr := requests[response.Request][0].Config.Url
+		urlStr := requests[response.Request][0].Config.URL
 		if len(urlStr) > 25 {
 			urlStr = getFilename(urlStr)
 		}
@@ -94,28 +91,29 @@ Loop:
 	expectedFilepath := registry.urltoFilename[response.Request.URL().String()]
 	if response.Filename != expectedFilepath {
 		err := os.Rename(response.Filename, expectedFilepath)
-		CheckError(err, "Unable to rename downloaded asset: "+response.Filename)
+		checkError(err, "Unable to rename downloaded asset: "+response.Filename)
 	}
 
 	// ensure the asset is executable
 	err := os.Chmod(expectedFilepath, 0755)
-	CheckError(err, "Unable to make asset executable: "+expectedFilepath)
+	checkError(err, "Unable to make asset executable: "+expectedFilepath)
 
 	// update all tasks using this asset to use the final filepath
 	for _, task := range registry.requestToTask[response.Request] {
-		task.UpdateExec(expectedFilepath)
+		task.updateExec(expectedFilepath)
 	}
 
 	waiter.Done()
 
 }
 
+// AddRequest extracts all URLS configured for a given task (does not examine child tasks) and queues them for download
 func AddRequest(task *Task) {
-	if task.Config.Url != "" {
-		request, ok := registry.urlToRequest[task.Config.Url]
+	if task.Config.URL != "" {
+		request, ok := registry.urlToRequest[task.Config.URL]
 		if !ok {
 			// never seen this url before
-			filepath := path.Join(config.downloadCachePath, getFilename(task.Config.Url))
+			filepath := path.Join(config.downloadCachePath, getFilename(task.Config.URL))
 
 			if _, err := os.Stat(filepath); err == nil {
 				// the asset already exists, skip (unless it has an unexpected checksum)
@@ -127,18 +125,17 @@ func AddRequest(task *Task) {
 					}
 
 				}
-				task.UpdateExec(filepath)
+				task.updateExec(filepath)
 				return
-			} else {
-				// the asset has not already been downloaded
-				request, _ = grab.NewRequest(filepath, task.Config.Url)
-
-				// workaround for https://github.com/cavaliercoder/grab/issues/25, allow the ability to follow 302s
-				//request.IgnoreBadStatusCodes = true
-
-				registry.urltoFilename[task.Config.Url] = filepath
-				registry.urlToRequest[task.Config.Url] = request
 			}
+			// the asset has not already been downloaded
+			request, _ = grab.NewRequest(filepath, task.Config.URL)
+
+			// workaround for https://github.com/cavaliercoder/grab/issues/25, allow the ability to follow 302s
+			//request.IgnoreBadStatusCodes = true
+
+			registry.urltoFilename[task.Config.URL] = filepath
+			registry.urlToRequest[task.Config.URL] = request
 		}
 		registry.requestToTask[request] = append(registry.requestToTask[request], task)
 	}
@@ -146,16 +143,17 @@ func AddRequest(task *Task) {
 
 func md5OfFile(filepath string) string {
 	f, err := os.Open(filepath)
-	CheckError(err, "File does not exist: "+filepath)
+	checkError(err, "File does not exist: "+filepath)
 	defer f.Close()
 
 	h := md5.New()
 	_, err = io.Copy(h, f)
-	CheckError(err, "Could not calculate md5 checksum of "+filepath)
+	checkError(err, "Could not calculate md5 checksum of "+filepath)
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+// DownloadAssets fetches all assets for the given task
 func DownloadAssets(tasks []*Task) {
 	registry.urlToRequest = make(map[string]*grab.Request)
 	registry.requestToTask = make(map[*grab.Request][]*Task)
@@ -189,12 +187,12 @@ func DownloadAssets(tasks []*Task) {
 	}
 
 	if len(allRequests) == 0 {
-		logToMain("No assets to download", MAJOR_FORMAT)
+		logToMain("No assets to download", majorFormat)
 		return
 	}
 
 	fmt.Println(bold("Downloading referenced assets"))
-	logToMain("Downloading referenced assets", MAJOR_FORMAT)
+	logToMain("Downloading referenced assets", majorFormat)
 
 	uiprogress.Empty = ' '
 	uiprogress.Fill = '|'
@@ -220,11 +218,11 @@ func DownloadAssets(tasks []*Task) {
 	foundFailedAsset := false
 	for _, response := range responses {
 		if err := response.Err(); err != nil {
-			logToMain(fmt.Sprintf(red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), ERROR_FORMAT)
+			logToMain(fmt.Sprintf(red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
 			foundFailedAsset = true
 		}
 		if response.HTTPResponse.StatusCode > 399 || response.HTTPResponse.StatusCode < 200 {
-			logToMain(fmt.Sprintf(red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), ERROR_FORMAT)
+			logToMain(fmt.Sprintf(red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
 			foundFailedAsset = true
 		}
 	}
@@ -246,5 +244,5 @@ func DownloadAssets(tasks []*Task) {
 		exitWithErrorMessage("Asset download failed")
 	}
 
-	logToMain("Asset download complete", MAJOR_FORMAT)
+	logToMain("Asset download complete", majorFormat)
 }

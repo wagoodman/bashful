@@ -96,7 +96,7 @@ func TestTrimToVisualLength(t *testing.T) {
 
 func TestMoveCursor(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := Screen()
+	scr := newScreen()
 	scr.ResetFrame(5, false, false)
 
 	// stay in place
@@ -161,7 +161,7 @@ func TestMoveCursor(t *testing.T) {
 
 func TestMovePastFrame(t *testing.T) {
 	var testOutput string
-	scr := Screen()
+	scr := newScreen()
 	scr.ResetFrame(5, false, false)
 
 	var testData = []struct {
@@ -192,7 +192,7 @@ func TestMovePastFrame(t *testing.T) {
 
 func TestDisplayFooter(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := Screen()
+	scr := newScreen()
 	scr.ResetFrame(5, false, false)
 
 	scr.curLine = 1
@@ -207,7 +207,7 @@ func TestDisplayFooter(t *testing.T) {
 
 func TestDisplayHeader(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := Screen()
+	scr := newScreen()
 	scr.ResetFrame(5, false, false)
 
 	scr.curLine = 1
@@ -222,7 +222,7 @@ func TestDisplayHeader(t *testing.T) {
 
 func TestPrintLn(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := Screen()
+	scr := newScreen()
 	scr.ResetFrame(5, false, false)
 
 	scr.curLine = 1
@@ -236,7 +236,7 @@ func TestPrintLn(t *testing.T) {
 
 func TestDisplay(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := Screen()
+	scr := newScreen()
 	scr.ResetFrame(5, false, false)
 
 	terminalWidth = func() (uint, error) {

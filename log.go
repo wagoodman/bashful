@@ -11,15 +11,17 @@ import (
 )
 
 var (
-	mainLogChan       chan LogItem   = make(chan LogItem)
-	mainLogConcatChan chan LogConcat = make(chan LogConcat)
+	mainLogChan       = make(chan LogItem)
+	mainLogConcatChan = make(chan LogConcat)
 )
 
+// LogItem represents all fields in a log message
 type LogItem struct {
 	Name    string
 	Message string
 }
 
+// LogConcat contains all metadata necessary to concatenate a subprocess log to the main log
 type LogConcat struct {
 	File string
 }
@@ -65,10 +67,11 @@ func setupLogging() {
 	}
 
 	removeDirContents(config.logCachePath)
-	go MainLogger(config.Options.LogPath)
+	go mainLogger(config.Options.LogPath)
 }
 
-func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
+// singleLogger creats a separatly managed log (typically for an individual task to be later concatenated with the mainlog)
+func singleLogger(SingleLogChan chan LogItem, name, logPath string) {
 
 	file, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -84,14 +87,13 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 	logger.SetFlags(0)
 
 	for {
-		select {
-		case logObj, ok := <-SingleLogChan:
-			if ok {
-				logger.Print(logObj.Message)
-			} else {
-				SingleLogChan = nil
-			}
+		logObj, ok := <-SingleLogChan
+		if ok {
+			logger.Print(logObj.Message)
+		} else {
+			SingleLogChan = nil
 		}
+
 		if SingleLogChan == nil {
 			break
 		}
@@ -99,7 +101,8 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 
 }
 
-func MainLogger(logPath string) {
+// mainLogger creates the main log configured by the `log-path` option
+func mainLogger(logPath string) {
 
 	file, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {

@@ -2,6 +2,7 @@
 set -u
 
 BOLD=$(tput bold)
+RED=$(tput setaf 1)
 NORMAL=$(tput sgr0)
 
 echo "${BOLD}Static analysis${NORMAL}"
@@ -9,20 +10,26 @@ echo "${BOLD}Static analysis${NORMAL}"
 cd $(dirname $0)/..
 
 FAILED=0
-PACKAGES=". $(find . -name '*.go' | xargs -I{} dirname {} |  cut -f2 -d/ | sort -u | grep -Ev '(^\.$|.git|.trash-cache|vendor|bin)' | sed -e 's!^!./!' -e 's!$!/...!')"
-
-echo -e "\n${BOLD}Running: go vet${NORMAL}"
-go vet ${PACKAGES}
-[ $? -eq 0 ] || FAILED=1
-
-echo -e "\n${BOLD}Running: golint${NORMAL}"
-for i in ${PACKAGES}; do
-    if [ -n "$(golint $i | grep -v 'should have comment.*or be unexported' | tee /dev/stderr)" ]; then
-        FAILED=1
-    fi
-done
+GO_FILES=$(find . -iname '*.go' -type f | grep -v /vendor/)
 
 echo -e "\n${BOLD}Running: go fmt${NORMAL}"
-test -z "$(go fmt ${PACKAGES} | tee /dev/stderr)"
+test -z "$(go fmt ${GO_FILES} | tee /dev/stderr)"
+[ $? -eq 0 ] || FAILED=1 echo -e "\n${RED}Failed${NORMAL}"
 
-[ $FAILED -eq 1 ] && exit 1
+echo -e "\n${BOLD}Running: go vet${NORMAL}"
+go vet ${GO_FILES} | tee /dev/stderr
+[ $? -eq 0 ] || FAILED=1 echo -e "\n${RED}Failed${NORMAL}"
+
+echo -e "\n${BOLD}Running: megacheck${NORMAL}"
+megacheck ./...
+[ $? -eq 0 ] || FAILED=1 echo -e "\n${RED}Failed${NORMAL}"
+
+# echo -e "\n${BOLD}Running: gocyclo${NORMAL}"
+# gocyclo -over 19 $GO_FILES
+# [ $? -eq 0 ] || FAILED=1 echo -e "\n${RED}Failed${NORMAL}"
+
+echo -e "\n${BOLD}Running: golint${NORMAL}"
+golint -set_exit_status $(go list ./...) | tee /dev/stderr
+[ $? -eq 0 ] || FAILED=1 echo -e "\n${RED}Failed${NORMAL}"
+
+[ $FAILED -eq 0 ] || exit 1

@@ -22,29 +22,27 @@ import (
 )
 
 const (
-	MAJOR_FORMAT = "cyan+b"
-	INFO_FORMAT  = "blue+b"
-	ERROR_FORMAT = "red+b"
+	majorFormat = "cyan+b"
+	infoFormat  = "blue+b"
+	errorFormat = "red+b"
 )
 
 var (
-	Version            = "No version provided"
-	GitCommit          = "No commit provided"
-	BuildTime          = "No build timestamp provided"
-	AllTasks           []*Task
+	version            = "No version provided"
+	commit             = "No commit provided"
+	buildTime          = "No build timestamp provided"
+	allTasks           []*Task
 	ticker             *time.Ticker
 	exitSignaled       = false
 	startTime          = time.Now()
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	blue               = color.ColorFunc("blue+h")
-	boldblue           = color.ColorFunc("blue+b")
-	boldcyan           = color.ColorFunc("cyan+b")
 	bold               = color.ColorFunc("default+b")
 	summaryTemplate, _ = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 
-type Summary struct {
+type summary struct {
 	Status  string
 	Percent string
 	Msg     string
@@ -55,7 +53,7 @@ type Summary struct {
 	Errors  string
 }
 
-func CheckError(err error, message string) {
+func checkError(err error, message string) {
 	if err != nil {
 		fmt.Println(red("Error:"))
 		_, file, line, _ := runtime.Caller(1)
@@ -106,7 +104,7 @@ func footer(status CommandStatus, message string) string {
 		percentStr = color.Color(percentStr, "default+b")
 	}
 
-	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
+	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
 
 	// calculate a space buffer to push the eta to the right
 	terminalWidth, _ := terminal.Width()
@@ -116,7 +114,7 @@ func footer(status CommandStatus, message string) string {
 	}
 
 	tpl.Reset()
-	summaryTemplate.Execute(&tpl, Summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString), Msg: message})
+	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString), Msg: message})
 
 	return tpl.String()
 }
@@ -141,9 +139,9 @@ func bundle(userYamlPath, outputPath string) {
 	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
 
 	bashfulPath, err := os.Executable()
-	CheckError(err, "Could not find path to bashful")
+	checkError(err, "Could not find path to bashful")
 	err = archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.CachePath})
-	CheckError(err, "Unable to create bundle")
+	checkError(err, "Unable to create bundle")
 
 	execute := `#!/bin/bash
 set -eu
@@ -170,28 +168,28 @@ __BASHFUL_ARCHIVE__
 
 	tmpl := template.New("test")
 	tmpl, err = tmpl.Parse(execute)
-	CheckError(err, "Failed to parse execute template")
+	checkError(err, "Failed to parse execute template")
 	err = tmpl.Execute(&buff, values)
-	CheckError(err, "Failed to render execute template")
+	checkError(err, "Failed to render execute template")
 
 	runnerPath := "./runner"
 	runnerFh, err := os.Create(runnerPath)
-	CheckError(err, "Unable to create runner executable file")
+	checkError(err, "Unable to create runner executable file")
 	defer runnerFh.Close()
 
 	_, err = runnerFh.Write(buff.Bytes())
-	CheckError(err, "Unable to write bootstrap script to runner executable file")
+	checkError(err, "Unable to write bootstrap script to runner executable file")
 
 	archiveFh, err := os.Open(archivePath)
-	CheckError(err, "Unable to open payload file")
+	checkError(err, "Unable to open payload file")
 	defer archiveFh.Close()
 	defer os.Remove(archivePath)
 
 	_, err = io.Copy(runnerFh, archiveFh)
-	CheckError(err, "Unable to write payload to runner executable file")
+	checkError(err, "Unable to write payload to runner executable file")
 
 	err = os.Chmod(runnerPath, 0755)
-	CheckError(err, "Unable to change runner permissions")
+	checkError(err, "Unable to change runner permissions")
 
 }
 
@@ -225,7 +223,7 @@ func run(userYamlPath string) {
 	}
 
 	fmt.Println(bold("Running " + userYamlPath + tagInfo))
-	logToMain("Running "+userYamlPath+tagInfo, MAJOR_FORMAT)
+	logToMain("Running "+userYamlPath+tagInfo, majorFormat)
 
 	// Since this is an empty map, no env vars will be loaded explicitly into the first exec.Command
 	// which will cause the current processes env vars to be loaded instead
@@ -239,21 +237,21 @@ func run(userYamlPath string) {
 			break
 		}
 	}
-	logToMain("Finished "+userYamlPath, MAJOR_FORMAT)
+	logToMain("Finished "+userYamlPath, majorFormat)
 
 	err = Save(config.etaCachePath, &config.commandTimeCache)
-	CheckError(err, "Unable to save command eta cache.")
+	checkError(err, "Unable to save command eta cache.")
 
 	if config.Options.ShowSummaryFooter {
 		message := ""
-		Screen().ResetFrame(0, false, true)
+		newScreen().ResetFrame(0, false, true)
 		if len(failedTasks) > 0 {
 			if config.Options.LogPath != "" {
 				message = bold(" See log for details (" + config.Options.LogPath + ")")
 			}
-			Screen().DisplayFooter(footer(StatusError, message))
+			newScreen().DisplayFooter(footer(statusError, message))
 		} else {
-			Screen().DisplayFooter(footer(StatusSuccess, message))
+			newScreen().DisplayFooter(footer(statusSuccess, message))
 		}
 	}
 
@@ -297,12 +295,12 @@ func exit(rc int) {
 
 func cleanup() {
 	// stop any running tasks
-	for _, task := range AllTasks {
+	for _, task := range allTasks {
 		task.Kill()
 	}
 
 	// move the cursor past the used screen realestate
-	Screen().MovePastFrame(true)
+	newScreen().MovePastFrame(true)
 
 	// show the cursor again
 	fmt.Print("\033[?25h") // show cursor
@@ -328,7 +326,7 @@ func main() {
 	setup()
 	app := cli.NewApp()
 	app.Name = "bashful"
-	app.Version = "Version:   " + Version + "\n   Commit:    " + GitCommit + "\n   BuildTime: " + BuildTime
+	app.Version = "Version:   " + version + "\n   Commit:    " + commit + "\n   BuildTime: " + buildTime
 	app.Usage = "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar."
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
