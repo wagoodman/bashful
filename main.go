@@ -142,7 +142,7 @@ func bundle(userYamlPath, outputPath string) {
 
 	bashfulPath, err := os.Executable()
 	CheckError(err, "Could not find path to bashful")
-	err = archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.cachePath})
+	err = archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.CachePath})
 	CheckError(err, "Unable to create bundle")
 
 	execute := `#!/bin/bash
