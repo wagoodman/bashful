@@ -1,4 +1,7 @@
 # bashful
+
+![Image](https://api.travis-ci.org/wagoodman/bashful.svg?branch=master)
+
 **This is beta quality!** Use at your own risk.
 
 Use a yaml file to stitch together commands and bash snippets and run them with a bit of style. 
