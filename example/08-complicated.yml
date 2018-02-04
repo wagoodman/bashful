@@ -16,6 +16,12 @@ config:
   # with a command running)
   show-task-times: true
 
+  # Change the color of each task status in the vertical progress bar
+  success-status-color: 2
+  running-status-color: 3
+  pending-status-color: 4
+  error-status-color: 1
+
 x-reference-data:
   all-apps: &app-names
     - some-lib-4

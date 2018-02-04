@@ -1,6 +1,7 @@
 config:
   # Want to keep a running count of errors in the summary footer? Enable this...
   show-summary-errors: true
+  log-path: build.log
 
 tasks:
   # This task will fail and be counted as a failure, however,

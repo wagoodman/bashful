@@ -152,16 +152,16 @@ const (
 func (status CommandStatus) Color(attributes string) string {
 	switch status {
 	case statusRunning:
-		return color.ColorCode("22+" + attributes) //28
+		return color.ColorCode(strconv.Itoa(config.Options.ColorRunning) + "+" + attributes)
 
 	case statusPending:
-		return color.ColorCode("22+" + attributes)
+		return color.ColorCode(strconv.Itoa(config.Options.ColorPending) + "+" + attributes)
 
 	case statusSuccess:
-		return color.ColorCode("green+h" + attributes)
+		return color.ColorCode(strconv.Itoa(config.Options.ColorSuccess) + "+" + attributes)
 
 	case statusError:
-		return color.ColorCode("red+h" + attributes)
+		return color.ColorCode(strconv.Itoa(config.Options.ColorError) + "+" + attributes)
 
 	}
 	return "INVALID COMMAND STATUS"
@@ -261,7 +261,7 @@ func (task *Task) inflateCmd() {
 	readFd, writeFd, err := os.Pipe()
 	checkError(err, "Could not open env pipe for child shell")
 
-	task.Command.Cmd = exec.Command(shell, "-c", task.Config.CmdString+"; env >&3")
+	task.Command.Cmd = exec.Command(shell, "-c", task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
 
 	// allow the child process to provide env vars via a pipe (FD3)
 	task.Command.Cmd.ExtraFiles = []*os.File{writeFd}
@@ -554,7 +554,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 	}
 	task.Command.StopTime = time.Now()
 
-	logToMain("Completed Task: "+task.Config.Name+" (rc: "+returnCodeMsg+")", infoFormat)
+	logToMain("Completed Task: "+task.Config.Name+" (rc:"+strconv.Itoa(returnCode)+")", infoFormat)
 
 	// close the write end of the pipe since the child shell is positively no longer writting to it
 	task.Command.Cmd.ExtraFiles[0].Close()
@@ -643,7 +643,7 @@ func (task *Task) Completed(rc int) {
 func (task *Task) listenAndDisplay(environment map[string]string) {
 	scr := newScreen()
 	// just wait for stuff to come back
-WhileRunningCommands:
+
 	for TaskStats.runningCmds > 0 {
 		select {
 		case <-ticker.C:
@@ -705,10 +705,6 @@ WhileRunningCommands:
 				scr.DisplayFooter(footer(statusPending, ""))
 			} else {
 				scr.MovePastFrame(false)
-			}
-
-			if exitSignaled {
-				break WhileRunningCommands
 			}
 
 		}

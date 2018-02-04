@@ -57,6 +57,18 @@ type OptionsConfig struct {
 	// CollapseOnCompletion indicates when a task with child tasks should be "rolled up" into a single line after all tasks have been executed
 	CollapseOnCompletion bool `yaml:"collapse-on-completion"`
 
+	// ColorRunning is the color of the vertical progress bar when the task is running (# in the 256 palett)
+	ColorRunning int `yaml:"running-status-color"`
+
+	// ColorPending is the color of the vertical progress bar when the task is waiting to be ran (# in the 256 palett)
+	ColorPending int `yaml:"pending-status-color"`
+
+	// ColorSuccessg is the color of the vertical progress bar when the task has finished successfully (# in the 256 palett)
+	ColorSuccess int `yaml:"success-status-color"`
+
+	// ColorError is the color of the vertical progress bar when the task has failed (# in the 256 palett)
+	ColorError int `yaml:"error-status-color"`
+
 	// EventDriven indicates if the screen should be updated on any/all task stdout/stderr events or on a polling schedule
 	EventDriven bool `yaml:"event-driven"`
 
@@ -106,6 +118,10 @@ type OptionsConfig struct {
 // NewOptionsConfig creates a new OptionsConfig populated with sane default values
 func NewOptionsConfig() (obj OptionsConfig) {
 	obj.BulletChar = "•"
+	obj.ColorError = 160
+	obj.ColorPending = 22
+	obj.ColorRunning = 22
+	obj.ColorSuccess = 10
 	obj.EventDriven = true
 	obj.ExecReplaceString = "<exec>"
 	obj.IgnoreFailure = false
