@@ -23,17 +23,6 @@ Why? Because your bash script should be quiet and shy-like (...and not such a lo
 - [x] Control which failing command should halt execution
 
 ## Installation
-**Go tools**
-```bash
-go get github.com/wagoodman/bashful
-```
-
-**Mac**
-```bash
-brew tap wagoodman/bashful
-brew install bashful
-```
-or download a Darwin build from the releases page.
 
 **Ubuntu/Debian**
 ```bash
@@ -45,6 +34,18 @@ sudo apt install ./bashful_0.0.10_linux_amd64.deb
 ```bash
 wget https://github.com/wagoodman/bashful/releases/download/v0.0.10/bashful_0.0.10_linux_amd64.rpm
 rpm -i bashful_0.0.10_linux_amd64.rpm
+```
+
+**Mac**
+```bash
+brew tap wagoodman/bashful
+brew install bashful
+```
+or download a Darwin build from the releases page.
+
+**Go tools**
+```bash
+go get github.com/wagoodman/bashful
 ```
 
 ## Getting Started
@@ -123,6 +124,15 @@ bashful bundle install.yaml
 ```
 *Note: the bundle feature is pretty experimental right now.*
 
+You can even persist environment variables across tasks:
+```yaml
+tasks:
+  - cmd: export VAR1=isnowset
+  - cmd: eval "export VAR2=isnowreallyset"
+  - cmd: echo ${VAR1} ${VAR2}
+```
+*Note: you cannot persist environment variables from a parallel step.*
+
 **There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir.** Go check them out!
 
 ## Configuration Options
@@ -137,6 +147,13 @@ config:
 
     # hide all subtasks after section completion
     collapse-on-completion: false
+
+    # change the colors of the vertical progress bar for a task in a particular state.
+    # this should be a number from the 256 color palette.
+    success-status-color: 10
+    running-status-color: 22
+    pending-status-color: 22
+    error-status-color: 160
 
     # by default the screen is updated when an event occurs (when stdout from
     # a running process is read). This can be changed to only allow the 
