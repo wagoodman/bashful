@@ -369,20 +369,14 @@ func main() {
 					Value: "",
 					Usage: "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag.",
 				},
-				cli.StringFlag{
-					Name:  "args",
-					Value: "",
-					Usage: "A comma delimited list of command-line arguments to be referenced by commands as $1, $2 or $*",
-				},
 			},
 			Action: func(cliCtx *cli.Context) error {
 				if cliCtx.NArg() < 1 {
 					exitWithErrorMessage("Must provide the path to a bashful yaml file")
-				} else if cliCtx.NArg() > 1 {
-					exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
 				}
 
 				userYamlPath := cliCtx.Args().Get(0)
+				config.Cli.Args = cliCtx.Args().Tail()
 
 				if cliCtx.String("tags") != "" && cliCtx.String("only-tags") != "" {
 					exitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
@@ -398,12 +392,6 @@ func main() {
 					if value != "" {
 						config.Cli.ExecuteOnlyMatchedTags = true
 						config.Cli.RunTags = append(config.Cli.RunTags, value)
-					}
-				}
-
-				for _, value := range strings.Split(cliCtx.String("args"), ",") {
-					if value != "" {
-						config.Cli.Args = append(config.Cli.Args, value)
 					}
 				}
 
