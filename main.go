@@ -63,6 +63,9 @@ func checkError(err error, message string) {
 }
 
 func showDuration(duration time.Duration) string {
+	if duration < 0 {
+		return "Overdue!"
+	}
 	seconds := int64(duration.Seconds()) % 60
 	minutes := int64(duration.Minutes()) % 60
 	hours := int64(duration.Hours()) % 24

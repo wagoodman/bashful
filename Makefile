@@ -5,10 +5,11 @@ TARGETS := $(shell ls scripts)
 $(TARGETS): 
 	./scripts/$@
 
-run: #clean build
-	./dist/bashful run example/11-tags.yml --tags some-app1
+run:
+	go run main.go task.go config.go screen.go download.go log.go \
+	run example/11-tags.yml --tags some-app1
 
-examples:
+examples: clean build
 	./dist/bashful run example/00-demo.yml
 	./dist/bashful run example/01-simple.yml
 	./dist/bashful run example/02-simple-and-pretty.yml

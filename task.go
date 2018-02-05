@@ -410,7 +410,7 @@ func (task *Task) CurrentEta() string {
 
 	if config.Options.ShowTaskEta {
 		running := time.Since(task.Command.StartTime)
-		etaValue = "?"
+		etaValue = "Unknown!"
 		if task.Command.EstimatedRuntime > 0 {
 			etaValue = showDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}

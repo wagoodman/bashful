@@ -1,5 +1,6 @@
 config:
   collapse-on-completion: true
+  show-task-times: true
 
 x-reference-data:
   all-apps: &app-names
