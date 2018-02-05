@@ -373,11 +373,10 @@ func main() {
 			Action: func(cliCtx *cli.Context) error {
 				if cliCtx.NArg() < 1 {
 					exitWithErrorMessage("Must provide the path to a bashful yaml file")
-				} else if cliCtx.NArg() > 1 {
-					exitWithErrorMessage("Only one bashful yaml file can be provided at a time")
 				}
 
 				userYamlPath := cliCtx.Args().Get(0)
+				config.Cli.Args = cliCtx.Args().Tail()
 
 				if cliCtx.String("tags") != "" && cliCtx.String("only-tags") != "" {
 					exitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
@@ -395,7 +394,6 @@ func main() {
 						config.Cli.RunTags = append(config.Cli.RunTags, value)
 					}
 				}
-				//config.Cli.RunTags = []string{"some-app1"}
 
 				run(userYamlPath)
 
