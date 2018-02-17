@@ -2,7 +2,6 @@ package main
 
 import (
 	"testing"
-	"time"
 
 	"github.com/alecthomas/repr"
 )
@@ -35,14 +34,16 @@ func TestTaskString(t *testing.T) {
 
 func TestSerialTaskEnvPersistence(t *testing.T) {
 	var expStr, actStr string
+	var failedTasks []*Task
 	simpleYamlStr := `
 tasks:
-  - cmd: export SOMEVAR=this 
+  - name: start
+    cmd: export SOMEVAR=this 
 
   - name: append 'is'
     cmd: export SOMEVAR=$SOMEVAR:is
 
-  - name: append 'is'
+  - name: append 'DONTDOIT'
     parallel-tasks:
       - cmd: export SOMEVAR=$SOMEVAR:DONTDOIT
 
@@ -51,23 +52,21 @@ tasks:
     for-each:
       - working
       - just
+
   - name: append 'is'
     cmd: eval 'export SOMEVAR=$SOMEVAR:fine'
 `
 
-	ticker = time.NewTicker(150 * time.Millisecond)
-	parseRunYaml([]byte(simpleYamlStr))
-	tasks := CreateTasks()
 	environment := map[string]string{}
-	for _, task := range tasks {
-		task.Run(environment)
-		if len(task.failedTasks) > 0 {
-			t.Error("TestSerialTaskEnvPersistence: Expected no tasks to fail")
-		}
+	config.Options.StopOnFailure = false
+	failedTasks = run([]byte(simpleYamlStr), environment)
+	if len(failedTasks) > 0 {
+		t.Error("TestSerialTaskEnvPersistence: Expected no tasks to fail")
 	}
 
 	expStr, actStr = "this:is:working:just:fine", environment["SOMEVAR"]
 	if expStr != actStr {
 		t.Error("Expected", expStr, "got", actStr)
 	}
+
 }

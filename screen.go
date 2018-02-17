@@ -153,7 +153,10 @@ func (scr *screen) Display(message string, index int) {
 
 	// trim message length if it won't fit on the screen
 	width, err := terminalWidth()
-	checkError(err, "Unable to determine screen width.")
+	if err != nil {
+		logToMain("Unable to determine screen width", errorFormat)
+		width = 80
+	}
 	for visualLength(message) > int(width) {
 		message = trimToVisualLength(message, int(width)-3) + "..."
 	}

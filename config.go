@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -469,17 +468,14 @@ func CreateTasks() (finalTasks []*Task) {
 	return finalTasks
 }
 
-// ReadConfig is the entrypoint for all config fetching and parsing. This returns a list of Task runtime objects to execute.
-func ReadConfig(userYamlPath string) {
+// ParseConfig is the entrypoint for all config fetching and parsing. This returns a list of Task runtime objects to execute.
+func ParseConfig(yamlString []byte) {
 	config.Cli.RunTagSet = mapset.NewSet()
 	for _, tag := range config.Cli.RunTags {
 		config.Cli.RunTagSet.Add(tag)
 	}
 
 	readTimeCache()
-
-	yamlString, err := ioutil.ReadFile(userYamlPath)
-	checkError(err, "Unable to read yaml config.")
 
 	parseRunYaml(yamlString)
 

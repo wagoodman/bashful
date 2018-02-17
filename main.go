@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -33,8 +34,8 @@ var (
 	buildTime          = "No build timestamp provided"
 	allTasks           []*Task
 	ticker             *time.Ticker
-	exitSignaled       = false
-	startTime          = time.Now()
+	exitSignaled       bool
+	startTime          time.Time
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	blue               = color.ColorFunc("blue+h")
@@ -134,10 +135,13 @@ func doesFileExist(name string) bool {
 func bundle(userYamlPath, outputPath string) {
 	archivePath := "bundle.tar.gz"
 
-	ReadConfig(userYamlPath)
-	AllTasks := CreateTasks()
+	yamlString, err := ioutil.ReadFile(userYamlPath)
+	checkError(err, "Unable to read yaml config.")
 
-	DownloadAssets(AllTasks)
+	ParseConfig(yamlString)
+	allTasks := CreateTasks()
+
+	DownloadAssets(allTasks)
 
 	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
 
@@ -196,14 +200,16 @@ __BASHFUL_ARCHIVE__
 
 }
 
-func run(userYamlPath string) {
+func run(yamlString []byte, environment map[string]string) []*Task {
 	var err error
-	fmt.Print("\033[?25l") // hide cursor
 
-	ReadConfig(userYamlPath)
-	AllTasks := CreateTasks()
+	exitSignaled = false
+	startTime = time.Now()
 
-	DownloadAssets(AllTasks)
+	ParseConfig(yamlString)
+	allTasks = CreateTasks()
+
+	DownloadAssets(allTasks)
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -218,21 +224,17 @@ func run(userYamlPath string) {
 	tagInfo := ""
 	if len(config.Cli.RunTags) > 0 {
 		if config.Cli.ExecuteOnlyMatchedTags {
-			tagInfo = " with only matching tags: "
+			tagInfo = " only matching tags: "
 		} else {
-			tagInfo = " with non-tagged and matching tags: "
+			tagInfo = " non-tagged and matching tags: "
 		}
 		tagInfo += strings.Join(config.Cli.RunTags, ", ")
 	}
 
-	fmt.Println(bold("Running " + userYamlPath + tagInfo))
-	logToMain("Running "+userYamlPath+tagInfo, majorFormat)
+	fmt.Println(bold("Running " + tagInfo))
+	logToMain("Running "+tagInfo, majorFormat)
 
-	// Since this is an empty map, no env vars will be loaded explicitly into the first exec.Command
-	// which will cause the current processes env vars to be loaded instead
-	environment := map[string]string{}
-
-	for _, task := range AllTasks {
+	for _, task := range allTasks {
 		task.Run(environment)
 		failedTasks = append(failedTasks, task.failedTasks...)
 
@@ -240,7 +242,7 @@ func run(userYamlPath string) {
 			break
 		}
 	}
-	logToMain("Finished "+userYamlPath, majorFormat)
+	logToMain("Complete", majorFormat)
 
 	err = Save(config.etaCachePath, &config.commandTimeCache)
 	checkError(err, "Unable to save command eta cache.")
@@ -280,9 +282,7 @@ func run(userYamlPath string) {
 
 	}
 
-	logToMain("Exiting", "")
-
-	exit(len(failedTasks))
+	return failedTasks
 }
 
 func exitWithErrorMessage(msg string) {
@@ -398,8 +398,19 @@ func main() {
 					}
 				}
 
-				run(userYamlPath)
+				// Since this is an empty map, no env vars will be loaded explicitly into the first exec.Command
+				// which will cause the current processes env vars to be loaded instead
+				environment := map[string]string{}
 
+				yamlString, err := ioutil.ReadFile(userYamlPath)
+				checkError(err, "Unable to read yaml config.")
+
+				fmt.Print("\033[?25l") // hide cursor
+				failedTasks := run(yamlString, environment)
+
+				logToMain("Exiting", "")
+
+				exit(len(failedTasks))
 				return nil
 			},
 		},

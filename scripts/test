@@ -11,4 +11,5 @@ cd $(dirname $0)/..
 PACKAGES=". $(find . -name '*.go' | xargs -I{} dirname {} |  cut -f2 -d/ | sort -u | grep -Ev '(^\.$|.git|.trash-cache|vendor|bin)' | sed -e 's!^!./!' -e 's!$!/...!')"
 
 [ $(arch) == "x86_64" ] && RACE=-race
-go test ${RACE} -cover -tags=test ${PACKAGES}
+#go test ${RACE} -cover -tags=test ${PACKAGES}
+go test -cover -tags=test ${PACKAGES}

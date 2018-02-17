@@ -7,6 +7,8 @@ tasks:
 
   - cmd: eval "export VAR3=isnowreallyset"
 
+  - cmd: eval "export VAR3=$VAR3:sweeeeet"
+
   - cmd: echo 1=${VAR1}  2=${VAR2}  3=${VAR3}  ; sleep 10
 
 
