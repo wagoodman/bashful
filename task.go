@@ -266,6 +266,7 @@ func (task *Task) inflateCmd() {
 		sudoCmd = "sudo -S "
 	}
 	task.Command.Cmd = exec.Command(shell, "-c", sudoCmd+task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
+	task.Command.Cmd.Stdin = strings.NewReader(string(sudoPassword) + "\n")
 
 	// allow the child process to provide env vars via a pipe (FD3)
 	task.Command.Cmd.ExtraFiles = []*os.File{writeFd}

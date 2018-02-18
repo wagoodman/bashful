@@ -203,7 +203,7 @@ __BASHFUL_ARCHIVE__
 
 }
 
-func StoreSudoPasswd() {
+func storeSudoPasswd() {
 	var sout bytes.Buffer
 
 	// check if there is a task that requires sudo
@@ -256,7 +256,7 @@ func run(yamlString []byte, environment map[string]string) []*Task {
 
 	ParseConfig(yamlString)
 	allTasks = CreateTasks()
-	StoreSudoPasswd()
+	storeSudoPasswd()
 
 	DownloadAssets(allTasks)
 
