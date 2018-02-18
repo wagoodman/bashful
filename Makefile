@@ -7,7 +7,7 @@ $(TARGETS):
 
 run:
 	go run main.go task.go config.go screen.go download.go log.go \
-	run example/13-single-line.yml
+	run example/14-sudo.yml
 
 examples: clean build
 	./dist/bashful run example/00-demo.yml
