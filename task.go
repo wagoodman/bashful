@@ -261,7 +261,11 @@ func (task *Task) inflateCmd() {
 	readFd, writeFd, err := os.Pipe()
 	checkError(err, "Could not open env pipe for child shell")
 
-	task.Command.Cmd = exec.Command(shell, "-c", task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
+	sudoCmd := ""
+	if task.Config.Sudo {
+		sudoCmd = "sudo -S "
+	}
+	task.Command.Cmd = exec.Command(shell, "-c", sudoCmd+task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
 
 	// allow the child process to provide env vars via a pipe (FD3)
 	task.Command.Cmd.ExtraFiles = []*os.File{writeFd}

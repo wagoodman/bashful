@@ -1,0 +1,9 @@
+tasks:
+  # if a command shold be run with sudo, flag it as so...
+  - cmd: touch /bin/true
+    sudo: true
+
+  #... *don't* put sudo in your cmd
+  - cmd: sudo touch /bin/true
+    stop-on-failure: false
+

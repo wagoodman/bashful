@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -16,6 +17,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/howeyc/gopass"
 	color "github.com/mgutz/ansi"
 	"github.com/mholt/archiver"
 	"github.com/urfave/cli"
@@ -36,6 +38,7 @@ var (
 	ticker             *time.Ticker
 	exitSignaled       bool
 	startTime          time.Time
+	sudoPassword       string
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	blue               = color.ColorFunc("blue+h")
@@ -200,6 +203,51 @@ __BASHFUL_ARCHIVE__
 
 }
 
+func StoreSudoPasswd() {
+	var sout bytes.Buffer
+
+	// check if there is a task that requires sudo
+	requireSudo := false
+	for _, task := range allTasks {
+		if task.Config.Sudo {
+			requireSudo = true
+			break
+		}
+		for _, subTask := range task.Children {
+			if subTask.Config.Sudo {
+				requireSudo = true
+				break
+			}
+		}
+	}
+
+	if !requireSudo {
+		return
+	}
+
+	// test if a password is even required for sudo
+	cmd := exec.Command("/bin/sh", "-c", "sudo -Sn /bin/true")
+	cmd.Stderr = &sout
+	err := cmd.Run()
+	requiresPassword := sout.String() == "sudo: a password is required\n"
+
+	if requiresPassword {
+		fmt.Print("[bashful] sudo password required: ")
+		sudoPassword, err := gopass.GetPasswd()
+		checkError(err, "Could get sudo password from user.")
+
+		// test the given password
+		cmdTest := exec.Command("/bin/sh", "-c", "sudo -S /bin/true")
+		cmdTest.Stdin = strings.NewReader(string(sudoPassword) + "\n")
+		err = cmdTest.Run()
+		if err != nil {
+			exitWithErrorMessage("Given sudo password did not work.")
+		}
+	} else {
+		checkError(err, "Could not determine sudo access for user.")
+	}
+}
+
 func run(yamlString []byte, environment map[string]string) []*Task {
 	var err error
 
@@ -208,6 +256,7 @@ func run(yamlString []byte, environment map[string]string) []*Task {
 
 	ParseConfig(yamlString)
 	allTasks = CreateTasks()
+	StoreSudoPasswd()
 
 	DownloadAssets(allTasks)
 

@@ -198,6 +198,9 @@ type TaskConfig struct {
 	// StopOnFailure indicates to halt further program execution if a task command has a non-zero return code
 	StopOnFailure bool `yaml:"stop-on-failure"`
 
+	// Sudo indicates that the given command should be run with the given sudo credentials
+	Sudo bool `yaml:"sudo"`
+
 	// Tags is a list of strings that is used to filter down which task are run at runtime
 	Tags   stringArray `yaml:"tags"`
 	TagSet mapset.Set
