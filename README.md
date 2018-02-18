@@ -190,6 +190,9 @@ config:
     # Show an eta for each task on the screen (being shown on every line with a command running)
     show-task-times: true
 
+    # Show only one line of output to the screen (instead of a line per task + a summary line)
+    single-line: true
+
     # globally enable/disable haulting further execution when any one task fails
     stop-on-failure: true
 
