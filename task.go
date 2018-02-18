@@ -359,7 +359,54 @@ func (task *Task) String(terminalWidth int) string {
 // display prints the current task string status to the screen
 func (task *Task) display() {
 	terminalWidth, _ := terminal.Width()
-	newScreen().Display(task.String(int(terminalWidth)), task.Display.Index)
+	theScreen := newScreen()
+	if config.Options.SingleLineDisplay {
+
+		var durString, etaString, stepString, errorString string
+		displayString := ""
+
+		effectiveWidth := int(terminalWidth)
+
+		fillColor := color.ColorCode(strconv.Itoa(config.Options.ColorSuccess) + "+i")
+		emptyColor := color.ColorCode(strconv.Itoa(config.Options.ColorSuccess))
+		if TaskStats.totalFailedTasks > 0 {
+			fillColor = color.ColorCode(strconv.Itoa(config.Options.ColorError) + "+i")
+			emptyColor = color.ColorCode(strconv.Itoa(config.Options.ColorError))
+		}
+
+		numFill := int(effectiveWidth) * TaskStats.completedTasks / TaskStats.totalTasks
+
+		if config.Options.ShowSummaryTimes {
+			duration := time.Since(startTime)
+			durString = fmt.Sprintf(" Runtime[%s]", showDuration(duration))
+
+			totalEta := time.Duration(config.totalEtaSeconds) * time.Second
+			remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
+			etaString = fmt.Sprintf(" ETA[%s]", showDuration(remainingEta))
+		}
+
+		if TaskStats.completedTasks == TaskStats.totalTasks {
+			etaString = ""
+		}
+
+		if config.Options.ShowSummarySteps {
+			stepString = fmt.Sprintf(" Tasks[%d/%d]", TaskStats.completedTasks, TaskStats.totalTasks)
+		}
+
+		if config.Options.ShowSummaryErrors {
+			errorString = fmt.Sprintf(" Errors[%d]", TaskStats.totalFailedTasks)
+		}
+
+		valueStr := stepString + errorString + durString + etaString
+
+		displayString = fmt.Sprintf("%[1]*s", -effectiveWidth, fmt.Sprintf("%[1]*s", (effectiveWidth+len(valueStr))/2, valueStr))
+		displayString = fillColor + displayString[:numFill] + color.Reset + emptyColor + displayString[numFill:] + color.Reset
+
+		theScreen.Display(displayString, 0)
+	} else {
+		theScreen.Display(task.String(int(terminalWidth)), task.Display.Index)
+	}
+
 }
 
 // EstimateRuntime returns the ETA in seconds until command completion
@@ -722,12 +769,14 @@ func (task *Task) Run(environment map[string]string) {
 
 	var message bytes.Buffer
 
-	task.Pave()
+	if !config.Options.SingleLineDisplay {
+		task.Pave()
+	}
 	task.StartAvailableTasks(environment)
 	task.listenAndDisplay(environment)
 
 	scr := newScreen()
-	hasHeader := len(task.Children) > 0
+	hasHeader := len(task.Children) > 0 && !config.Options.SingleLineDisplay
 	collapseSection := task.Config.CollapseOnCompletion && hasHeader && len(task.failedTasks) == 0
 
 	// complete the proc group status

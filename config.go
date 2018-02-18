@@ -112,6 +112,9 @@ type OptionsConfig struct {
 	// StopOnFailure indicates to halt further program execution if a task command has a non-zero return code
 	StopOnFailure bool `yaml:"stop-on-failure"`
 
+	// SingleLineDisplay indicates to show all bashful output in a single line (instead of a line per task + a summary line)
+	SingleLineDisplay bool `yaml:"single-line"`
+
 	// UpdateInterval is the time in seconds that the screen should be refreshed (only if EventDriven=false)
 	UpdateInterval float64 `yaml:"update-interval"`
 }
@@ -119,6 +122,7 @@ type OptionsConfig struct {
 // NewOptionsConfig creates a new OptionsConfig populated with sane default values
 func NewOptionsConfig() (obj OptionsConfig) {
 	obj.BulletChar = "•"
+	obj.CollapseOnCompletion = false
 	obj.ColorError = 160
 	obj.ColorPending = 22
 	obj.ColorRunning = 22
@@ -136,6 +140,7 @@ func NewOptionsConfig() (obj OptionsConfig) {
 	obj.ShowTaskEta = false
 	obj.ShowTaskOutput = true
 	obj.StopOnFailure = true
+	obj.SingleLineDisplay = false
 	obj.UpdateInterval = -1
 	return obj
 }
@@ -150,6 +155,11 @@ func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	}
 
 	*options = OptionsConfig(defaultValues)
+
+	if options.SingleLineDisplay {
+		options.ShowSummaryFooter = false
+		options.CollapseOnCompletion = false
+	}
 
 	// the global options must be available when parsing the task yaml (does order matter?)
 	config.Options = *options
@@ -203,6 +213,7 @@ func NewTaskConfig() (obj TaskConfig) {
 	obj.ShowTaskOutput = config.Options.ShowTaskOutput
 	obj.EventDriven = config.Options.EventDriven
 	obj.CollapseOnCompletion = config.Options.CollapseOnCompletion
+
 	return obj
 }
 
@@ -216,6 +227,12 @@ func (taskConfig *TaskConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	}
 
 	*taskConfig = TaskConfig(defaultValues)
+
+	if config.Options.SingleLineDisplay {
+		taskConfig.ShowTaskOutput = false
+		taskConfig.CollapseOnCompletion = false
+	}
+
 	return nil
 }
 

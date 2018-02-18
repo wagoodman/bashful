@@ -1,0 +1,61 @@
+config:
+
+  # Show only one line of output to the screen (instead of a line per task + a summary line)
+  single-line: true
+  log-path: build.log
+
+x-reference-data:
+  all-apps: &app-names
+    - some-lib-4
+    - utilities-lib
+    - important-lib
+    - some-app1
+    - some-app3
+    - some-awesome-app-5
+    - watcher-app
+    - yup-another-app-7
+
+tasks:
+
+  - name: Cloning Repos
+    collapse-on-completion: true
+    parallel-tasks:
+      - name: "Cloning <replace>"
+        cmd: example/scripts/random-worker.sh 1 %
+        ignore-failure: true
+        for-each: *app-names
+
+  - name: Compiling app (with trace)
+    cmd: example/scripts/random-error.sh 4
+
+  - name: Installing dependencies
+    parallel-tasks:
+      - name: Installing Oracle client
+        cmd: example/scripts/random-worker.sh 3
+      - name: Installing Google chrome
+        cmd: example/scripts/random-worker.sh 4
+      - name: Installing MD helper
+        cmd: example/scripts/random-worker.sh 5
+      - name: Installing Bridgy
+        cmd: example/scripts/random-worker.sh 6
+
+  - name: Building Images
+    cmd: example/scripts/random-worker.sh 3
+
+  - name: Gathering Secrets
+    cmd: example/scripts/random-worker.sh 3
+
+  - name: Building and Migrating
+    parallel-tasks:
+      - name: Building app1
+        cmd: example/scripts/random-worker.sh 5
+      - name: Building some-app3
+        cmd: example/scripts/random-worker.sh 5
+      - name: Building some-lib-4
+        cmd: example/scripts/random-worker.sh 6
+      - name: Building some-awesome-app-5
+        cmd: example/scripts/random-worker.sh 7
+      - name: Building watcher-app
+        cmd: example/scripts/random-worker.sh 5
+      - name: Building public-6
+        cmd: example/scripts/random-worker.sh 5
