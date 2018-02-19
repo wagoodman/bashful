@@ -1,0 +1,17 @@
+config:
+  # Supress the error summary that follows
+  show-failure-report: false
+  show-summary-errors: true
+
+  # Lets run more than the default 4 tasks at a time (for parallel blocks)
+  max-parallel-commands: 6
+
+  # Show an eta for each task on the screen (being shown on every line 
+  # with a command running)
+  show-task-times: true
+
+  # Change the color of each task status in the vertical progress bar
+  success-status-color: 76
+  running-status-color: 190
+  pending-status-color: 237
+  error-status-color: 160

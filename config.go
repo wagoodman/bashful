@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -361,11 +362,65 @@ func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
 	return tasks
 }
 
+// type IncludeMatch struct {
+// 	includeFile	string
+// 	startIdx int
+// 	endIdx
+// }
+
+// func reSubMatchMap(r *regexp.Regexp, str string) map[string][]string {
+// 	groupNames := r.SubexpNames()
+// 	results := make(map[string][]string)
+// 	for _, match := range r.FindAllStringSubmatch(str, -1) {
+// 		for groupIdx, group := range match {
+// 			name := groupNames[groupIdx]
+// 			if name != "" {
+// 				// fmt.Printf("#%d text: '%s', group: '%s'\n", matchNum, group, name)
+// 				results[name] = append(results[name], group)
+// 			}
+// 		}
+// 	}
+// 	return results
+// }
+
+func reSubMatchMap(r *regexp.Regexp, str string) map[string][]string {
+	//groupNames := r.SubexpNames()
+	results := make(map[string][]string)
+	for _, match := range r.FindAllStringSubmatchIndex(str, -1) {
+		fmt.Printf("#%v\n", match)
+		// for groupIdx, group := range match {
+		// 	name := groupNames[groupIdx]
+		// 	if name != "" {
+		// 		// fmt.Printf("#%d text: '%s', group: '%s'\n", matchNum, group, name)
+		// 		results[name] = append(results[name], group)
+		// 	}
+		// }
+	}
+	return results
+}
+
+func assembleIncludes(yamlString []byte) []byte {
+	// look for "- $include"
+	listInc := regexp.MustCompile(`(?m:^\s*-\s\$include\s+(?P<filename>.+)$)`)
+	mapInc := regexp.MustCompile(`(?m:^\s*\$include:\s+(?P<filename>.+)$)`)
+
+	res1 := listInc.FindAllStringIndex(string(yamlString), -1)
+	fmt.Printf("<%v> %v\n", res1, reSubMatchMap(listInc, string(yamlString)))
+
+	res2 := mapInc.FindAllStringIndex(string(yamlString), -1)
+	fmt.Printf("<%v> %v\n", res2, reSubMatchMap(mapInc, string(yamlString)))
+	exit(0)
+
+	return yamlString
+}
+
 // readRunYaml fetches and reads the user given yaml file from disk and populates the global config object
 func parseRunYaml(yamlString []byte) {
 	// fetch and parse the run.yaml user file...
 	config.Options = NewOptionsConfig()
 
+	yamlString = assembleIncludes(yamlString)
+	exit(0)
 	err := yaml.Unmarshal(yamlString, &config)
 	checkError(err, "Error: Unable to parse given yaml")
 

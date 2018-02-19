@@ -1,0 +1,16 @@
+- name: Installing dependencies
+  parallel-tasks:
+    - name: Installing Oracle client
+      cmd: example/scripts/random-worker.sh 3
+    - name: Installing Google chrome
+      cmd: example/scripts/random-worker.sh 1
+    - name: Installing MD helper
+      cmd: example/scripts/random-worker.sh 1
+    - name: Installing Bridgy
+      cmd: example/scripts/random-worker.sh 1
+
+- name: Building Images
+  cmd: example/scripts/random-worker.sh 2
+
+- name: Gathering Secrets
+  cmd: example/scripts/random-worker.sh 2
