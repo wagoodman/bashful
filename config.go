@@ -386,16 +386,18 @@ func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
 func reSubMatchMap(r *regexp.Regexp, str string) map[string][]string {
 	//groupNames := r.SubexpNames()
 	results := make(map[string][]string)
-	for _, match := range r.FindAllStringSubmatchIndex(str, -1) {
-		fmt.Printf("#%v\n", match)
-		// for groupIdx, group := range match {
-		// 	name := groupNames[groupIdx]
-		// 	if name != "" {
-		// 		// fmt.Printf("#%d text: '%s', group: '%s'\n", matchNum, group, name)
-		// 		results[name] = append(results[name], group)
-		// 	}
-		// }
-	}
+	x := r.FindAllStringSubmatchIndex(str, -1)
+	fmt.Printf("#%v\n", x)
+	// for _, match := range  {
+	// fmt.Printf("#%v\n", match)
+	// for groupIdx, group := range match {
+	// 	name := groupNames[groupIdx]
+	// 	if name != "" {
+	// 		// fmt.Printf("#%d text: '%s', group: '%s'\n", matchNum, group, name)
+	// 		results[name] = append(results[name], group)
+	// 	}
+	// }
+	// }
 	return results
 }
 
