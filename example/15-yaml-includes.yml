@@ -1,8 +1,8 @@
-$include: common-config.yml
+$include: example/common-config.yml
 
 x-reference-data:
   all-apps: &app-names
-    - $include common-apps.yml
+    - $include example/common-apps.yml
 
 tasks:
 
@@ -13,7 +13,7 @@ tasks:
         ignore-failure: true
         for-each: *app-names
 
-  - $include common-tasks.yml
+  - $include example/common-tasks.yml
 
   - name: Building and Migrating
     parallel-tasks:

@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -362,55 +363,74 @@ func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
 	return tasks
 }
 
-// type IncludeMatch struct {
-// 	includeFile	string
-// 	startIdx int
-// 	endIdx
-// }
+type includeMatch struct {
+	includeFile string
+	startIdx    int
+	endIdx      int
+}
 
-// func reSubMatchMap(r *regexp.Regexp, str string) map[string][]string {
-// 	groupNames := r.SubexpNames()
-// 	results := make(map[string][]string)
-// 	for _, match := range r.FindAllStringSubmatch(str, -1) {
-// 		for groupIdx, group := range match {
-// 			name := groupNames[groupIdx]
-// 			if name != "" {
-// 				// fmt.Printf("#%d text: '%s', group: '%s'\n", matchNum, group, name)
-// 				results[name] = append(results[name], group)
-// 			}
-// 		}
-// 	}
-// 	return results
-// }
+func getIndentSize(yamlString []byte, startIdx int) int {
+	spaces := 0
+	for idx := startIdx; idx > 0; idx++ {
+		char := yamlString[idx]
+		if char == '\n' {
+			spaces = 0
+		} else if char == ' ' {
+			spaces++
+		} else {
+			break
+		}
+	}
+	return spaces
+}
 
-func reSubMatchMap(r *regexp.Regexp, str string) map[string][]string {
-	//groupNames := r.SubexpNames()
-	results := make(map[string][]string)
-	x := r.FindAllStringSubmatchIndex(str, -1)
-	fmt.Printf("#%v\n", x)
-	// for _, match := range  {
-	// fmt.Printf("#%v\n", match)
-	// for groupIdx, group := range match {
-	// 	name := groupNames[groupIdx]
-	// 	if name != "" {
-	// 		// fmt.Printf("#%d text: '%s', group: '%s'\n", matchNum, group, name)
-	// 		results[name] = append(results[name], group)
-	// 	}
-	// }
-	// }
-	return results
+func indentBytes(b []byte, size int) []byte {
+	prefix := []byte(strings.Repeat(" ", size))
+	var res []byte
+	bol := true
+	for _, c := range b {
+		if bol && c != '\n' {
+			res = append(res, prefix...)
+		}
+		res = append(res, c)
+		bol = c == '\n'
+	}
+	return res
 }
 
 func assembleIncludes(yamlString []byte) []byte {
 	// look for "- $include"
-	listInc := regexp.MustCompile(`(?m:^\s*-\s\$include\s+(?P<filename>.+)$)`)
+	listInc := regexp.MustCompile(`(?m:\s*-\s\$include\s+(?P<filename>.+)$)`)
 	mapInc := regexp.MustCompile(`(?m:^\s*\$include:\s+(?P<filename>.+)$)`)
+	patterns := []*regexp.Regexp{listInc, mapInc}
 
-	res1 := listInc.FindAllStringIndex(string(yamlString), -1)
-	fmt.Printf("<%v> %v\n", res1, reSubMatchMap(listInc, string(yamlString)))
+	for _, pattern := range patterns {
+		for ok := true; ok; {
+			indexes := pattern.FindSubmatchIndex(yamlString)
+			ok = len(indexes) != 0
+			if ok {
+				match := includeMatch{
+					includeFile: string(yamlString[indexes[2]:indexes[3]]),
+					startIdx:    indexes[0],
+					endIdx:      indexes[1],
+				}
 
-	res2 := mapInc.FindAllStringIndex(string(yamlString), -1)
-	fmt.Printf("<%v> %v\n", res2, reSubMatchMap(mapInc, string(yamlString)))
+				indent := getIndentSize(yamlString, match.startIdx)
+
+				contents, err := ioutil.ReadFile(match.includeFile)
+				checkError(err, "Unable to read file: "+match.includeFile)
+				indentedContents := indentBytes(contents, indent)
+				result := []byte{}
+				result = append(result, yamlString[:match.startIdx]...)
+				result = append(result, '\n')
+				result = append(result, indentedContents...)
+				result = append(result, yamlString[match.endIdx:]...)
+				yamlString = result
+
+			}
+		}
+	}
+	fmt.Println(string(yamlString))
 	exit(0)
 
 	return yamlString
