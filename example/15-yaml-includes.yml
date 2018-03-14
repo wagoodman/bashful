@@ -1,0 +1,23 @@
+$include: example/common-config.yml
+
+x-reference-data:
+  all-apps: &app-names
+    - $include example/common-apps.yml
+
+tasks:
+
+  - name: Cloning Repos
+    parallel-tasks:
+      - name: "Cloning <replace>"
+        cmd: example/scripts/random-worker.sh 2 <replace>
+        ignore-failure: true
+        for-each: *app-names
+
+  - $include example/common-tasks.yml
+
+  - name: Building and Migrating
+    parallel-tasks:
+      - name: "Building <replace>"
+        cmd: example/scripts/random-worker.sh 2 <replace>
+        ignore-failure: true
+        for-each: *app-names
