@@ -51,7 +51,7 @@ go get github.com/wagoodman/bashful
 ## Getting Started
 **There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir**, but here are a few:
 
-1. The simplest of examples:
+**1. The simplest of examples:**
 ```yaml
 tasks:
     - cmd: echo "Hello, World!"
@@ -61,7 +61,7 @@ To run it:
 bashful run hello.yaml
 ```
 
-2. A more realistic example: a build and deployment description
+**2. A more realistic example: a build and deployment description**
 ```yaml
 # ci.yaml
 tasks:
@@ -92,7 +92,7 @@ bashful run ci.yaml
 bashful run ci.yaml --tags build
 ```
 
-3. Have an installer run things in parallel...
+**3. Have an installer run things in parallel...**
 ```yaml
 # install.yaml
 tasks:
@@ -134,7 +134,8 @@ tasks:
 *Note: you cannot persist environment variables from a parallel step.*
 
 
-4. Include other yaml files in your bashful run.yaml. This way you can centralize your common yaml snippets for reusability:
+**4. Include other yaml files in your bashful run.yaml.**
+This way you can centralize your common yaml snippets for reusability:
 
 ```yaml
 # run.yaml
