@@ -133,6 +133,89 @@ tasks:
 ```
 *Note: you cannot persist environment variables from a parallel step.*
 
+
+4. Include other yaml files in your bashful run.yaml. This way you can centralize your common yaml snippets for reusability:
+
+```yaml
+# run.yaml
+
+$include: example/common-config.yml
+
+x-reference-data:
+  all-apps: &app-names
+    - $include example/common-apps.yml
+
+tasks:
+
+  - name: Cloning Repos
+    parallel-tasks:
+      - name: "Cloning <replace>"
+        cmd: example/scripts/random-worker.sh 2 <replace>
+        ignore-failure: true
+        for-each: *app-names
+
+  - name: Building Repos
+    parallel-tasks:
+      - name: "Building <replace>"
+        cmd: example/scripts/random-worker.sh 1 <replace>
+        ignore-failure: true
+        for-each: *app-names
+
+```
+
+```yaml
+# example/common-config.yml
+
+config:
+  show-failure-report: false
+  show-summary-errors: true
+  max-parallel-commands: 6
+  show-task-times: true
+```
+
+```yaml
+# example/common-apps.yml
+
+- some-lib-4
+- utilities-lib
+- important-lib
+- some-app1
+- some-app3
+```
+
+Will generate:
+```yaml
+config:
+    show-failure-report: false
+    show-summary-errors: true
+    max-parallel-commands: 6
+    show-task-times: true
+
+x-reference-data:
+  all-apps: &app-names
+    - some-lib-4
+    - utilities-lib
+    - important-lib
+    - some-app1
+    - some-app3
+
+tasks:
+
+  - name: Cloning Repos
+    parallel-tasks:
+      - name: "Cloning <replace>"
+        cmd: example/scripts/random-worker.sh 2 <replace>
+        ignore-failure: true
+        for-each: *app-names
+
+  - name: Building Repos
+    parallel-tasks:
+      - name: "Building <replace>"
+        cmd: example/scripts/random-worker.sh 1 <replace>
+        ignore-failure: true
+        for-each: *app-names
+```
+
 **There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir.** Go check them out!
 
 ## Configuration Options
