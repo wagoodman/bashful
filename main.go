@@ -20,6 +20,7 @@ import (
 	"github.com/howeyc/gopass"
 	color "github.com/mgutz/ansi"
 	"github.com/mholt/archiver"
+	"github.com/spf13/afero"
 	"github.com/urfave/cli"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
@@ -31,6 +32,7 @@ const (
 )
 
 var (
+	appFs              afero.Fs
 	version            = "No version provided"
 	commit             = "No commit provided"
 	buildTime          = "No build timestamp provided"
@@ -376,6 +378,7 @@ func setup() {
 
 func main() {
 	setup()
+	appFs = afero.NewOsFs()
 	app := cli.NewApp()
 	app.Name = "bashful"
 	app.Version = "Version:   " + version + "\n   Commit:    " + commit + "\n   BuildTime: " + buildTime

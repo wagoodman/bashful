@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/deckarep/golang-set"
+	"github.com/spf13/afero"
 	"gopkg.in/yaml.v2"
 )
 
@@ -399,12 +399,10 @@ func indentBytes(b []byte, size int) []byte {
 }
 
 func assembleIncludes(yamlString []byte) []byte {
-	// look for "- $include"
 	listInc := regexp.MustCompile(`(?m:\s*-\s\$include\s+(?P<filename>.+)$)`)
 	mapInc := regexp.MustCompile(`(?m:^\s*\$include:\s+(?P<filename>.+)$)`)
-	patterns := []*regexp.Regexp{listInc, mapInc}
 
-	for _, pattern := range patterns {
+	for _, pattern := range []*regexp.Regexp{listInc, mapInc} {
 		for ok := true; ok; {
 			indexes := pattern.FindSubmatchIndex(yamlString)
 			ok = len(indexes) != 0
@@ -417,7 +415,7 @@ func assembleIncludes(yamlString []byte) []byte {
 
 				indent := getIndentSize(yamlString, match.startIdx)
 
-				contents, err := ioutil.ReadFile(match.includeFile)
+				contents, err := afero.ReadFile(appFs, match.includeFile)
 				checkError(err, "Unable to read file: "+match.includeFile)
 				indentedContents := indentBytes(contents, indent)
 				result := []byte{}
@@ -426,12 +424,9 @@ func assembleIncludes(yamlString []byte) []byte {
 				result = append(result, indentedContents...)
 				result = append(result, yamlString[match.endIdx:]...)
 				yamlString = result
-
 			}
 		}
 	}
-	fmt.Println(string(yamlString))
-	exit(0)
 
 	return yamlString
 }
@@ -442,7 +437,6 @@ func parseRunYaml(yamlString []byte) {
 	config.Options = NewOptionsConfig()
 
 	yamlString = assembleIncludes(yamlString)
-	exit(0)
 	err := yaml.Unmarshal(yamlString, &config)
 	checkError(err, "Error: Unable to parse given yaml")
 
