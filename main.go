@@ -156,16 +156,17 @@ func bundle(userYamlPath, outputPath string) {
 
 	archive := NewArchive(archivePath)
 
-	for _, path := range append([]string{userYamlPath, bashfulPath, config.CachePath}, config.Options.Bundle...) {
-		fmt.Println(path)
-		err = archive.Archive(path)
+	for _, path := range []string{userYamlPath, bashfulPath} {
+		err = archive.Archive(path, false)
+		checkError(err, "Unable to add '"+path+"' to bundle")
+	}
+
+	for _, path := range append([]string{config.CachePath}, config.Options.Bundle...) {
+		err = archive.Archive(path, true)
 		checkError(err, "Unable to add '"+path+"' to bundle")
 	}
 
 	archive.Close()
-
-	// err = archiver.TarGz.Make(archivePath, append([]string{userYamlPath, bashfulPath, config.CachePath}, config.Options.Bundle...))
-	// checkError(err, "Unable to create bundle")
 
 	execute := `#!/bin/bash
 set -eu
@@ -196,8 +197,7 @@ __BASHFUL_ARCHIVE__
 	err = tmpl.Execute(&buff, values)
 	checkError(err, "Failed to render execute template")
 
-	runnerPath := "./runner"
-	runnerFh, err := os.Create(runnerPath)
+	runnerFh, err := os.Create(outputPath)
 	checkError(err, "Unable to create runner executable file")
 	defer runnerFh.Close()
 
@@ -212,7 +212,7 @@ __BASHFUL_ARCHIVE__
 	_, err = io.Copy(runnerFh, archiveFh)
 	checkError(err, "Unable to write payload to runner executable file")
 
-	err = os.Chmod(runnerPath, 0755)
+	err = os.Chmod(outputPath, 0755)
 	checkError(err, "Unable to change runner permissions")
 
 }
@@ -415,7 +415,7 @@ func main() {
 				}
 
 				userYamlPath := cliCtx.Args().Get(0)
-				bundlePath := userYamlPath + ".bundle"
+				bundlePath := filepath.Base(userYamlPath[0:len(userYamlPath)-len(filepath.Ext(userYamlPath))]) + ".bundle"
 
 				bundle(userYamlPath, bundlePath)
 

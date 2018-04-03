@@ -11,3 +11,4 @@ archive
 /.idea
 /vendor
 /dist
+*.bundle

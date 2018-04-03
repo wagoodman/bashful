@@ -6,10 +6,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Archiver interface {
-	Archive(src string) error
+	Archive(srcPath string, preservePath bool) error
 	Close()
 }
 
@@ -37,32 +38,52 @@ func (archiver *archive) Close() {
 	archiver.outputFile.Close()
 }
 
-func (archiver *archive) Archive(srcPath string) error {
+func isDir(pth string) (bool, error) {
+	fi, err := os.Stat(pth)
+	if err != nil {
+		return false, err
+	}
+
+	return fi.Mode().IsDir(), nil
+}
+
+func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 	absPath, err := filepath.Abs(srcPath)
 	if err != nil {
 		return err
 	}
 
-	err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	isDirectory, err := isDir(srcPath)
+	checkError(err, "Could not determine if this is a directory.")
+
+	if isDirectory || !preservePath {
+		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			var relative string
+			if os.IsPathSeparator(srcPath[len(srcPath)-1]) {
+				relative, err = filepath.Rel(absPath, path)
+			} else {
+				relative, err = filepath.Rel(filepath.Dir(absPath), path)
+			}
+
+			relative = filepath.ToSlash(relative)
+
+			if err != nil {
+				return err
+			}
+
+			return archiver.addTarFile(path, relative)
+		})
+	} else {
+		fields := strings.Split(srcPath, string(os.PathSeparator))
+		for idx := range fields {
+			path := strings.Join(fields[:idx+1], string(os.PathSeparator))
+			archiver.addTarFile(path, path)
 		}
-
-		var relative string
-		if os.IsPathSeparator(srcPath[len(srcPath)-1]) {
-			relative, err = filepath.Rel(absPath, path)
-		} else {
-			relative, err = filepath.Rel(filepath.Dir(absPath), path)
-		}
-
-		relative = filepath.ToSlash(relative)
-
-		if err != nil {
-			return err
-		}
-
-		return archiver.addTarFile(path, relative)
-	})
+	}
 
 	return err
 }

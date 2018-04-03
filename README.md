@@ -119,8 +119,8 @@ tasks:
 Package up the installed into a single executable and give it to someone else to run (must be the same architecture and OS type):
 ```bash
 bashful bundle install.yaml
-# now you have a new executable called "runner", which can simply be executed
-./runner
+# now you have a new executable called "install.bundle", which can simply be executed
+./install.bundle
 ```
 *Note: the bundle feature is pretty experimental right now.*
 
