@@ -6,8 +6,14 @@ $(TARGETS):
 	./scripts/$@
 
 run:
-	go run main.go task.go config.go screen.go download.go log.go \
-	run example/15-yaml-includes.yml
+	make build
+	rm runner
+	rm -rf /tmp/bashful.*
+	./dist/bashful bundle example/16-bundle-manifest.yml
+	./runner
+
+	# go run main.go task.go config.go screen.go download.go log.go \
+	# run example/16-bundle-manifest.yml
 
 examples: clean build
 	./dist/bashful run example/00-demo.yml

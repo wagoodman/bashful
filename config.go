@@ -57,6 +57,9 @@ type OptionsConfig struct {
 	// BulletChar is a character (or short string) that should prefix any displayed task name
 	BulletChar string `yaml:"bullet-char"`
 
+	// Bundle is a list of relative file paths that should be included in a bashful bundle
+	Bundle []string `yaml:"bundle"`
+
 	// CollapseOnCompletion indicates when a task with child tasks should be "rolled up" into a single line after all tasks have been executed
 	CollapseOnCompletion bool `yaml:"collapse-on-completion"`
 

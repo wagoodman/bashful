@@ -19,7 +19,8 @@ import (
 
 	"github.com/howeyc/gopass"
 	color "github.com/mgutz/ansi"
-	"github.com/mholt/archiver"
+	// "github.com/mholt/archiver"
+
 	"github.com/spf13/afero"
 	"github.com/urfave/cli"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
@@ -152,8 +153,19 @@ func bundle(userYamlPath, outputPath string) {
 
 	bashfulPath, err := os.Executable()
 	checkError(err, "Could not find path to bashful")
-	err = archiver.TarGz.Make(archivePath, []string{userYamlPath, bashfulPath, config.CachePath})
-	checkError(err, "Unable to create bundle")
+
+	archive := NewArchive(archivePath)
+
+	for _, path := range append([]string{userYamlPath, bashfulPath, config.CachePath}, config.Options.Bundle...) {
+		fmt.Println(path)
+		err = archive.Archive(path)
+		checkError(err, "Unable to add '"+path+"' to bundle")
+	}
+
+	archive.Close()
+
+	// err = archiver.TarGz.Make(archivePath, append([]string{userYamlPath, bashfulPath, config.CachePath}, config.Options.Bundle...))
+	// checkError(err, "Unable to create bundle")
 
 	execute := `#!/bin/bash
 set -eu
