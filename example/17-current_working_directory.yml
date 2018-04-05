@@ -1,0 +1,5 @@
+tasks:
+  # execute command by first changing directory to cwd
+  - name: cwd
+    cmd: pwd
+    cwd: /tmp

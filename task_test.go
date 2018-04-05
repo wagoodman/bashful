@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/repr"
@@ -65,6 +66,30 @@ tasks:
 	}
 
 	expStr, actStr = "this:is:working:just:fine", environment["SOMEVAR"]
+	if expStr != actStr {
+		t.Error("Expected", expStr, "got", actStr)
+	}
+
+}
+
+func TestCurrentWorkingDirectory(t *testing.T) {
+	var expStr, actStr string
+	var failedTasks []*Task
+	simpleYamlStr := `
+tasks:
+  - name: start
+    cmd: export CWD=$(pwd)
+    cwd: ./example
+`
+
+	environment := map[string]string{}
+	config.Options.StopOnFailure = false
+	failedTasks = run([]byte(simpleYamlStr), environment)
+	if len(failedTasks) > 0 {
+		t.Error("TestSerialTaskEnvPersistence: Expected no tasks to fail")
+	}
+	cwd := strings.Split(environment["CWD"], "/")
+	expStr, actStr = "example", cwd[len(cwd)-1]
 	if expStr != actStr {
 		t.Error("Expected", expStr, "got", actStr)
 	}

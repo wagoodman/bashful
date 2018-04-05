@@ -268,6 +268,9 @@ func (task *Task) inflateCmd() {
 	task.Command.Cmd = exec.Command(shell, "-c", sudoCmd+task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
 	task.Command.Cmd.Stdin = strings.NewReader(string(sudoPassword) + "\n")
 
+	// Set current working directory; default is empty
+	task.Command.Cmd.Dir = task.Config.CwdString
+
 	// allow the child process to provide env vars via a pipe (FD3)
 	task.Command.Cmd.ExtraFiles = []*os.File{writeFd}
 	task.Command.EnvReadFile = readFd

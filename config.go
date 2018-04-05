@@ -179,6 +179,9 @@ type TaskConfig struct {
 	// CmdString is the bash command to invoke when "running" this task
 	CmdString string `yaml:"cmd"`
 
+	// CwdString is current working directory
+	CwdString string `yaml:"cwd"`
+
 	// CollapseOnCompletion indicates when a task with child tasks should be "rolled up" into a single line after all tasks have been executed
 	CollapseOnCompletion bool `yaml:"collapse-on-completion"`
 
