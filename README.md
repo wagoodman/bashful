@@ -229,7 +229,7 @@ config:
     # which character used to delimintate the task list
     bullet-char: "-"
 
-    # hide all subtasks after section completion
+    # hide all child tasks after task section completion
     collapse-on-completion: false
 
     # change the colors of the vertical progress bar for a task in a particular state.

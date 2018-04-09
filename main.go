@@ -19,7 +19,6 @@ import (
 
 	"github.com/howeyc/gopass"
 	color "github.com/mgutz/ansi"
-	// "github.com/mholt/archiver"
 
 	"github.com/spf13/afero"
 	"github.com/urfave/cli"
@@ -176,7 +175,7 @@ ARCHIVE=$(awk '/^__BASHFUL_ARCHIVE__/ {print NR + 1; exit 0; }' $0)
 tail -n+$ARCHIVE $0 | tar -xz -C $TMPDIR
 
 pushd $TMPDIR > /dev/null
-./bashful run {{.Runyaml}}
+./bashful run {{.Runyaml}} $*
 popd > /dev/null
 rm -rf $TMPDIR
 

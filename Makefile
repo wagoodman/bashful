@@ -7,7 +7,7 @@ $(TARGETS):
 
 run:
 	make build
-	rm 16-bundle-manifest.bundle
+	rm -f 16-bundle-manifest.bundle
 	rm -rf /tmp/bashful.*
 	./dist/bashful bundle example/16-bundle-manifest.yml
 	./16-bundle-manifest.bundle
@@ -33,6 +33,7 @@ examples: clean build
 	./dist/bashful run example/13-single-line.yml || true
 	# ./dist/bashful run example/14-sudo.yml
 	./dist/bashful run example/15-yaml-includes.yml
+	./dist/bashful bundle example/16-bundle-manifest.yml && ./16-bundle-manifest.bundle; rm -f 16-bundle-manifest.bundle
 
 clean:
 	rm -f dist/bashful build.log
