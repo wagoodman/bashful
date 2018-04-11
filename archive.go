@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -81,7 +82,8 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 		fields := strings.Split(srcPath, string(os.PathSeparator))
 		for idx := range fields {
 			path := strings.Join(fields[:idx+1], string(os.PathSeparator))
-			archiver.addTarFile(path, path)
+			err := archiver.addTarFile(path, path)
+			checkError(err, "Unable to archive file")
 		}
 	}
 
@@ -89,6 +91,9 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 }
 
 func (archiver *archive) addTarFile(path, name string) error {
+	if strings.Contains(path, "..") {
+		return errors.New("Path cannot contain a relative marker of '..': " + path)
+	}
 	fi, err := os.Lstat(path)
 	if err != nil {
 		return err

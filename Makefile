@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 .DEFAULT_GOAL := ci
 TARGETS := $(shell ls scripts) 
 .PHONY: run clean $(TARGETS)
@@ -6,14 +7,8 @@ $(TARGETS):
 	./scripts/$@
 
 run:
-	make build
-	rm -f 16-bundle-manifest.bundle
-	rm -rf /tmp/bashful.*
-	./dist/bashful bundle example/16-bundle-manifest.yml
-	./16-bundle-manifest.bundle
-
-	# go run main.go task.go config.go screen.go download.go log.go \
-	# run example/16-bundle-manifest.yml
+	go run main.go task.go config.go screen.go download.go log.go archive.go \
+	run example/00-demo.yml
 
 examples: clean build
 	./dist/bashful run example/00-demo.yml
