@@ -1,5 +1,5 @@
 tasks:
-  # if a command shold be run with sudo, flag it as so...
+  # if a command should be run with sudo, flag it as so...
   - cmd: touch /bin/true
     sudo: true
 
