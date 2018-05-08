@@ -1,6 +1,6 @@
 # bashful
 
-![Image](https://api.travis-ci.org/wagoodman/bashful.svg?branch=master)
+[![Travis CI](https://api.travis-ci.org/wagoodman/bashful.svg?branch=master)](https://travis-ci.org/wagoodman/bashful) [![Go Report Card](https://goreportcard.com/badge/github.com/wagoodman/bashful)](https://goreportcard.com/report/github.com/wagoodman/bashful)
 
 **This is beta quality!** Use at your own risk.
 
