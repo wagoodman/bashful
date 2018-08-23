@@ -4,8 +4,10 @@ config:
   log-path: build.log
 
 tasks:
+  # cd to a dir first before running the cmd... just for one task though
   - name: Prepping data
-    cmd: example/scripts/random-worker.sh 10
+    cmd: random-worker.sh 10
+    cwd: example/scripts/
 
   - name: Compiling source
     parallel-tasks:

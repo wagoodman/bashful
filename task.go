@@ -26,6 +26,9 @@ var (
 	// spinner generates the spin icon character in front of running tasks
 	spinner = spin.New()
 
+	// functions is a string formatted with `declare -pf` output for bash functions
+	functions = "true"
+
 	// nextDisplayIdx is the next available screen row to use based off of the task / sub-task order.
 	nextDisplayIdx = 0
 
@@ -133,6 +136,9 @@ type TaskCommand struct {
 
 	// EnvReadFile is an extra pipe given to the child shell process for exfiltrating env vars back up to bashful (to provide as input for future tasks)
 	EnvReadFile *os.File
+
+	// FuncReadFile is an extra pipe given to the child shell process for exfiltrating bash functions back up to bashful (to provide as input for future tasks)
+	FuncReadFile *os.File
 
 	// Environment is a list of env vars from the exited child process
 	Environment map[string]string
@@ -258,22 +264,26 @@ func (task *Task) inflateCmd() {
 		shell = "sh"
 	}
 
-	readFd, writeFd, err := os.Pipe()
-	checkError(err, "Could not open env pipe for child shell")
+	readEnvFd, writeEnvFd, err := os.Pipe()
+	checkError(err, "Could not open env pipe for child shell (for env)")
+
+	readFuncFd, writeFuncFd, err := os.Pipe()
+	checkError(err, "Could not open env pipe for child shell (for func)")
 
 	sudoCmd := ""
 	if task.Config.Sudo {
 		sudoCmd = "sudo -S "
 	}
-	task.Command.Cmd = exec.Command(shell, "-c", sudoCmd+task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
+	task.Command.Cmd = exec.Command(shell, "-c", sudoCmd+task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; declare -pf >&4; exit $BASHFUL_RC")
 	task.Command.Cmd.Stdin = strings.NewReader(string(sudoPassword) + "\n")
 
 	// Set current working directory; default is empty
 	task.Command.Cmd.Dir = task.Config.CwdString
 
-	// allow the child process to provide env vars via a pipe (FD3)
-	task.Command.Cmd.ExtraFiles = []*os.File{writeFd}
-	task.Command.EnvReadFile = readFd
+	// allow the child process to provide env vars and functions via a pipe (FD3)
+	task.Command.Cmd.ExtraFiles = []*os.File{writeEnvFd, writeFuncFd}
+	task.Command.EnvReadFile = readEnvFd
+	task.Command.FuncReadFile = readFuncFd
 
 	// set this command as a process group
 	task.Command.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -509,7 +519,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 }
 
 // runSingleCmd executes a tasks primary command (not child task commands) and monitors command events
-func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup, environment map[string]string) {
+func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup, environment map[string]string, updateEnv bool) {
 	logToMain("Started Task: "+task.Config.Name, infoFormat)
 
 	task.Command.StartTime = time.Now()
@@ -614,9 +624,9 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 	// close the write end of the pipe since the child shell is positively no longer writting to it
 	task.Command.Cmd.ExtraFiles[0].Close()
 	data, err := ioutil.ReadAll(task.Command.EnvReadFile)
-	checkError(err, "Could not read env vars from child shell")
+	checkError(err, "Could not read env vars from child shell (env)")
 
-	if environment != nil {
+	if environment != nil && updateEnv == true {
 		lines := strings.Split(string(data[:]), "\n")
 		for _, line := range lines {
 			fields := strings.SplitN(strings.TrimSpace(line), "=", 2)
@@ -626,6 +636,16 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 				environment[fields[0]] = ""
 			}
 		}
+	}
+	fmt.Println(environment)
+
+	// close the write end of the pipe since the child shell is positively no longer writting to it
+	task.Command.Cmd.ExtraFiles[1].Close()
+	data, err = ioutil.ReadAll(task.Command.FuncReadFile)
+	checkError(err, "Could not read env vars from child shell (func)")
+
+	if updateEnv {
+		functions = string(data)
 	}
 
 	if returnCode == 0 || task.Config.IgnoreFailure {
@@ -672,12 +692,12 @@ func (task *Task) Pave() {
 // StartAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
 func (task *Task) StartAvailableTasks(environment map[string]string) {
 	if task.Config.CmdString != "" && !task.Command.Started && TaskStats.runningCmds < config.Options.MaxParallelCmds {
-		go task.runSingleCmd(task.resultChan, &task.waiter, environment)
+		go task.runSingleCmd(task.resultChan, &task.waiter, environment, true)
 		task.Command.Started = true
 		TaskStats.runningCmds++
 	}
 	for ; TaskStats.runningCmds < config.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
-		go task.Children[task.lastStartedTask].runSingleCmd(task.resultChan, &task.waiter, nil)
+		go task.Children[task.lastStartedTask].runSingleCmd(task.resultChan, &task.waiter, environment, false)
 		task.Children[task.lastStartedTask].Command.Started = true
 		TaskStats.runningCmds++
 	}

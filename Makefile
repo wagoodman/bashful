@@ -8,7 +8,7 @@ $(TARGETS):
 
 run:
 	go run main.go task.go config.go screen.go download.go log.go archive.go \
-	run example/00-demo.yml
+	run example/12-share-variables.yml
 
 examples: clean build
 	./dist/bashful run example/00-demo.yml
@@ -29,6 +29,8 @@ examples: clean build
 	# ./dist/bashful run example/14-sudo.yml
 	./dist/bashful run example/15-yaml-includes.yml
 	./dist/bashful bundle example/16-bundle-manifest.yml && ./16-bundle-manifest.bundle; rm -f 16-bundle-manifest.bundle
+	./dist/bashful run example/17-bash-functions.yml
+
 
 clean:
 	rm -f dist/bashful build.log

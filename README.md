@@ -294,6 +294,7 @@ tasks:
       cmd: echo "woot"              # the command to be ran (required)
       
       collapse-on-completion: false # hide all defined 'parallel-tasks' after completion
+      cwd: ...                      # optionally cd to another dir before running the command.
       event-driven: true            # use a event driven or polling mechanism for displaying task stdout
       ignore-failure: false         # do not register any non-zero return code as a failure (this task will appear to never fail)
       show-output: true             # show task stdout to the screen
