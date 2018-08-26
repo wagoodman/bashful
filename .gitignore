@@ -2,13 +2,13 @@ debug
 debug.test
 runner
 .vscode
-/.bashful
+.bashful
 bashful*
 /bin
 archive
 *.log
 /downloads
-/.idea
+.idea
 /vendor
 /dist
 *.bundle

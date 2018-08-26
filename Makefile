@@ -7,8 +7,7 @@ $(TARGETS):
 	./scripts/$@
 
 run:
-	go run main.go task.go config.go screen.go download.go log.go archive.go \
-	run example/00-demo.yml
+	go run main.go run example/00-demo.yml
 
 examples: clean build
 	./dist/bashful run example/00-demo.yml

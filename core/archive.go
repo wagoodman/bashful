@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"archive/tar"
@@ -17,7 +17,7 @@ type Archiver interface {
 
 func NewArchive(dest string) Archiver {
 	fw, err := os.Create(dest)
-	checkError(err, "Could not create archive file")
+	CheckError(err, "Could not create archive file")
 	gw := gzip.NewWriter(fw)
 	tw := tar.NewWriter(gw)
 	return &archive{
@@ -55,7 +55,7 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 	}
 
 	isDirectory, err := isDir(srcPath)
-	checkError(err, "Could not determine if this is a directory.")
+	CheckError(err, "Could not determine if this is a directory.")
 
 	if isDirectory || !preservePath {
 		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
@@ -83,7 +83,7 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 		for idx := range fields {
 			path := strings.Join(fields[:idx+1], string(os.PathSeparator))
 			err := archiver.addTarFile(path, path)
-			checkError(err, "Unable to archive file")
+			CheckError(err, "Unable to archive file")
 		}
 	}
 

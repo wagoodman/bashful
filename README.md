@@ -7,7 +7,7 @@
 Use a yaml file to stitch together commands and bash snippets and run them with a bit of style. 
 Why? Because your bash script should be quiet and shy-like (...and not such a loud mouth). 
 
-![Image](demo.gif)
+![Image](doc/demo.gif)
 
 *"But why would you make this monstrosity?"* you ask... because ` &>/dev/null` and ` | tee -a some.log` and `set -e; do something; set +e` and other similar things is getting annoying. And besides... why shouldn't your bash script output look pretty?
 
@@ -340,6 +340,7 @@ GLOBAL OPTIONS:
 ## Wish list
 All feature requests are welcome! 
 - [ ] at least 70% test coverage
+- [ ] truly cross platform (windows)
 - [ ] Multiple (serial) commands for a single task (`cmd: [run something, run another thing]`)
 - [ ] Multiple url references for a single task (`url: [https://someurl.com/some-script.sh, https://anotherurl.com/another-script.sh]`)
 - [ ] Allow parallel tasks within parallel tasks (really just allow deeper nesting of any kind of task)

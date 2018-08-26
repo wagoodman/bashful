@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"strings"
@@ -23,7 +23,7 @@ func TestTaskString(t *testing.T) {
 		t.Error("TestTaskString (default): Expected", repr.String(expectedOutput), "got", repr.String(testOutput))
 	}
 
-	config.Options.ShowTaskEta = false
+	Config.Options.ShowTaskEta = false
 	task.Display.Values.Title = "123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm"
 	testOutput = task.String(20)
 	expectedOutput = " \x1b[38;5;10m  \x1b[0m • 123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm s...SOMEETAVALUE"
@@ -59,8 +59,8 @@ tasks:
 `
 
 	environment := map[string]string{}
-	config.Options.StopOnFailure = false
-	failedTasks = run([]byte(simpleYamlStr), environment)
+	Config.Options.StopOnFailure = false
+	failedTasks = Run([]byte(simpleYamlStr), environment)
 	if len(failedTasks) > 0 {
 		t.Error("TestSerialTaskEnvPersistence: Expected no tasks to fail")
 	}
@@ -79,12 +79,12 @@ func TestCurrentWorkingDirectory(t *testing.T) {
 tasks:
   - name: start
     cmd: export CWD=$(pwd)
-    cwd: ./example
+    cwd: ../example
 `
 
 	environment := map[string]string{}
-	config.Options.StopOnFailure = false
-	failedTasks = run([]byte(simpleYamlStr), environment)
+	Config.Options.StopOnFailure = false
+	failedTasks = Run([]byte(simpleYamlStr), environment)
 	if len(failedTasks) > 0 {
 		t.Error("TestSerialTaskEnvPersistence: Expected no tasks to fail")
 	}

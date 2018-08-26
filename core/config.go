@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"encoding/gob"
@@ -15,12 +15,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// config represents a superset of options parsed from the user yaml file (or derived from user values)
-var config struct {
+// Config represents a superset of options parsed from the user yaml file (or derived from user values)
+var Config struct {
 	Cli CliOptions
 
 	// Options is a global set of values to be applied to all tasks
-	Options OptionsConfig `yaml:"config"`
+	Options OptionsConfig `yaml:"Config"`
 
 	// TaskConfigs is a list of task definitions and their metadata
 	TaskConfigs []TaskConfig `yaml:"tasks"`
@@ -78,7 +78,7 @@ type OptionsConfig struct {
 	// EventDriven indicates if the screen should be updated on any/all task stdout/stderr events or on a polling schedule
 	EventDriven bool `yaml:"event-driven"`
 
-	// ExecReplaceString is a char or short string that is replaced with the temporary executable path when using the 'url' task config option
+	// ExecReplaceString is a char or short string that is replaced with the temporary executable path when using the 'url' task Config option
 	ExecReplaceString string `yaml:"exec-replace-pattern"`
 
 	// IgnoreFailure indicates when no errors should be registered (all task command non-zero return codes will be treated as a zero return code)
@@ -167,7 +167,7 @@ func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	}
 
 	// the global options must be available when parsing the task yaml (does order matter?)
-	config.Options = *options
+	Config.Options = *options
 	return nil
 }
 
@@ -219,11 +219,11 @@ type TaskConfig struct {
 
 // NewTaskConfig creates a new TaskConfig populated with sane default values (derived from the global OptionsConfig)
 func NewTaskConfig() (obj TaskConfig) {
-	obj.IgnoreFailure = config.Options.IgnoreFailure
-	obj.StopOnFailure = config.Options.StopOnFailure
-	obj.ShowTaskOutput = config.Options.ShowTaskOutput
-	obj.EventDriven = config.Options.EventDriven
-	obj.CollapseOnCompletion = config.Options.CollapseOnCompletion
+	obj.IgnoreFailure = Config.Options.IgnoreFailure
+	obj.StopOnFailure = Config.Options.StopOnFailure
+	obj.ShowTaskOutput = Config.Options.ShowTaskOutput
+	obj.EventDriven = Config.Options.EventDriven
+	obj.CollapseOnCompletion = Config.Options.CollapseOnCompletion
 
 	return obj
 }
@@ -239,7 +239,7 @@ func (taskConfig *TaskConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 
 	*taskConfig = TaskConfig(defaultValues)
 
-	if config.Options.SingleLineDisplay {
+	if Config.Options.SingleLineDisplay {
 		taskConfig.ShowTaskOutput = false
 		taskConfig.CollapseOnCompletion = false
 	}
@@ -296,41 +296,41 @@ func removeOneValue(slice []float64, value float64) []float64 {
 
 // readTimeCache fetches and reads a cache file from disk containing CmdString-to-ETASeconds. Note: this this must be done before fetching/parsing the run.yaml
 func readTimeCache() {
-	if config.CachePath == "" {
+	if Config.CachePath == "" {
 		cwd, err := os.Getwd()
-		checkError(err, "Unable to get CWD.")
-		config.CachePath = path.Join(cwd, ".bashful")
+		CheckError(err, "Unable to get CWD.")
+		Config.CachePath = path.Join(cwd, ".bashful")
 	}
 
-	config.downloadCachePath = path.Join(config.CachePath, "downloads")
-	config.logCachePath = path.Join(config.CachePath, "logs")
-	config.etaCachePath = path.Join(config.CachePath, "eta")
+	Config.downloadCachePath = path.Join(Config.CachePath, "downloads")
+	Config.logCachePath = path.Join(Config.CachePath, "logs")
+	Config.etaCachePath = path.Join(Config.CachePath, "eta")
 
 	// create the cache dirs if they do not already exist
-	if _, err := os.Stat(config.CachePath); os.IsNotExist(err) {
-		os.Mkdir(config.CachePath, 0755)
+	if _, err := os.Stat(Config.CachePath); os.IsNotExist(err) {
+		os.Mkdir(Config.CachePath, 0755)
 	}
-	if _, err := os.Stat(config.downloadCachePath); os.IsNotExist(err) {
-		os.Mkdir(config.downloadCachePath, 0755)
+	if _, err := os.Stat(Config.downloadCachePath); os.IsNotExist(err) {
+		os.Mkdir(Config.downloadCachePath, 0755)
 	}
-	if _, err := os.Stat(config.logCachePath); os.IsNotExist(err) {
-		os.Mkdir(config.logCachePath, 0755)
+	if _, err := os.Stat(Config.logCachePath); os.IsNotExist(err) {
+		os.Mkdir(Config.logCachePath, 0755)
 	}
 
-	config.commandTimeCache = make(map[string]time.Duration)
-	if doesFileExist(config.etaCachePath) {
-		err := Load(config.etaCachePath, &config.commandTimeCache)
-		checkError(err, "Unable to load command eta cache.")
+	Config.commandTimeCache = make(map[string]time.Duration)
+	if doesFileExist(Config.etaCachePath) {
+		err := Load(Config.etaCachePath, &Config.commandTimeCache)
+		CheckError(err, "Unable to load command eta cache.")
 	}
 }
 
 // replaceArguments replaces the command line arguments in the given string
 func replaceArguments(source string) string {
 	replaced := source
-	for i, arg := range config.Cli.Args {
+	for i, arg := range Config.Cli.Args {
 		replaced = strings.Replace(replaced, fmt.Sprintf("$%v", i+1), arg, -1)
 	}
-	replaced = strings.Replace(replaced, "$*", strings.Join(config.Cli.Args, " "), -1)
+	replaced = strings.Replace(replaced, "$*", strings.Join(Config.Cli.Args, " "), -1)
 	return replaced
 }
 
@@ -344,7 +344,7 @@ func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
 
 	if len(taskConfig.ForEach) > 0 {
 		for _, replicaValue := range taskConfig.ForEach {
-			// make replacements of select attributes on a copy of the config
+			// make replacements of select attributes on a copy of the Config
 			newConfig := *taskConfig
 
 			// ensure we don't re-inflate a replica with more replica's of itself
@@ -353,13 +353,13 @@ func (taskConfig *TaskConfig) inflate() (tasks []TaskConfig) {
 			if newConfig.Name == "" {
 				newConfig.Name = newConfig.CmdString
 			}
-			newConfig.Name = strings.Replace(newConfig.Name, config.Options.ReplicaReplaceString, replicaValue, -1)
-			newConfig.CmdString = strings.Replace(newConfig.CmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
-			newConfig.URL = strings.Replace(newConfig.URL, config.Options.ReplicaReplaceString, replicaValue, -1)
+			newConfig.Name = strings.Replace(newConfig.Name, Config.Options.ReplicaReplaceString, replicaValue, -1)
+			newConfig.CmdString = strings.Replace(newConfig.CmdString, Config.Options.ReplicaReplaceString, replicaValue, -1)
+			newConfig.URL = strings.Replace(newConfig.URL, Config.Options.ReplicaReplaceString, replicaValue, -1)
 
 			newConfig.Tags = make(stringArray, len(taskConfig.Tags))
 			for k := range taskConfig.Tags {
-				newConfig.Tags[k] = strings.Replace(taskConfig.Tags[k], config.Options.ReplicaReplaceString, replicaValue, -1)
+				newConfig.Tags[k] = strings.Replace(taskConfig.Tags[k], Config.Options.ReplicaReplaceString, replicaValue, -1)
 			}
 
 			// insert the copy after current index
@@ -422,7 +422,7 @@ func assembleIncludes(yamlString []byte) []byte {
 				indent := getIndentSize(yamlString, match.startIdx)
 
 				contents, err := afero.ReadFile(appFs, match.includeFile)
-				checkError(err, "Unable to read file: "+match.includeFile)
+				CheckError(err, "Unable to read file: "+match.includeFile)
 				indentedContents := indentBytes(contents, indent)
 				result := []byte{}
 				result = append(result, yamlString[:match.startIdx]...)
@@ -437,29 +437,29 @@ func assembleIncludes(yamlString []byte) []byte {
 	return yamlString
 }
 
-// readRunYaml fetches and reads the user given yaml file from disk and populates the global config object
+// readRunYaml fetches and reads the user given yaml file from disk and populates the global Config object
 func parseRunYaml(yamlString []byte) {
 	// fetch and parse the run.yaml user file...
-	config.Options = NewOptionsConfig()
+	Config.Options = NewOptionsConfig()
 
 	yamlString = assembleIncludes(yamlString)
-	err := yaml.Unmarshal(yamlString, &config)
-	checkError(err, "Error: Unable to parse given yaml")
+	err := yaml.Unmarshal(yamlString, &Config)
+	CheckError(err, "Error: Unable to parse given yaml")
 
-	config.Options.validate()
+	Config.Options.validate()
 
 	// duplicate tasks with for-each clauses
-	for i := 0; i < len(config.TaskConfigs); i++ {
-		taskConfig := &config.TaskConfigs[i]
+	for i := 0; i < len(Config.TaskConfigs); i++ {
+		taskConfig := &Config.TaskConfigs[i]
 		newTaskConfigs := taskConfig.inflate()
 		if len(newTaskConfigs) > 0 {
 			for _, newConfig := range newTaskConfigs {
 				// insert the copy after current index
-				config.TaskConfigs = append(config.TaskConfigs[:i], append([]TaskConfig{newConfig}, config.TaskConfigs[i:]...)...)
+				Config.TaskConfigs = append(Config.TaskConfigs[:i], append([]TaskConfig{newConfig}, Config.TaskConfigs[i:]...)...)
 				i++
 			}
 			// remove current index
-			config.TaskConfigs = append(config.TaskConfigs[:i], config.TaskConfigs[i+1:]...)
+			Config.TaskConfigs = append(Config.TaskConfigs[:i], Config.TaskConfigs[i+1:]...)
 			i--
 		}
 
@@ -479,9 +479,9 @@ func parseRunYaml(yamlString []byte) {
 		}
 	}
 
-	// child tasks should inherit parent config tags
-	for index := range config.TaskConfigs {
-		taskConfig := &config.TaskConfigs[index]
+	// child tasks should inherit parent Config tags
+	for index := range Config.TaskConfigs {
+		taskConfig := &Config.TaskConfigs[index]
 		taskConfig.TagSet = mapset.NewSet()
 		for _, tag := range taskConfig.Tags {
 			taskConfig.TagSet.Add(tag)
@@ -497,15 +497,15 @@ func parseRunYaml(yamlString []byte) {
 	}
 
 	// prune the set of tasks that will not run given the set of cli options
-	if len(config.Cli.RunTags) > 0 {
-		for i := 0; i < len(config.TaskConfigs); i++ {
-			taskConfig := &config.TaskConfigs[i]
+	if len(Config.Cli.RunTags) > 0 {
+		for i := 0; i < len(Config.TaskConfigs); i++ {
+			taskConfig := &Config.TaskConfigs[i]
 			subTasksWithActiveTag := false
 
 			for j := 0; j < len(taskConfig.ParallelTasks); j++ {
 				subTaskConfig := &taskConfig.ParallelTasks[j]
-				matchedTaskTags := config.Cli.RunTagSet.Intersect(subTaskConfig.TagSet)
-				if len(matchedTaskTags.ToSlice()) > 0 || (len(subTaskConfig.Tags) == 0 && !config.Cli.ExecuteOnlyMatchedTags) {
+				matchedTaskTags := Config.Cli.RunTagSet.Intersect(subTaskConfig.TagSet)
+				if len(matchedTaskTags.ToSlice()) > 0 || (len(subTaskConfig.Tags) == 0 && !Config.Cli.ExecuteOnlyMatchedTags) {
 					subTasksWithActiveTag = true
 					continue
 				}
@@ -514,10 +514,10 @@ func parseRunYaml(yamlString []byte) {
 				j--
 			}
 
-			matchedTaskTags := config.Cli.RunTagSet.Intersect(taskConfig.TagSet)
-			if !subTasksWithActiveTag && len(matchedTaskTags.ToSlice()) == 0 && (len(taskConfig.Tags) > 0 || config.Cli.ExecuteOnlyMatchedTags) {
+			matchedTaskTags := Config.Cli.RunTagSet.Intersect(taskConfig.TagSet)
+			if !subTasksWithActiveTag && len(matchedTaskTags.ToSlice()) == 0 && (len(taskConfig.Tags) > 0 || Config.Cli.ExecuteOnlyMatchedTags) {
 				// this task does not have matching tags and there are no children with matching tags: prune this task
-				config.TaskConfigs = append(config.TaskConfigs[:i], config.TaskConfigs[i+1:]...)
+				Config.TaskConfigs = append(Config.TaskConfigs[:i], Config.TaskConfigs[i+1:]...)
 				i--
 			}
 		}
@@ -527,10 +527,10 @@ func parseRunYaml(yamlString []byte) {
 func (options *OptionsConfig) validate() {
 
 	// ensure not too many nestings of parallel tasks has been configured
-	for _, taskConfig := range config.TaskConfigs {
+	for _, taskConfig := range Config.TaskConfigs {
 		for _, subTaskConfig := range taskConfig.ParallelTasks {
 			if len(subTaskConfig.ParallelTasks) > 0 {
-				exitWithErrorMessage("Nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
+				ExitWithErrorMessage("Nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
 			}
 			subTaskConfig.validate()
 		}
@@ -540,7 +540,7 @@ func (options *OptionsConfig) validate() {
 
 func (taskConfig *TaskConfig) validate() {
 	if taskConfig.CmdString == "" && len(taskConfig.ParallelTasks) == 0 && taskConfig.URL == "" {
-		exitWithErrorMessage("Task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
+		ExitWithErrorMessage("Task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
 	}
 }
 
@@ -548,7 +548,7 @@ func (taskConfig *TaskConfig) validate() {
 func CreateTasks() (finalTasks []*Task) {
 
 	// initialize tasks with default values
-	for _, taskConfig := range config.TaskConfigs {
+	for _, taskConfig := range Config.TaskConfigs {
 		nextDisplayIdx = 0
 
 		// finalize task by appending to the set of final tasks
@@ -558,25 +558,25 @@ func CreateTasks() (finalTasks []*Task) {
 
 	// now that all tasks have been inflated, set the total eta
 	for _, task := range finalTasks {
-		config.totalEtaSeconds += task.EstimateRuntime()
+		Config.totalEtaSeconds += task.EstimateRuntime()
 	}
 
-	// replace the current config with the inflated list of final tasks
+	// replace the current Config with the inflated list of final tasks
 	return finalTasks
 }
 
-// ParseConfig is the entrypoint for all config fetching and parsing. This returns a list of Task runtime objects to execute.
+// ParseConfig is the entrypoint for all Config fetching and parsing. This returns a list of Task runtime objects to execute.
 func ParseConfig(yamlString []byte) {
-	config.Cli.RunTagSet = mapset.NewSet()
-	for _, tag := range config.Cli.RunTags {
-		config.Cli.RunTagSet.Add(tag)
+	Config.Cli.RunTagSet = mapset.NewSet()
+	for _, tag := range Config.Cli.RunTags {
+		Config.Cli.RunTagSet.Add(tag)
 	}
 
 	readTimeCache()
 
 	parseRunYaml(yamlString)
 
-	if config.Options.LogPath != "" {
+	if Config.Options.LogPath != "" {
 		setupLogging()
 	}
 

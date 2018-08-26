@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"fmt"
@@ -154,7 +154,7 @@ func (scr *screen) Display(message string, index int) {
 	// trim message length if it won't fit on the screen
 	width, err := terminalWidth()
 	if err != nil {
-		logToMain("Unable to determine screen width", errorFormat)
+		LogToMain("Unable to determine screen width", errorFormat)
 		width = 80
 	}
 	for visualLength(message) > int(width) {
