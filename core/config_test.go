@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"bytes"
@@ -81,7 +81,7 @@ tasks:
     name: Args=$*
 `
 
-	config.Cli.Args = []string{"First", "Second"}
+	Config.Cli.Args = []string{"First", "Second"}
 	parseRunYaml([]byte(yamlStr))
 	tasks := CreateTasks()
 	if len(tasks) != 2 {
@@ -132,14 +132,14 @@ tasks:
       - plug 2
 `
 	// load test time cache
-	config.commandTimeCache = make(map[string]time.Duration)
-	config.commandTimeCache["compile-something.sh 2"] = time.Duration(2 * time.Second)
-	config.commandTimeCache["compile-something.sh 4"] = time.Duration(4 * time.Second)
-	config.commandTimeCache["compile-something.sh 6"] = time.Duration(6 * time.Second)
-	config.commandTimeCache["compile-something.sh 9"] = time.Duration(9 * time.Second)
-	config.commandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
+	Config.commandTimeCache = make(map[string]time.Duration)
+	Config.commandTimeCache["compile-something.sh 2"] = time.Duration(2 * time.Second)
+	Config.commandTimeCache["compile-something.sh 4"] = time.Duration(4 * time.Second)
+	Config.commandTimeCache["compile-something.sh 6"] = time.Duration(6 * time.Second)
+	Config.commandTimeCache["compile-something.sh 9"] = time.Duration(9 * time.Second)
+	Config.commandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
 
-	// load test config yaml
+	// load test Config yaml
 	parseRunYaml([]byte(simpleYamlStr))
 	// create and inflate tasks
 	tasks := CreateTasks()
@@ -293,7 +293,7 @@ tasks:
 
 	appFs = afero.NewMemMapFs()
 	appFs.MkdirAll("example", 0644)
-	afero.WriteFile(appFs, "example/15-yaml-include.yml", []byte(`$include: example/common-config.yml
+	afero.WriteFile(appFs, "example/15-yaml-include.yml", []byte(`$include: example/common-Config.yml
 
 x-reference-data:
   all-apps: &app-names
@@ -344,7 +344,7 @@ tasks:
 
 - name: Gathering Secrets
   cmd: example/scripts/random-worker.sh 2`), 0644)
-	afero.WriteFile(appFs, "example/common-config.yml", []byte(`config:
+	afero.WriteFile(appFs, "example/common-Config.yml", []byte(`config:
     # Supress the error summary that follows
     show-failure-report: false
     show-summary-errors: true

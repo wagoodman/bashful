@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"crypto/md5"
@@ -25,7 +25,7 @@ var registry struct {
 
 func getFilename(urlStr string) string {
 	uri, err := url.Parse(urlStr)
-	checkError(err, "Unable to parse URI")
+	CheckError(err, "Unable to parse URI")
 
 	pathElements := strings.Split(uri.Path, "/")
 
@@ -91,12 +91,12 @@ Loop:
 	expectedFilepath := registry.urltoFilename[response.Request.URL().String()]
 	if response.Filename != expectedFilepath {
 		err := os.Rename(response.Filename, expectedFilepath)
-		checkError(err, "Unable to rename downloaded asset: "+response.Filename)
+		CheckError(err, "Unable to rename downloaded asset: "+response.Filename)
 	}
 
 	// ensure the asset is executable
 	err := os.Chmod(expectedFilepath, 0755)
-	checkError(err, "Unable to make asset executable: "+expectedFilepath)
+	CheckError(err, "Unable to make asset executable: "+expectedFilepath)
 
 	// update all tasks using this asset to use the final filepath
 	for _, task := range registry.requestToTask[response.Request] {
@@ -113,7 +113,7 @@ func AddRequest(task *Task) {
 		request, ok := registry.urlToRequest[task.Config.URL]
 		if !ok {
 			// never seen this url before
-			filepath := path.Join(config.downloadCachePath, getFilename(task.Config.URL))
+			filepath := path.Join(Config.downloadCachePath, getFilename(task.Config.URL))
 
 			if _, err := os.Stat(filepath); err == nil {
 				// the asset already exists, skip (unless it has an unexpected checksum)
@@ -121,7 +121,7 @@ func AddRequest(task *Task) {
 
 					actualHash := md5OfFile(filepath)
 					if task.Config.Md5 != actualHash {
-						exitWithErrorMessage("Already downloaded asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
+						ExitWithErrorMessage("Already downloaded asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
 					}
 
 				}
@@ -143,12 +143,12 @@ func AddRequest(task *Task) {
 
 func md5OfFile(filepath string) string {
 	f, err := os.Open(filepath)
-	checkError(err, "File does not exist: "+filepath)
+	CheckError(err, "File does not exist: "+filepath)
 	defer f.Close()
 
 	h := md5.New()
 	_, err = io.Copy(h, f)
-	checkError(err, "Could not calculate md5 checksum of "+filepath)
+	CheckError(err, "Could not calculate md5 checksum of "+filepath)
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
@@ -173,7 +173,7 @@ func DownloadAssets(tasks []*Task) {
 	targetFilenames := mapset.NewSet()
 	for _, filename := range registry.urltoFilename {
 		if targetFilenames.Contains(filename) {
-			exitWithErrorMessage("Provided two different urls with the same filename!")
+			ExitWithErrorMessage("Provided two different urls with the same filename!")
 		}
 		targetFilenames.Add(filename)
 	}
@@ -187,12 +187,12 @@ func DownloadAssets(tasks []*Task) {
 	}
 
 	if len(allRequests) == 0 {
-		logToMain("No assets to download", majorFormat)
+		LogToMain("No assets to download", majorFormat)
 		return
 	}
 
 	fmt.Println(bold("Downloading referenced assets"))
-	logToMain("Downloading referenced assets", majorFormat)
+	LogToMain("Downloading referenced assets", majorFormat)
 
 	uiprogress.Empty = ' '
 	uiprogress.Fill = '|'
@@ -201,7 +201,7 @@ func DownloadAssets(tasks []*Task) {
 	uiprogress.RightEnd = '|'
 
 	uiprogress.Start()
-	respch := client.DoBatch(config.Options.MaxParallelCmds, allRequests...)
+	respch := client.DoBatch(Config.Options.MaxParallelCmds, allRequests...)
 	var waiter sync.WaitGroup
 	var responses []*grab.Response
 	for response := range respch {
@@ -218,11 +218,11 @@ func DownloadAssets(tasks []*Task) {
 	foundFailedAsset := false
 	for _, response := range responses {
 		if err := response.Err(); err != nil {
-			logToMain(fmt.Sprintf(red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
+			LogToMain(fmt.Sprintf(red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
 			foundFailedAsset = true
 		}
 		if response.HTTPResponse.StatusCode > 399 || response.HTTPResponse.StatusCode < 200 {
-			logToMain(fmt.Sprintf(red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
+			LogToMain(fmt.Sprintf(red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
 			foundFailedAsset = true
 		}
 	}
@@ -234,15 +234,15 @@ func DownloadAssets(tasks []*Task) {
 				filepath := registry.urltoFilename[response.Request.URL().String()]
 				actualHash := md5OfFile(filepath)
 				if task.Config.Md5 != actualHash {
-					exitWithErrorMessage("Asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
+					ExitWithErrorMessage("Asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
 				}
 			}
 		}
 	}
 
 	if foundFailedAsset {
-		exitWithErrorMessage("Asset download failed")
+		ExitWithErrorMessage("Asset download failed")
 	}
 
-	logToMain("Asset download complete", majorFormat)
+	LogToMain("Asset download complete", majorFormat)
 }

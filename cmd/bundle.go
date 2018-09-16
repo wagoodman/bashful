@@ -18,19 +18,39 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package main
+package cmd
 
 import (
-	"github.com/wagoodman/bashful/cmd"
+	"github.com/spf13/cobra"
+	"github.com/wagoodman/bashful/core"
+	"path/filepath"
 )
 
-var (
-	version            = "No version provided"
-	commit             = "No commit provided"
-	buildTime          = "No build timestamp provided"
-)
-//	app.Version = "Version:   " + version + "\n   Commit:    " + commit + "\n   BuildTime: " + buildTime
+// bundleCmd represents the bundle command
+var bundleCmd = &cobra.Command{
+	Use:   "bundle",
+	Short: "Bundle yaml and referenced resources into a single executable (experimental)",
+	Long:  `Bundle yaml and referenced resources into a single executable (experimental)`,
+	Args: cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
 
-func main() {
-	cmd.Execute()
+		userYamlPath := args[0]
+		bundlePath := filepath.Base(userYamlPath[0:len(userYamlPath)-len(filepath.Ext(userYamlPath))]) + ".bundle"
+
+		core.Bundle(userYamlPath, bundlePath)
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(bundleCmd)
+
+	// Here you will define your flags and configuration settings.
+
+	// Cobra supports Persistent Flags which will work for this command
+	// and all subcommands, e.g.:
+	// bundleCmd.PersistentFlags().String("foo", "", "A help for foo")
+
+	// Cobra supports local flags which will only run when this command
+	// is called directly, e.g.:
+	// bundleCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

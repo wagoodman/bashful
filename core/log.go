@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"fmt"
@@ -26,8 +26,8 @@ type LogConcat struct {
 	File string
 }
 
-func logToMain(msg, format string) {
-	if config.Options.LogPath != "" {
+func LogToMain(msg, format string) {
+	if Config.Options.LogPath != "" {
 		if format != "" {
 			mainLogChan <- LogItem{Name: "[Main]", Message: color.Color(msg, format)}
 		} else {
@@ -57,17 +57,17 @@ func removeDirContents(dir string) error {
 
 func setupLogging() {
 
-	err := os.MkdirAll(config.CachePath, 0755)
+	err := os.MkdirAll(Config.CachePath, 0755)
 	if err != nil {
-		exitWithErrorMessage("\nUnable to create cache dir\n" + err.Error())
+		ExitWithErrorMessage("\nUnable to create cache dir\n" + err.Error())
 	}
-	err = os.MkdirAll(config.logCachePath, 0755)
+	err = os.MkdirAll(Config.logCachePath, 0755)
 	if err != nil {
-		exitWithErrorMessage("\nUnable to create log dir\n" + err.Error())
+		ExitWithErrorMessage("\nUnable to create log dir\n" + err.Error())
 	}
 
-	removeDirContents(config.logCachePath)
-	go mainLogger(config.Options.LogPath)
+	removeDirContents(Config.logCachePath)
+	go mainLogger(Config.Options.LogPath)
 }
 
 // singleLogger creats a separatly managed log (typically for an individual task to be later concatenated with the mainlog)
@@ -75,7 +75,7 @@ func singleLogger(SingleLogChan chan LogItem, name, logPath string) {
 
 	file, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		exitWithErrorMessage("\nUnable to create log\n" + err.Error())
+		ExitWithErrorMessage("\nUnable to create log\n" + err.Error())
 	}
 	defer file.Close()
 	defer func() {
@@ -106,7 +106,7 @@ func mainLogger(logPath string) {
 
 	file, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		exitWithErrorMessage("\nUnable to create main log\n" + err.Error())
+		ExitWithErrorMessage("\nUnable to create main log\n" + err.Error())
 	}
 	defer file.Close()
 
@@ -129,12 +129,12 @@ func mainLogger(logPath string) {
 
 				if err != nil {
 					fmt.Printf("%s\n", out)
-					exitWithErrorMessage("\nUnable to concat logs\n" + err.Error())
+					ExitWithErrorMessage("\nUnable to concat logs\n" + err.Error())
 				}
 
 				file, err = os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 				if err != nil {
-					exitWithErrorMessage("\nUnable to create main log\n" + err.Error())
+					ExitWithErrorMessage("\nUnable to create main log\n" + err.Error())
 				}
 				logger = log.New(file, "", log.Ldate|log.Ltime)
 
