@@ -226,7 +226,7 @@ tasks:
 func TestYamlInclude(t *testing.T) {
 	var expStr, actStr []byte
 	expStr = []byte(`
-Config:
+config:
     # Supress the error summary that follows
     show-failure-report: false
     show-summary-errors: true
@@ -344,7 +344,7 @@ tasks:
 
 - name: Gathering Secrets
   cmd: example/scripts/random-worker.sh 2`), 0644)
-	afero.WriteFile(appFs, "example/common-Config.yml", []byte(`Config:
+	afero.WriteFile(appFs, "example/common-Config.yml", []byte(`config:
     # Supress the error summary that follows
     show-failure-report: false
     show-summary-errors: true

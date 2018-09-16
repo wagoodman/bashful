@@ -29,7 +29,7 @@ tasks:
 	}
 
 	simpleYamlStr = `
-Config:
+config:
   stop-on-failure: true
 tasks:
   - cmd: false
@@ -41,7 +41,7 @@ tasks:
 	}
 
 	simpleYamlStr = `
-Config:
+config:
   stop-on-failure: false
 tasks:
   - cmd: false
