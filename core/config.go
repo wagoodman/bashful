@@ -20,7 +20,7 @@ var Config struct {
 	Cli CliOptions
 
 	// Options is a global set of values to be applied to all tasks
-	Options OptionsConfig `yaml:"Config"`
+	Options OptionsConfig `yaml:"config"`
 
 	// TaskConfigs is a list of task definitions and their metadata
 	TaskConfigs []TaskConfig `yaml:"tasks"`
