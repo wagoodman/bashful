@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 	"github.com/spf13/afero"
+	"github.com/wagoodman/bashful/utils"
 )
 
 var (
@@ -19,11 +20,11 @@ func Setup() {
 	go func() {
 		for sig := range sigChannel {
 			if sig == syscall.SIGINT {
-				ExitWithErrorMessage(red("Keyboard Interrupt"))
+				utils.ExitWithErrorMessage(red("Keyboard Interrupt"))
 			} else if sig == syscall.SIGTERM {
-				Exit(0)
+				utils.Exit(0)
 			} else {
-				ExitWithErrorMessage("Unknown Signal: " + sig.String())
+				utils.ExitWithErrorMessage("Unknown Signal: " + sig.String())
 			}
 		}
 	}()

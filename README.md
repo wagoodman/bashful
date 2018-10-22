@@ -7,7 +7,7 @@
 Use a yaml file to stitch together commands and bash snippets and run them with a bit of style. 
 Why? Because your bash script should be quiet and shy-like (...and not such a loud mouth). 
 
-![Image](doc/demo.gif)
+![Image](.data/demo.gif)
 
 *"But why would you make this monstrosity?"* you ask... because ` &>/dev/null` and ` | tee -a some.log` and `set -e; do something; set +e` and other similar things is getting annoying. And besides... why shouldn't your bash script output look pretty?
 

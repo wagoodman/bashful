@@ -1,4 +1,4 @@
-package core
+package config
 
 import (
 	"bytes"
@@ -9,12 +9,13 @@ import (
 
 	"github.com/alecthomas/repr"
 	"github.com/spf13/afero"
+	"github.com/wagoodman/bashful/utils"
 )
 
 func TestMinMax(t *testing.T) {
 
 	tester := func(arr []float64, exMin, exMax float64, exError bool) {
-		min, max, err := MinMax(arr)
+		min, max, err := utils.MinMax(arr)
 		if min != exMin {
 			t.Error("Expected min=", exMin, "got", min)
 		}
@@ -59,7 +60,7 @@ func TestRemoveOneValue(t *testing.T) {
 	}
 
 	tester := func(arr []float64, value float64, exArr []float64) {
-		testArr := removeOneValue(arr, value)
+		testArr := utils.RemoveOneValue(arr, value)
 		if !eq(testArr, exArr) {
 			t.Error("Expected", repr.String(exArr), "got", repr.String(testArr))
 		}
@@ -132,12 +133,12 @@ tasks:
       - plug 2
 `
 	// load test time cache
-	Config.commandTimeCache = make(map[string]time.Duration)
-	Config.commandTimeCache["compile-something.sh 2"] = time.Duration(2 * time.Second)
-	Config.commandTimeCache["compile-something.sh 4"] = time.Duration(4 * time.Second)
-	Config.commandTimeCache["compile-something.sh 6"] = time.Duration(6 * time.Second)
-	Config.commandTimeCache["compile-something.sh 9"] = time.Duration(9 * time.Second)
-	Config.commandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
+	Config.CommandTimeCache = make(map[string]time.Duration)
+	Config.CommandTimeCache["compile-something.sh 2"] = time.Duration(2 * time.Second)
+	Config.CommandTimeCache["compile-something.sh 4"] = time.Duration(4 * time.Second)
+	Config.CommandTimeCache["compile-something.sh 6"] = time.Duration(6 * time.Second)
+	Config.CommandTimeCache["compile-something.sh 9"] = time.Duration(9 * time.Second)
+	Config.CommandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
 
 	// load test Config yaml
 	parseRunYaml([]byte(simpleYamlStr))

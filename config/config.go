@@ -1,8 +1,7 @@
-package core
+package config
 
 import (
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -13,6 +12,7 @@ import (
 	"github.com/deckarep/golang-set"
 	"github.com/spf13/afero"
 	"gopkg.in/yaml.v2"
+	"github.com/wagoodman/bashful/utils"
 )
 
 // Config represents a superset of options parsed from the user yaml file (or derived from user values)
@@ -28,20 +28,20 @@ var Config struct {
 	// CachePath is the dir path to place any temporary files
 	CachePath string
 
-	// logCachePath is the dir path to place temporary logs
-	logCachePath string
+	// LogCachePath is the dir path to place temporary logs
+	LogCachePath string
 
-	// etaCachePath is the file path for per-task ETA values (derived from a tasks CmdString)
-	etaCachePath string
+	// EtaCachePath is the file path for per-task ETA values (derived from a tasks CmdString)
+	EtaCachePath string
 
-	// downloadCachePath is the dir path to place downloaded resources (from url references)
-	downloadCachePath string
+	// DownloadCachePath is the dir path to place downloaded resources (from url references)
+	DownloadCachePath string
 
-	// totalEtaSeconds is the calculated ETA given the tree of tasks to execute
-	totalEtaSeconds float64
+	// TotalEtaSeconds is the calculated ETA given the tree of tasks to execute
+	TotalEtaSeconds float64
 
-	// commandTimeCache is the task CmdString-to-ETASeconds for any previously run command (read from etaCachePath)
-	commandTimeCache map[string]time.Duration
+	// CommandTimeCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
+	CommandTimeCache map[string]time.Duration
 }
 
 // CliOptions is the exhaustive set of all command line options available on bashful
@@ -266,61 +266,33 @@ func (a *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// MinMax returns the min and max values from an array of float64 values
-func MinMax(array []float64) (float64, float64, error) {
-	if len(array) == 0 {
-		return 0, 0, errors.New("no min/max of empty array")
-	}
-	var max = array[0]
-	var min = array[0]
-	for _, value := range array {
-		if max < value {
-			max = value
-		}
-		if min > value {
-			min = value
-		}
-	}
-	return min, max, nil
-}
-
-// removeOneValue removes the first matching value from the given array of float64 values
-func removeOneValue(slice []float64, value float64) []float64 {
-	for index, arrValue := range slice {
-		if arrValue == value {
-			return append(slice[:index], slice[index+1:]...)
-		}
-	}
-	return slice
-}
-
 // readTimeCache fetches and reads a cache file from disk containing CmdString-to-ETASeconds. Note: this this must be done before fetching/parsing the run.yaml
 func readTimeCache() {
 	if Config.CachePath == "" {
 		cwd, err := os.Getwd()
-		CheckError(err, "Unable to get CWD.")
+		utils.CheckError(err, "Unable to get CWD.")
 		Config.CachePath = path.Join(cwd, ".bashful")
 	}
 
-	Config.downloadCachePath = path.Join(Config.CachePath, "downloads")
-	Config.logCachePath = path.Join(Config.CachePath, "logs")
-	Config.etaCachePath = path.Join(Config.CachePath, "eta")
+	Config.DownloadCachePath = path.Join(Config.CachePath, "downloads")
+	Config.LogCachePath = path.Join(Config.CachePath, "logs")
+	Config.EtaCachePath = path.Join(Config.CachePath, "eta")
 
 	// create the cache dirs if they do not already exist
 	if _, err := os.Stat(Config.CachePath); os.IsNotExist(err) {
 		os.Mkdir(Config.CachePath, 0755)
 	}
-	if _, err := os.Stat(Config.downloadCachePath); os.IsNotExist(err) {
-		os.Mkdir(Config.downloadCachePath, 0755)
+	if _, err := os.Stat(Config.DownloadCachePath); os.IsNotExist(err) {
+		os.Mkdir(Config.DownloadCachePath, 0755)
 	}
-	if _, err := os.Stat(Config.logCachePath); os.IsNotExist(err) {
-		os.Mkdir(Config.logCachePath, 0755)
+	if _, err := os.Stat(Config.LogCachePath); os.IsNotExist(err) {
+		os.Mkdir(Config.LogCachePath, 0755)
 	}
 
-	Config.commandTimeCache = make(map[string]time.Duration)
-	if doesFileExist(Config.etaCachePath) {
-		err := Load(Config.etaCachePath, &Config.commandTimeCache)
-		CheckError(err, "Unable to load command eta cache.")
+	Config.CommandTimeCache = make(map[string]time.Duration)
+	if utils.DoesFileExist(Config.EtaCachePath) {
+		err := Load(Config.EtaCachePath, &Config.CommandTimeCache)
+		utils.CheckError(err, "Unable to load command eta cache.")
 	}
 }
 
@@ -422,7 +394,7 @@ func assembleIncludes(yamlString []byte) []byte {
 				indent := getIndentSize(yamlString, match.startIdx)
 
 				contents, err := afero.ReadFile(appFs, match.includeFile)
-				CheckError(err, "Unable to read file: "+match.includeFile)
+				utils.CheckError(err, "Unable to read file: "+match.includeFile)
 				indentedContents := indentBytes(contents, indent)
 				result := []byte{}
 				result = append(result, yamlString[:match.startIdx]...)
@@ -444,7 +416,7 @@ func parseRunYaml(yamlString []byte) {
 
 	yamlString = assembleIncludes(yamlString)
 	err := yaml.Unmarshal(yamlString, &Config)
-	CheckError(err, "Error: Unable to parse given yaml")
+	utils.CheckError(err, "Error: Unable to parse given yaml")
 
 	Config.Options.validate()
 
@@ -530,7 +502,7 @@ func (options *OptionsConfig) validate() {
 	for _, taskConfig := range Config.TaskConfigs {
 		for _, subTaskConfig := range taskConfig.ParallelTasks {
 			if len(subTaskConfig.ParallelTasks) > 0 {
-				ExitWithErrorMessage("Nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
+				utils.ExitWithErrorMessage("Nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
 			}
 			subTaskConfig.validate()
 		}
@@ -540,29 +512,8 @@ func (options *OptionsConfig) validate() {
 
 func (taskConfig *TaskConfig) validate() {
 	if taskConfig.CmdString == "" && len(taskConfig.ParallelTasks) == 0 && taskConfig.URL == "" {
-		ExitWithErrorMessage("Task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
+		utils.ExitWithErrorMessage("Task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
 	}
-}
-
-// CreateTasks is responsible for reading all parsed TaskConfigs and generating a list of Task runtime objects to later execute
-func CreateTasks() (finalTasks []*Task) {
-
-	// initialize tasks with default values
-	for _, taskConfig := range Config.TaskConfigs {
-		nextDisplayIdx = 0
-
-		// finalize task by appending to the set of final tasks
-		task := NewTask(taskConfig, nextDisplayIdx, "")
-		finalTasks = append(finalTasks, task)
-	}
-
-	// now that all tasks have been inflated, set the total eta
-	for _, task := range finalTasks {
-		Config.totalEtaSeconds += task.EstimateRuntime()
-	}
-
-	// replace the current Config with the inflated list of final tasks
-	return finalTasks
 }
 
 // ParseConfig is the entrypoint for all Config fetching and parsing. This returns a list of Task runtime objects to execute.

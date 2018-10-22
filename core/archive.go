@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"github.com/wagoodman/bashful/utils"
 )
 
 type Archiver interface {
@@ -17,7 +18,7 @@ type Archiver interface {
 
 func NewArchive(dest string) Archiver {
 	fw, err := os.Create(dest)
-	CheckError(err, "Could not create archive file")
+	utils.CheckError(err, "Could not create archive file")
 	gw := gzip.NewWriter(fw)
 	tw := tar.NewWriter(gw)
 	return &archive{
@@ -55,7 +56,7 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 	}
 
 	isDirectory, err := isDir(srcPath)
-	CheckError(err, "Could not determine if this is a directory.")
+	utils.CheckError(err, "Could not determine if this is a directory.")
 
 	if isDirectory || !preservePath {
 		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
@@ -83,7 +84,7 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 		for idx := range fields {
 			path := strings.Join(fields[:idx+1], string(os.PathSeparator))
 			err := archiver.addTarFile(path, path)
-			CheckError(err, "Unable to archive file")
+			utils.CheckError(err, "Unable to archive file")
 		}
 	}
 

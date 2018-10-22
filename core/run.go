@@ -12,6 +12,9 @@ import (
 	"github.com/howeyc/gopass"
 	color "github.com/mgutz/ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
+	"github.com/wagoodman/bashful/task"
+	"github.com/wagoodman/bashful/utils"
+	"github.com/wagoodman/bashful/config"
 )
 
 const (
@@ -21,16 +24,19 @@ const (
 )
 
 var (
-	allTasks           []*Task
+	allTasks           []*task.Task
 	ticker             *time.Ticker
 	exitSignaled       bool
 	startTime          time.Time
 	sudoPassword       string
+	summaryTemplate, _ = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
+)
+
+var (
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	blue               = color.ColorFunc("blue+h")
 	bold               = color.ColorFunc("default+b")
-	summaryTemplate, _ = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 
 type summary struct {
@@ -44,37 +50,36 @@ type summary struct {
 	Errors  string
 }
 
-
-func Run(yamlString []byte, environment map[string]string) []*Task {
+func Run(yamlString []byte, environment map[string]string) []*task.Task {
 	var err error
 
 	exitSignaled = false
 	startTime = time.Now()
 
-	ParseConfig(yamlString)
-	allTasks = CreateTasks()
+	config.ParseConfig(yamlString)
+	allTasks = task.CreateTasks()
 	storeSudoPasswd()
 
 	DownloadAssets(allTasks)
 
 	rand.Seed(time.Now().UnixNano())
 
-	if Config.Options.UpdateInterval > 150 {
-		ticker = time.NewTicker(time.Duration(Config.Options.UpdateInterval) * time.Millisecond)
+	if config.Config.Options.UpdateInterval > 150 {
+		ticker = time.NewTicker(time.Duration(config.Config.Options.UpdateInterval) * time.Millisecond)
 	} else {
 		ticker = time.NewTicker(150 * time.Millisecond)
 	}
 
-	var failedTasks []*Task
+	var failedTasks []*task.Task
 
 	tagInfo := ""
-	if len(Config.Cli.RunTags) > 0 {
-		if Config.Cli.ExecuteOnlyMatchedTags {
+	if len(config.Config.Cli.RunTags) > 0 {
+		if config.Config.Cli.ExecuteOnlyMatchedTags {
 			tagInfo = " only matching tags: "
 		} else {
 			tagInfo = " non-tagged and matching tags: "
 		}
-		tagInfo += strings.Join(Config.Cli.RunTags, ", ")
+		tagInfo += strings.Join(config.Config.Cli.RunTags, ", ")
 	}
 
 	fmt.Println(bold("Running " + tagInfo))
@@ -82,7 +87,7 @@ func Run(yamlString []byte, environment map[string]string) []*Task {
 
 	for _, task := range allTasks {
 		task.Run(environment)
-		failedTasks = append(failedTasks, task.failedTasks...)
+		failedTasks = append(failedTasks, task.FailedTasks...)
 
 		if exitSignaled {
 			break
@@ -90,19 +95,19 @@ func Run(yamlString []byte, environment map[string]string) []*Task {
 	}
 	LogToMain("Complete", majorFormat)
 
-	err = Save(Config.etaCachePath, &Config.commandTimeCache)
-	CheckError(err, "Unable to save command eta cache.")
+	err = config.Save(config.Config.EtaCachePath, &config.Config.CommandTimeCache)
+	utils.CheckError(err, "Unable to save command eta cache.")
 
-	if Config.Options.ShowSummaryFooter {
+	if config.Config.Options.ShowSummaryFooter {
 		message := ""
-		newScreen().ResetFrame(0, false, true)
+		NewScreen().ResetFrame(0, false, true)
 		if len(failedTasks) > 0 {
-			if Config.Options.LogPath != "" {
-				message = bold(" See log for details (" + Config.Options.LogPath + ")")
+			if config.Config.Options.LogPath != "" {
+				message = bold(" See log for details (" + config.Config.Options.LogPath + ")")
 			}
-			newScreen().DisplayFooter(footer(statusError, message))
+			NewScreen().DisplayFooter(footer(task.StatusError, message))
 		} else {
-			newScreen().DisplayFooter(footer(statusSuccess, message))
+			NewScreen().DisplayFooter(footer(task.StatusSuccess, message))
 		}
 	}
 
@@ -122,7 +127,7 @@ func Run(yamlString []byte, environment map[string]string) []*Task {
 		LogToMain(buffer.String(), "")
 
 		// we may not show the error report, but we always log it.
-		if Config.Options.ShowFailureReport {
+		if config.Config.Options.ShowFailureReport {
 			fmt.Print(buffer.String())
 		}
 
@@ -130,7 +135,6 @@ func Run(yamlString []byte, environment map[string]string) []*Task {
 
 	return failedTasks
 }
-
 
 func storeSudoPasswd() {
 	var sout bytes.Buffer
@@ -163,52 +167,50 @@ func storeSudoPasswd() {
 	if requiresPassword {
 		fmt.Print("[bashful] sudo password required: ")
 		sudoPassword, err := gopass.GetPasswd()
-		CheckError(err, "Could get sudo password from user.")
+		utils.CheckError(err, "Could get sudo password from user.")
 
 		// test the given password
 		cmdTest := exec.Command("/bin/sh", "-c", "sudo -S /bin/true")
 		cmdTest.Stdin = strings.NewReader(string(sudoPassword) + "\n")
 		err = cmdTest.Run()
 		if err != nil {
-			ExitWithErrorMessage("Given sudo password did not work.")
+			utils.ExitWithErrorMessage("Given sudo password did not work.")
 		}
 	} else {
-		CheckError(err, "Could not determine sudo access for user.")
+		utils.CheckError(err, "Could not determine sudo access for user.")
 	}
 }
 
-
-
-func footer(status CommandStatus, message string) string {
+func footer(status task.CommandStatus, message string) string {
 	var tpl bytes.Buffer
 	var durString, etaString, stepString, errorString string
 
-	if Config.Options.ShowSummaryTimes {
+	if config.Config.Options.ShowSummaryTimes {
 		duration := time.Since(startTime)
-		durString = fmt.Sprintf(" Runtime[%s]", showDuration(duration))
+		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
 
-		totalEta := time.Duration(Config.totalEtaSeconds) * time.Second
+		totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" ETA[%s]", showDuration(remainingEta))
+		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
 
-	if TaskStats.completedTasks == TaskStats.totalTasks {
+	if task.TaskStats.CompletedTasks == task.TaskStats.TotalTasks {
 		etaString = ""
 	}
 
-	if Config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", TaskStats.completedTasks, TaskStats.totalTasks)
+	if config.Config.Options.ShowSummarySteps {
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", task.TaskStats.CompletedTasks, task.TaskStats.TotalTasks)
 	}
 
-	if Config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", TaskStats.totalFailedTasks)
+	if config.Config.Options.ShowSummaryErrors {
+		errorString = fmt.Sprintf(" Errors[%d]", task.TaskStats.TotalFailedTasks)
 	}
 
 	// get a string with the summary line without a split gap (eta floats left)
-	percentValue := (float64(TaskStats.completedTasks) * float64(100)) / float64(TaskStats.totalTasks)
+	percentValue := (float64(task.TaskStats.CompletedTasks) * float64(100)) / float64(task.TaskStats.TotalTasks)
 	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
 
-	if TaskStats.completedTasks == TaskStats.totalTasks {
+	if task.TaskStats.CompletedTasks == task.TaskStats.TotalTasks {
 		percentStr = status.Color("b") + percentStr + color.Reset
 	} else {
 		percentStr = color.Color(percentStr, "default+b")
@@ -218,7 +220,7 @@ func footer(status CommandStatus, message string) string {
 
 	// calculate a space buffer to push the eta to the right
 	terminalWidth, _ := terminal.Width()
-	splitWidth := int(terminalWidth) - visualLength(tpl.String())
+	splitWidth := int(terminalWidth) - utils.VisualLength(tpl.String())
 	if splitWidth < 0 {
 		splitWidth = 0
 	}

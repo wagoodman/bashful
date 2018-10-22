@@ -7,7 +7,7 @@ $(TARGETS):
 	./scripts/$@
 
 run:
-	go run main.go run example/13-single-line.yml
+	go run main.go run example/00-demo.yml
 
 examples: clean build
 	./dist/bashful run example/00-demo.yml

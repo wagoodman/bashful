@@ -15,24 +15,27 @@ import (
 	"github.com/deckarep/golang-set"
 	"github.com/dustin/go-humanize"
 	"github.com/gosuri/uiprogress"
+	"github.com/wagoodman/bashful/task"
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/utils"
 )
 
 var registry struct {
 	urlToRequest  map[string]*grab.Request
-	requestToTask map[*grab.Request][]*Task
+	requestToTask map[*grab.Request][]*task.Task
 	urltoFilename map[string]string
 }
 
 func getFilename(urlStr string) string {
 	uri, err := url.Parse(urlStr)
-	CheckError(err, "Unable to parse URI")
+	utils.CheckError(err, "Unable to parse URI")
 
 	pathElements := strings.Split(uri.Path, "/")
 
 	return pathElements[len(pathElements)-1]
 }
 
-func monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response, waiter *sync.WaitGroup) {
+func monitorDownload(requests map[*grab.Request][]*task.Task, response *grab.Response, waiter *sync.WaitGroup) {
 	bar := uiprogress.AddBar(100)
 	bar.AppendFunc(func(b *uiprogress.Bar) string {
 
@@ -91,16 +94,16 @@ Loop:
 	expectedFilepath := registry.urltoFilename[response.Request.URL().String()]
 	if response.Filename != expectedFilepath {
 		err := os.Rename(response.Filename, expectedFilepath)
-		CheckError(err, "Unable to rename downloaded asset: "+response.Filename)
+		utils.CheckError(err, "Unable to rename downloaded asset: "+response.Filename)
 	}
 
 	// ensure the asset is executable
 	err := os.Chmod(expectedFilepath, 0755)
-	CheckError(err, "Unable to make asset executable: "+expectedFilepath)
+	utils.CheckError(err, "Unable to make asset executable: "+expectedFilepath)
 
 	// update all tasks using this asset to use the final filepath
 	for _, task := range registry.requestToTask[response.Request] {
-		task.updateExec(expectedFilepath)
+		task.UpdateExec(expectedFilepath)
 	}
 
 	waiter.Done()
@@ -108,12 +111,12 @@ Loop:
 }
 
 // AddRequest extracts all URLS configured for a given task (does not examine child tasks) and queues them for download
-func AddRequest(task *Task) {
+func AddRequest(task *task.Task) {
 	if task.Config.URL != "" {
 		request, ok := registry.urlToRequest[task.Config.URL]
 		if !ok {
 			// never seen this url before
-			filepath := path.Join(Config.downloadCachePath, getFilename(task.Config.URL))
+			filepath := path.Join(config.Config.DownloadCachePath, getFilename(task.Config.URL))
 
 			if _, err := os.Stat(filepath); err == nil {
 				// the asset already exists, skip (unless it has an unexpected checksum)
@@ -121,11 +124,11 @@ func AddRequest(task *Task) {
 
 					actualHash := md5OfFile(filepath)
 					if task.Config.Md5 != actualHash {
-						ExitWithErrorMessage("Already downloaded asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
+						utils.ExitWithErrorMessage("Already downloaded asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
 					}
 
 				}
-				task.updateExec(filepath)
+				task.UpdateExec(filepath)
 				return
 			}
 			// the asset has not already been downloaded
@@ -143,20 +146,20 @@ func AddRequest(task *Task) {
 
 func md5OfFile(filepath string) string {
 	f, err := os.Open(filepath)
-	CheckError(err, "File does not exist: "+filepath)
+	utils.CheckError(err, "File does not exist: "+filepath)
 	defer f.Close()
 
 	h := md5.New()
 	_, err = io.Copy(h, f)
-	CheckError(err, "Could not calculate md5 checksum of "+filepath)
+	utils.CheckError(err, "Could not calculate md5 checksum of "+filepath)
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // DownloadAssets fetches all assets for the given task
-func DownloadAssets(tasks []*Task) {
+func DownloadAssets(tasks []*task.Task) {
 	registry.urlToRequest = make(map[string]*grab.Request)
-	registry.requestToTask = make(map[*grab.Request][]*Task)
+	registry.requestToTask = make(map[*grab.Request][]*task.Task)
 	registry.urltoFilename = make(map[string]string)
 
 	client := grab.NewClient()
@@ -173,7 +176,7 @@ func DownloadAssets(tasks []*Task) {
 	targetFilenames := mapset.NewSet()
 	for _, filename := range registry.urltoFilename {
 		if targetFilenames.Contains(filename) {
-			ExitWithErrorMessage("Provided two different urls with the same filename!")
+			utils.ExitWithErrorMessage("Provided two different urls with the same filename!")
 		}
 		targetFilenames.Add(filename)
 	}
@@ -201,7 +204,7 @@ func DownloadAssets(tasks []*Task) {
 	uiprogress.RightEnd = '|'
 
 	uiprogress.Start()
-	respch := client.DoBatch(Config.Options.MaxParallelCmds, allRequests...)
+	respch := client.DoBatch(config.Config.Options.MaxParallelCmds, allRequests...)
 	var waiter sync.WaitGroup
 	var responses []*grab.Response
 	for response := range respch {
@@ -234,14 +237,14 @@ func DownloadAssets(tasks []*Task) {
 				filepath := registry.urltoFilename[response.Request.URL().String()]
 				actualHash := md5OfFile(filepath)
 				if task.Config.Md5 != actualHash {
-					ExitWithErrorMessage("Asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
+					utils.ExitWithErrorMessage("Asset '" + filepath + "' checksum failed. Expected: " + task.Config.Md5 + " Got: " + actualHash)
 				}
 			}
 		}
 	}
 
 	if foundFailedAsset {
-		ExitWithErrorMessage("Asset download failed")
+		utils.ExitWithErrorMessage("Asset download failed")
 	}
 
 	LogToMain("Asset download complete", majorFormat)

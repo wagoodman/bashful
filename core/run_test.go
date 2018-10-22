@@ -7,7 +7,7 @@ import (
 
 func TestTaskErrorPolicy(t *testing.T) {
 	var simpleYamlStr string
-	var failedTasks []*Task
+	var failedTasks []*task.Task
 
 	simpleYamlStr = `
 tasks:

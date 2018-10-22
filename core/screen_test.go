@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/repr"
+	"github.com/wagoodman/bashful/utils"
 )
 
 func captureBoolStdout(f func(bool), x bool) string {
@@ -76,7 +77,7 @@ func TestVisualLength(t *testing.T) {
 		t.Error("TestVisualLength: Test harness not working! Expected 15 got", normalLen)
 	}
 
-	visualLen := visualLength(ansiString)
+	visualLen := utils.VisualLength(ansiString)
 	if visualLen != 13 {
 		t.Error("Expected 13 got", visualLen)
 	}
@@ -87,16 +88,16 @@ func TestTrimToVisualLength(t *testing.T) {
 	ansiString := "\x1b[2mHel\x1b[3mlo, Wor\x1b[0mld!\x1b[0m"
 
 	for idx := 0; idx < len(normalString); idx++ {
-		trimString := trimToVisualLength(ansiString, idx)
-		if visualLength(trimString) != idx {
-			t.Error("TestTrimToVisualLength: Expected", idx, "got", visualLength(trimString), ". Trim:", trimString)
+		trimString := utils.TrimToVisualLength(ansiString, idx)
+		if utils.VisualLength(trimString) != idx {
+			t.Error("TestTrimToVisualLength: Expected", idx, "got", utils.VisualLength(trimString), ". Trim:", trimString)
 		}
 	}
 }
 
 func TestMoveCursor(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := newScreen()
+	scr := NewScreen()
 	scr.ResetFrame(5, false, false)
 
 	// stay in place
@@ -161,7 +162,7 @@ func TestMoveCursor(t *testing.T) {
 
 func TestMovePastFrame(t *testing.T) {
 	var testOutput string
-	scr := newScreen()
+	scr := NewScreen()
 	scr.ResetFrame(5, false, false)
 
 	var testData = []struct {
@@ -192,7 +193,7 @@ func TestMovePastFrame(t *testing.T) {
 
 func TestDisplayFooter(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := newScreen()
+	scr := NewScreen()
 	scr.ResetFrame(5, false, false)
 
 	scr.curLine = 1
@@ -207,7 +208,7 @@ func TestDisplayFooter(t *testing.T) {
 
 func TestDisplayHeader(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := newScreen()
+	scr := NewScreen()
 	scr.ResetFrame(5, false, false)
 
 	scr.curLine = 1
@@ -222,7 +223,7 @@ func TestDisplayHeader(t *testing.T) {
 
 func TestPrintLn(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := newScreen()
+	scr := NewScreen()
 	scr.ResetFrame(5, false, false)
 
 	scr.curLine = 1
@@ -236,7 +237,7 @@ func TestPrintLn(t *testing.T) {
 
 func TestDisplay(t *testing.T) {
 	var expectedOutput, testOutput string
-	scr := newScreen()
+	scr := NewScreen()
 	scr.ResetFrame(5, false, false)
 
 	terminalWidth = func() (uint, error) {

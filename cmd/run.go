@@ -26,6 +26,8 @@ import (
 	"github.com/spf13/cobra"
 	"strings"
 	"io/ioutil"
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/core"
 )
 
@@ -41,25 +43,25 @@ var runCmd = &cobra.Command{
 
 		userYamlPath := args[0]
 		if len(args) > 1 {
-			core.Config.Cli.Args = args[1:]
+			config.Config.Cli.Args = args[1:]
 		} else {
-			core.Config.Cli.Args = []string{}
+			config.Config.Cli.Args = []string{}
 		}
 
 		if tags != "" && onlyTags != "" {
-			core.ExitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
+			utils.ExitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
 		}
 
 		for _, value := range strings.Split(tags, ",") {
 			if value != "" {
-				core.Config.Cli.RunTags = append(core.Config.Cli.RunTags, value)
+				config.Config.Cli.RunTags = append(config.Config.Cli.RunTags, value)
 			}
 		}
 
 		for _, value := range strings.Split(onlyTags, ",") {
 			if value != "" {
-				core.Config.Cli.ExecuteOnlyMatchedTags = true
-				core.Config.Cli.RunTags = append(core.Config.Cli.RunTags, value)
+				config.Config.Cli.ExecuteOnlyMatchedTags = true
+				config.Config.Cli.RunTags = append(config.Config.Cli.RunTags, value)
 			}
 		}
 
@@ -68,7 +70,7 @@ var runCmd = &cobra.Command{
 		environment := map[string]string{}
 
 		yamlString, err := ioutil.ReadFile(userYamlPath)
-		core.CheckError(err, "Unable to read yaml config.")
+		utils.CheckError(err, "Unable to read yaml config.")
 
 		fmt.Print("\033[?25l") // hide cursor
 		failedTasks := core.Run(yamlString, environment)

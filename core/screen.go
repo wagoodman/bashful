@@ -6,6 +6,7 @@ import (
 
 	"github.com/k0kubun/go-ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
+	"github.com/wagoodman/bashful/utils"
 )
 
 var (
@@ -21,39 +22,12 @@ type screen struct {
 	hasFooter bool
 }
 
-// newScreen is a singleton that represents the screen frame being actively written to
-func newScreen() *screen {
+// NewScreen is a singleton that represents the screen frame being actively written to
+func NewScreen() *screen {
 	once.Do(func() {
 		instance = &screen{}
 	})
 	return instance
-}
-
-func visualLength(str string) int {
-	inEscapeSeq := false
-	length := 0
-
-	for _, r := range str {
-		switch {
-		case inEscapeSeq:
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
-				inEscapeSeq = false
-			}
-		case r == '\x1b':
-			inEscapeSeq = true
-		default:
-			length++
-		}
-	}
-
-	return length
-}
-
-func trimToVisualLength(message string, length int) string {
-	for visualLength(message) > length && len(message) > 1 {
-		message = message[:len(message)-1]
-	}
-	return message
 }
 
 func (scr *screen) ResetFrame(numLines int, hasHeader, hasFooter bool) {
@@ -157,8 +131,8 @@ func (scr *screen) Display(message string, index int) {
 		LogToMain("Unable to determine screen width", errorFormat)
 		width = 80
 	}
-	for visualLength(message) > int(width) {
-		message = trimToVisualLength(message, int(width)-3) + "..."
+	for utils.VisualLength(message) > int(width) {
+		message = utils.TrimToVisualLength(message, int(width)-3) + "..."
 	}
 
 	scr.printLn(message)
