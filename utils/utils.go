@@ -96,12 +96,12 @@ func CheckError(err error, message string) {
 // TODO: THIS NEEDS TO BE RETHOUGHT
 func cleanup() {
 	// // stop any running tasks
-	// for _, task := range allTasks {
+	// for _, task := range AllTasks {
 	// 	task.Kill()
 	// }
 	//
 	// // move the cursor past the used screen realestate
-	// core.NewScreen().MovePastFrame(true)
+	// NewScreen().MovePastFrame(true)
 	//
 	// // show the cursor again
 	// fmt.Print("\033[?25h") // show cursor

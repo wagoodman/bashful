@@ -22,7 +22,7 @@ import (
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/wagoodman/bashful/core"
+	"github.com/wagoodman/bashful/log"
 )
 
 const (
@@ -30,6 +30,16 @@ const (
 	infoFormat  = "blue+b"
 	errorFormat = "red+b"
 )
+
+var (
+	AllTasks           []*Task
+	SudoPassword       string
+	ExitSignaled       bool
+	StartTime          time.Time
+	Ticker             *time.Ticker
+	summaryTemplate, _ = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
+)
+
 
 var (
 	purple             = color.ColorFunc("magenta+h")
@@ -80,7 +90,7 @@ type Task struct {
 	Command TaskCommand
 
 	// LogChan is a channel with event log items written to the temporary logfile
-	LogChan chan core.LogItem
+	LogChan chan log.LogItem
 
 	// LogFile is the temporary log file where all formatted stdout/stderr events are recorded
 	LogFile *os.File
@@ -280,7 +290,7 @@ func (task *Task) inflateCmd() {
 		sudoCmd = "sudo -S "
 	}
 	task.Command.Cmd = exec.Command(shell, "-c", sudoCmd+task.Config.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
-	task.Command.Cmd.Stdin = strings.NewReader(string(sudoPassword) + "\n")
+	task.Command.Cmd.Stdin = strings.NewReader(string(SudoPassword) + "\n")
 
 	// Set current working directory; default is empty
 	task.Command.Cmd.Dir = task.Config.CwdString
@@ -402,7 +412,7 @@ func (task *Task) String(terminalWidth int) string {
 // display prints the current task string status to the screen
 func (task *Task) display() {
 	terminalWidth, _ := terminal.Width()
-	theScreen := core.NewScreen()
+	theScreen := NewScreen()
 	if config.Config.Options.SingleLineDisplay {
 
 		var durString, etaString, stepString, errorString string
@@ -420,7 +430,7 @@ func (task *Task) display() {
 		numFill := int(effectiveWidth) * TaskStats.CompletedTasks / TaskStats.TotalTasks
 
 		if config.Config.Options.ShowSummaryTimes {
-			duration := time.Since(startTime)
+			duration := time.Since(StartTime)
 			durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
 
 			totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
@@ -545,7 +555,7 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 // runSingleCmd executes a tasks primary command (not child task commands) and monitors command events
 func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup, environment map[string]string) {
-	core.LogToMain("Started Task: "+task.Config.Name, infoFormat)
+	log.LogToMain("Started Task: "+task.Config.Name, infoFormat)
 
 	task.Command.StartTime = time.Now()
 
@@ -555,8 +565,8 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 
 	tempFile, _ := ioutil.TempFile(config.Config.LogCachePath, "")
 	task.LogFile = tempFile
-	task.LogChan = make(chan core.LogItem)
-	go core.SingleLogger(task.LogChan, task.Config.Name, tempFile.Name())
+	task.LogChan = make(chan log.LogItem)
+	go log.SingleLogger(task.LogChan, task.Config.Name, tempFile.Name())
 
 	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := task.Command.Cmd.StderrPipe()
@@ -600,7 +610,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 					// on a polling interval... (do not create an event)
 					task.Display.Values.Msg = blue(stdoutMsg)
 				}
-				task.LogChan <- core.LogItem{Name: task.Config.Name, Message: stdoutMsg + "\n"}
+				task.LogChan <- log.LogItem{Name: task.Config.Name, Message: stdoutMsg + "\n"}
 
 			} else {
 				stdoutChan = nil
@@ -615,7 +625,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 					// or on a polling interval... (do not create an event)
 					task.Display.Values.Msg = red(stderrMsg)
 				}
-				task.LogChan <- core.LogItem{Name: task.Config.Name, Message: red(stderrMsg) + "\n"}
+				task.LogChan <- log.LogItem{Name: task.Config.Name, Message: red(stderrMsg) + "\n"}
 				task.ErrorBuffer.WriteString(stderrMsg + "\n")
 			} else {
 				stderrChan = nil
@@ -638,13 +648,13 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
 			resultChan <- CmdEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
-			task.LogChan <- core.LogItem{Name: task.Config.Name, Message: red(returnCodeMsg) + "\n"}
+			task.LogChan <- log.LogItem{Name: task.Config.Name, Message: red(returnCodeMsg) + "\n"}
 			task.ErrorBuffer.WriteString(returnCodeMsg + "\n")
 		}
 	}
 	task.Command.StopTime = time.Now()
 
-	core.LogToMain("Completed Task: "+task.Config.Name+" (rc:"+strconv.Itoa(returnCode)+")", infoFormat)
+	log.LogToMain("Completed Task: "+task.Config.Name+" (rc:"+strconv.Itoa(returnCode)+")", infoFormat)
 
 	// close the write end of the pipe since the child shell is positively no longer writting to it
 	task.Command.Cmd.ExtraFiles[0].Close()
@@ -668,7 +678,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 	} else {
 		resultChan <- CmdEvent{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
 		if task.Config.StopOnFailure {
-			exitSignaled = true
+			ExitSignaled = true
 		}
 	}
 }
@@ -682,7 +692,7 @@ func (task *Task) Pave() {
 	if hasParentCmd {
 		numTasks++
 	}
-	scr := core.NewScreen()
+	scr := NewScreen()
 	scr.ResetFrame(numTasks, hasHeader, config.Config.Options.ShowSummaryFooter)
 
 	// make room for the title of a parallel proc group
@@ -731,12 +741,12 @@ func (task *Task) Completed(rc int) {
 
 // listenAndDisplay updates the screen frame with the latest task and child task updates as they occur (either in realtime or in a polling loop). Returns when all child processes have been completed.
 func (task *Task) listenAndDisplay(environment map[string]string) {
-	scr := core.NewScreen()
+	scr := NewScreen()
 	// just wait for stuff to come back
 
 	for TaskStats.RunningCmds > 0 {
 		select {
-		case <-ticker.C:
+		case <-Ticker.C:
 			spinner.Next()
 
 			if task.Config.CmdString != "" {
@@ -801,7 +811,7 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 
 	}
 
-	if !exitSignaled {
+	if !ExitSignaled {
 		task.waiter.Wait()
 	}
 
@@ -818,7 +828,7 @@ func (task *Task) Run(environment map[string]string) {
 	task.StartAvailableTasks(environment)
 	task.listenAndDisplay(environment)
 
-	scr := core.NewScreen()
+	scr := NewScreen()
 	hasHeader := len(task.Children) > 0 && !config.Config.Options.SingleLineDisplay
 	collapseSection := task.Config.CollapseOnCompletion && hasHeader && len(task.FailedTasks) == 0
 
@@ -848,4 +858,91 @@ func (task *Task) Run(environment map[string]string) {
 		// ...reset the cursor to the bottom of the section
 		scr.MovePastFrame(false)
 	}
+}
+
+func Open() {
+
+	StartTime = time.Now()
+	if config.Config.Options.UpdateInterval > 150 {
+		Ticker = time.NewTicker(time.Duration(config.Config.Options.UpdateInterval) * time.Millisecond)
+	} else {
+		Ticker = time.NewTicker(150 * time.Millisecond)
+	}
+	AllTasks = CreateTasks()
+}
+
+func Close(failedTasks []*Task) {
+	if config.Config.Options.ShowSummaryFooter {
+		message := ""
+		NewScreen().ResetFrame(0, false, true)
+		if len(failedTasks) > 0 {
+			if config.Config.Options.LogPath != "" {
+				message = bold(" See log for details (" + config.Config.Options.LogPath + ")")
+			}
+			NewScreen().DisplayFooter(footer(StatusError, message))
+		} else {
+			NewScreen().DisplayFooter(footer(StatusSuccess, message))
+		}
+	}
+}
+
+type summary struct {
+	Status  string
+	Percent string
+	Msg     string
+	Runtime string
+	Eta     string
+	Split   string
+	Steps   string
+	Errors  string
+}
+
+func footer(status CommandStatus, message string) string {
+	var tpl bytes.Buffer
+	var durString, etaString, stepString, errorString string
+
+	if config.Config.Options.ShowSummaryTimes {
+		duration := time.Since(StartTime)
+		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
+
+		totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
+		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
+		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
+	}
+
+	if TaskStats.CompletedTasks == TaskStats.TotalTasks {
+		etaString = ""
+	}
+
+	if config.Config.Options.ShowSummarySteps {
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", TaskStats.CompletedTasks, TaskStats.TotalTasks)
+	}
+
+	if config.Config.Options.ShowSummaryErrors {
+		errorString = fmt.Sprintf(" Errors[%d]", TaskStats.TotalFailedTasks)
+	}
+
+	// get a string with the summary line without a split gap (eta floats left)
+	percentValue := (float64(TaskStats.CompletedTasks) * float64(100)) / float64(TaskStats.TotalTasks)
+	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
+
+	if TaskStats.CompletedTasks == TaskStats.TotalTasks {
+		percentStr = status.Color("b") + percentStr + color.Reset
+	} else {
+		percentStr = color.Color(percentStr, "default+b")
+	}
+
+	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
+
+	// calculate a space buffer to push the eta to the right
+	terminalWidth, _ := terminal.Width()
+	splitWidth := int(terminalWidth) - utils.VisualLength(tpl.String())
+	if splitWidth < 0 {
+		splitWidth = 0
+	}
+
+	tpl.Reset()
+	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString), Msg: message})
+
+	return tpl.String()
 }

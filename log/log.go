@@ -1,4 +1,4 @@
-package core
+package log
 
 import (
 	"fmt"
@@ -57,7 +57,7 @@ func removeDirContents(dir string) error {
 	return nil
 }
 
-func setupLogging() {
+func SetupLogging() {
 
 	err := os.MkdirAll(config.Config.CachePath, 0755)
 	if err != nil {
@@ -71,6 +71,14 @@ func setupLogging() {
 	removeDirContents(config.Config.LogCachePath)
 	go mainLogger(config.Config.Options.LogPath)
 }
+
+// todo: this is in a bunch of spots
+var (
+	purple             = color.ColorFunc("magenta+h")
+	red                = color.ColorFunc("red+h")
+	blue               = color.ColorFunc("blue+h")
+	bold               = color.ColorFunc("default+b")
+)
 
 // SingleLogger creats a separatly managed log (typically for an individual task to be later concatenated with the mainlog)
 func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {

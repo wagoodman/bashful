@@ -29,6 +29,7 @@ import (
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/core"
+	"github.com/wagoodman/bashful/log"
 )
 
 var tags, onlyTags string
@@ -75,9 +76,9 @@ var runCmd = &cobra.Command{
 		fmt.Print("\033[?25l") // hide cursor
 		failedTasks := core.Run(yamlString, environment)
 
-		core.LogToMain("Exiting", "")
+		log.LogToMain("Exiting", "")
 
-		core.Exit(len(failedTasks))
+		utils.Exit(len(failedTasks))
 	},
 }
 

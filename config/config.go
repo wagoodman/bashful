@@ -377,6 +377,7 @@ func indentBytes(b []byte, size int) []byte {
 }
 
 func assembleIncludes(yamlString []byte) []byte {
+	appFs := afero.NewOsFs()
 	listInc := regexp.MustCompile(`(?m:\s*-\s\$include\s+(?P<filename>.+)$)`)
 	mapInc := regexp.MustCompile(`(?m:^\s*\$include:\s+(?P<filename>.+)$)`)
 
@@ -526,10 +527,6 @@ func ParseConfig(yamlString []byte) {
 	readTimeCache()
 
 	parseRunYaml(yamlString)
-
-	if Config.Options.LogPath != "" {
-		setupLogging()
-	}
 
 }
 

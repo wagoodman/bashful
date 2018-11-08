@@ -1,7 +1,6 @@
 package core
 
 import (
-	"text/template"
 	"time"
 	"strings"
 	"fmt"
@@ -11,10 +10,10 @@ import (
 	"os/exec"
 	"github.com/howeyc/gopass"
 	color "github.com/mgutz/ansi"
-	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"github.com/wagoodman/bashful/task"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/log"
 )
 
 const (
@@ -23,14 +22,6 @@ const (
 	errorFormat = "red+b"
 )
 
-var (
-	allTasks           []*task.Task
-	ticker             *time.Ticker
-	exitSignaled       bool
-	startTime          time.Time
-	sudoPassword       string
-	summaryTemplate, _ = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
-)
 
 var (
 	purple             = color.ColorFunc("magenta+h")
@@ -39,36 +30,22 @@ var (
 	bold               = color.ColorFunc("default+b")
 )
 
-type summary struct {
-	Status  string
-	Percent string
-	Msg     string
-	Runtime string
-	Eta     string
-	Split   string
-	Steps   string
-	Errors  string
-}
-
 func Run(yamlString []byte, environment map[string]string) []*task.Task {
 	var err error
 
-	exitSignaled = false
-	startTime = time.Now()
-
 	config.ParseConfig(yamlString)
-	allTasks = task.CreateTasks()
+
+	if config.Config.Options.LogPath != "" {
+		log.SetupLogging()
+	}
+
+	task.Open()
 	storeSudoPasswd()
 
-	DownloadAssets(allTasks)
+	DownloadAssets(task.AllTasks)
 
 	rand.Seed(time.Now().UnixNano())
 
-	if config.Config.Options.UpdateInterval > 150 {
-		ticker = time.NewTicker(time.Duration(config.Config.Options.UpdateInterval) * time.Millisecond)
-	} else {
-		ticker = time.NewTicker(150 * time.Millisecond)
-	}
 
 	var failedTasks []*task.Task
 
@@ -83,33 +60,22 @@ func Run(yamlString []byte, environment map[string]string) []*task.Task {
 	}
 
 	fmt.Println(bold("Running " + tagInfo))
-	LogToMain("Running "+tagInfo, majorFormat)
+	log.LogToMain("Running "+tagInfo, majorFormat)
 
-	for _, task := range allTasks {
-		task.Run(environment)
-		failedTasks = append(failedTasks, task.FailedTasks...)
+	for _, t := range task.AllTasks {
+		t.Run(environment)
+		failedTasks = append(failedTasks, t.FailedTasks...)
 
-		if exitSignaled {
+		if task.ExitSignaled {
 			break
 		}
 	}
-	LogToMain("Complete", majorFormat)
+	log.LogToMain("Complete", majorFormat)
 
 	err = config.Save(config.Config.EtaCachePath, &config.Config.CommandTimeCache)
 	utils.CheckError(err, "Unable to save command eta cache.")
 
-	if config.Config.Options.ShowSummaryFooter {
-		message := ""
-		NewScreen().ResetFrame(0, false, true)
-		if len(failedTasks) > 0 {
-			if config.Config.Options.LogPath != "" {
-				message = bold(" See log for details (" + config.Config.Options.LogPath + ")")
-			}
-			NewScreen().DisplayFooter(footer(task.StatusError, message))
-		} else {
-			NewScreen().DisplayFooter(footer(task.StatusSuccess, message))
-		}
-	}
+	task.Close(failedTasks)
 
 	if len(failedTasks) > 0 {
 		var buffer bytes.Buffer
@@ -124,7 +90,7 @@ func Run(yamlString []byte, environment map[string]string) []*task.Task {
 			buffer.WriteString(red("  └─ stderr: ") + task.ErrorBuffer.String() + "\n")
 
 		}
-		LogToMain(buffer.String(), "")
+		log.LogToMain(buffer.String(), "")
 
 		// we may not show the error report, but we always log it.
 		if config.Config.Options.ShowFailureReport {
@@ -141,12 +107,12 @@ func storeSudoPasswd() {
 
 	// check if there is a task that requires sudo
 	requireSudo := false
-	for _, task := range allTasks {
-		if task.Config.Sudo {
+	for _, t := range task.AllTasks {
+		if t.Config.Sudo {
 			requireSudo = true
 			break
 		}
-		for _, subTask := range task.Children {
+		for _, subTask := range t.Children {
 			if subTask.Config.Sudo {
 				requireSudo = true
 				break
@@ -166,12 +132,12 @@ func storeSudoPasswd() {
 
 	if requiresPassword {
 		fmt.Print("[bashful] sudo password required: ")
-		sudoPassword, err := gopass.GetPasswd()
+		SudoPassword, err := gopass.GetPasswd()
 		utils.CheckError(err, "Could get sudo password from user.")
 
 		// test the given password
 		cmdTest := exec.Command("/bin/sh", "-c", "sudo -S /bin/true")
-		cmdTest.Stdin = strings.NewReader(string(sudoPassword) + "\n")
+		cmdTest.Stdin = strings.NewReader(string(SudoPassword) + "\n")
 		err = cmdTest.Run()
 		if err != nil {
 			utils.ExitWithErrorMessage("Given sudo password did not work.")
@@ -181,52 +147,4 @@ func storeSudoPasswd() {
 	}
 }
 
-func footer(status task.CommandStatus, message string) string {
-	var tpl bytes.Buffer
-	var durString, etaString, stepString, errorString string
 
-	if config.Config.Options.ShowSummaryTimes {
-		duration := time.Since(startTime)
-		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
-
-		totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
-		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
-	}
-
-	if task.TaskStats.CompletedTasks == task.TaskStats.TotalTasks {
-		etaString = ""
-	}
-
-	if config.Config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", task.TaskStats.CompletedTasks, task.TaskStats.TotalTasks)
-	}
-
-	if config.Config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", task.TaskStats.TotalFailedTasks)
-	}
-
-	// get a string with the summary line without a split gap (eta floats left)
-	percentValue := (float64(task.TaskStats.CompletedTasks) * float64(100)) / float64(task.TaskStats.TotalTasks)
-	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
-
-	if task.TaskStats.CompletedTasks == task.TaskStats.TotalTasks {
-		percentStr = status.Color("b") + percentStr + color.Reset
-	} else {
-		percentStr = color.Color(percentStr, "default+b")
-	}
-
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
-
-	// calculate a space buffer to push the eta to the right
-	terminalWidth, _ := terminal.Width()
-	splitWidth := int(terminalWidth) - utils.VisualLength(tpl.String())
-	if splitWidth < 0 {
-		splitWidth = 0
-	}
-
-	tpl.Reset()
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString), Msg: message})
-
-	return tpl.String()
-}

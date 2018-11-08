@@ -18,6 +18,7 @@ import (
 	"github.com/wagoodman/bashful/task"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
+	"github.com/wagoodman/bashful/log"
 )
 
 var registry struct {
@@ -190,12 +191,12 @@ func DownloadAssets(tasks []*task.Task) {
 	}
 
 	if len(allRequests) == 0 {
-		LogToMain("No assets to download", majorFormat)
+		log.LogToMain("No assets to download", majorFormat)
 		return
 	}
 
 	fmt.Println(bold("Downloading referenced assets"))
-	LogToMain("Downloading referenced assets", majorFormat)
+	log.LogToMain("Downloading referenced assets", majorFormat)
 
 	uiprogress.Empty = ' '
 	uiprogress.Fill = '|'
@@ -221,11 +222,11 @@ func DownloadAssets(tasks []*task.Task) {
 	foundFailedAsset := false
 	for _, response := range responses {
 		if err := response.Err(); err != nil {
-			LogToMain(fmt.Sprintf(red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
+			log.LogToMain(fmt.Sprintf(red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
 			foundFailedAsset = true
 		}
 		if response.HTTPResponse.StatusCode > 399 || response.HTTPResponse.StatusCode < 200 {
-			LogToMain(fmt.Sprintf(red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
+			log.LogToMain(fmt.Sprintf(red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
 			foundFailedAsset = true
 		}
 	}
@@ -247,5 +248,5 @@ func DownloadAssets(tasks []*task.Task) {
 		utils.ExitWithErrorMessage("Asset download failed")
 	}
 
-	LogToMain("Asset download complete", majorFormat)
+	log.LogToMain("Asset download complete", majorFormat)
 }

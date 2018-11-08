@@ -20,9 +20,9 @@ func Bundle(userYamlPath, outputPath string) {
 	utils.CheckError(err, "Unable to read yaml Config.")
 
 	config.ParseConfig(yamlString)
-	allTasks := task.CreateTasks()
+	AllTasks := task.CreateTasks()
 
-	DownloadAssets(allTasks)
+	DownloadAssets(AllTasks)
 
 	fmt.Println(bold("Bundling " + userYamlPath + " to " + outputPath))
 

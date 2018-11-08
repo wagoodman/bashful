@@ -1,4 +1,4 @@
-package core
+package task
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"github.com/k0kubun/go-ansi"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"github.com/wagoodman/bashful/utils"
+	"github.com/wagoodman/bashful/log"
 )
 
 var (
@@ -128,7 +129,7 @@ func (scr *screen) Display(message string, index int) {
 	// trim message length if it won't fit on the screen
 	width, err := terminalWidth()
 	if err != nil {
-		LogToMain("Unable to determine screen width", errorFormat)
+		log.LogToMain("Unable to determine screen width", errorFormat)
 		width = 80
 	}
 	for utils.VisualLength(message) > int(width) {
