@@ -26,8 +26,8 @@ import (
 	"io/ioutil"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/config"
-	"github.com/wagoodman/bashful/core"
 	"fmt"
+	"github.com/wagoodman/bashful/runtime"
 )
 
 // bundleCmd represents the bundle command
@@ -55,7 +55,7 @@ func Bundle(userYamlPath, outputPath string) {
 	utils.CheckError(err, "Unable to read yaml Config.")
 
 	config.ParseConfig(yamlString)
-	client := core.NewClient(config.Config.TaskConfigs, config.Config.Options)
+	client := runtime.NewClient(config.Config.TaskConfigs, config.Config.Options)
 
 	fmt.Println(utils.Bold("Bundling " + userYamlPath + " to " + outputPath))
 

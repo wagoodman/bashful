@@ -29,9 +29,9 @@ import (
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/log"
-	"github.com/wagoodman/bashful/core"
 	"time"
 	"math/rand"
+	"github.com/wagoodman/bashful/runtime"
 )
 
 // TODO: this is duplicated
@@ -95,7 +95,7 @@ func init() {
 func Run(yamlString []byte) {
 	var err error
 
-	client := core.NewClientFromConfig(yamlString)
+	client := runtime.NewClientFromConfig(yamlString)
 
 	if config.Config.Options.LogPath != "" {
 		log.SetupLogging()

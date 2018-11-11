@@ -25,7 +25,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/wagoodman/bashful/core"
+	"github.com/wagoodman/bashful/runtime"
 )
 
 var cachePath string
@@ -53,5 +53,5 @@ func init() {
 
 // initConfigDir ...todo
 func initBashful() {
-	core.Setup()
+	runtime.Setup()
 }
