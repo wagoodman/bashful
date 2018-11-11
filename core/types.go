@@ -1,4 +1,4 @@
-package task
+package core
 
 import (
 	"github.com/wagoodman/bashful/config"
@@ -11,16 +11,44 @@ import (
 	"text/template"
 )
 
+type Client struct {
+	Options     config.OptionsConfig
+	TaskConfigs []config.TaskConfig
+	Executor    *Executor
+}
+
+
+type Executor struct {
+	environment map[string]string
+
+	// Tasks is a list of all Task objects that will be invoked
+	Tasks       []*Task
+
+	// FailedTasks is a list of Task objects with non-zero return codes upon invocation
+	FailedTasks []*Task
+
+	// RunningTasks indicates the number of actively running Tasks
+	RunningTasks int
+
+	// CompletedTasks is a list of Task objects that have been invoked (regardless of the return code value)
+	CompletedTasks []*Task
+
+	// TotalTasks indicates the number of tasks that can be run (Note: this is not necessarily the same number of tasks planned to be run)
+	TotalTasks int
+
+}
+
+
 // Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to execute, track, and display the task.
 type Task struct {
 	// Config is the user-defined values parsed from the run yaml
 	Config config.TaskConfig
 
 	// Display represents all non-Config items that control how the task line should be printed to the screen
-	Display TaskDisplay
+	Display display
 
 	// Command represents all non-Config items used to execute and track task progress
-	Command TaskCommand
+	Command command
 
 	// LogChan is a channel with event log items written to the temporary logfile
 	LogChan chan log.LogItem
@@ -31,27 +59,29 @@ type Task struct {
 	// ErrorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
 	ErrorBuffer *bytes.Buffer
 
-	// Children is a list of all sub-tasks that should be run concurrently
+	// Children is a list of all sub-Tasks that should be run concurrently
 	Children []*Task
 
 	// lastStartedTask is the index of the last child task that was started
 	lastStartedTask int
 
 	// resultChan is a channel where all raw command events are queued to
-	resultChan chan CmdEvent
+	resultChan chan event
 
 	// waiter is a synchronization object which returns when all child task command executions have been completed
 	waiter sync.WaitGroup
 
 	// status is the last known status value that represents the entire list of child commands
-	status CommandStatus
+	status status
 
-	// FailedTasks is a list of tasks with a non-zero return value
-	FailedTasks []*Task
+	// FailedTasks is a list of Tasks with a non-zero return value
+	FailedChildren int
+
+	invoker *Executor
 }
 
-// TaskDisplay represents all non-Config items that control how the task line should be printed to the screen
-type TaskDisplay struct {
+// display represents all non-Config items that control how the task line should be printed to the screen
+type display struct {
 	// Template is the single-line string template that should be used to display the status of a single task
 	Template *template.Template
 
@@ -59,11 +89,11 @@ type TaskDisplay struct {
 	Index int
 
 	// Values holds all template values that represent the task status
-	Values LineInfo
+	Values lineInfo
 }
 
-// TaskCommand represents all non-Config items used to execute and track task progress
-type TaskCommand struct {
+// command represents all non-Config items used to execute and track task progress
+type command struct {
 	// Cmd is the object used to execute the given user CmdString to a sub-shell
 	Cmd *exec.Cmd
 
@@ -88,23 +118,23 @@ type TaskCommand struct {
 	// ReturnCode is simply the value returned from the child process after Cmd execution
 	ReturnCode int
 
-	// EnvReadFile is an extra pipe given to the child shell process for exfiltrating env vars back up to bashful (to provide as input for future tasks)
+	// EnvReadFile is an extra pipe given to the child shell process for exfiltrating env vars back up to bashful (to provide as input for future Tasks)
 	EnvReadFile *os.File
 
 	// Environment is a list of env vars from the exited child process
 	Environment map[string]string
 }
 
-// CommandStatus represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
-type CommandStatus int32
+// status represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
+type status int32
 
-// CmdEvent represents an output from stdout/stderr during command execution or when a command has completed
-type CmdEvent struct {
+// event represents an output from stdout/stderr during command execution or when a command has completed
+type event struct {
 	// Task is the task which the command was run from
 	Task *Task
 
 	// Status is the current pending/running/error/success status of the command
-	Status CommandStatus
+	Status status
 
 	// Stdout is a single line from standard out (optional)
 	Stdout string
@@ -119,8 +149,8 @@ type CmdEvent struct {
 	ReturnCode int
 }
 
-// LineInfo represents all template values that represent the task status
-type LineInfo struct {
+// lineInfo represents all template values that represent the task status
+type lineInfo struct {
 	// Status is the current pending/running/error/success status of the command
 	Status string
 

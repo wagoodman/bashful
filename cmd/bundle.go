@@ -22,8 +22,12 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/wagoodman/bashful/core"
 	"path/filepath"
+	"io/ioutil"
+	"github.com/wagoodman/bashful/utils"
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/core"
+	"fmt"
 )
 
 // bundleCmd represents the bundle command
@@ -37,20 +41,25 @@ var bundleCmd = &cobra.Command{
 		userYamlPath := args[0]
 		bundlePath := filepath.Base(userYamlPath[0:len(userYamlPath)-len(filepath.Ext(userYamlPath))]) + ".bundle"
 
-		core.Bundle(userYamlPath, bundlePath)
+		Bundle(userYamlPath, bundlePath)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(bundleCmd)
+}
 
-	// Here you will define your flags and configuration settings.
+func Bundle(userYamlPath, outputPath string) {
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// bundleCmd.PersistentFlags().String("foo", "", "A help for foo")
+	yamlString, err := ioutil.ReadFile(userYamlPath)
+	utils.CheckError(err, "Unable to read yaml Config.")
 
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// bundleCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	config.ParseConfig(yamlString)
+	client := core.NewClient(config.Config.TaskConfigs, config.Config.Options)
+
+	fmt.Println(utils.Bold("Bundling " + userYamlPath + " to " + outputPath))
+
+	client.Bundle(userYamlPath, outputPath)
+
+
 }

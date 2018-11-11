@@ -1,4 +1,4 @@
-package task
+package core
 
 import (
 	"bufio"
@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	AllTasks           []*Task
+	// todo: none of these should be public
 	SudoPassword       string
 	ExitSignaled       bool
 	StartTime          time.Time
@@ -42,7 +42,7 @@ var (
 
 
 var (
-	// spinner generates the spin icon character in front of running tasks
+	// spinner generates the spin icon character in front of running Tasks
 	spinner = spin.New()
 
 	// nextDisplayIdx is the next available screen row to use based off of the task / sub-task order.
@@ -58,24 +58,8 @@ var (
 	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} └─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 )
 
-// TaskStats is a global struct keeping track of the number of running tasks, failed tasks, completed tasks, and total tasks
-var TaskStats struct {
-	// RunningCmds indicates the number of actively running tasks
-	RunningCmds int
-
-	// CompletedTasks indicates the number of tasks that have finished execution (regardless of the return code value)
-	CompletedTasks int
-
-	// TotalFailedTasks indicates the number of tasks that have a non-zero return code
-	TotalFailedTasks int
-
-	// TotalTasks is the number of tasks that is expected to be run based on the user configuration
-	TotalTasks int
-}
-
-
 const (
-	statusRunning CommandStatus = iota
+	statusRunning status = iota
 	statusPending
 	StatusSuccess
 	StatusError
@@ -84,7 +68,7 @@ const (
 // NewTask creates a new task in the context of the user configuration at a particular screen location (row)
 func NewTask(taskConfig config.TaskConfig, displayStartIdx int, replicaValue string) *Task {
 	task := Task{Config: taskConfig}
-	task.inflate(displayStartIdx, replicaValue)
+	task.compile(displayStartIdx, replicaValue)
 
 	for subIndex := range taskConfig.ParallelTasks {
 		subTaskConfig := &taskConfig.ParallelTasks[subIndex]
@@ -101,24 +85,19 @@ func NewTask(taskConfig config.TaskConfig, displayStartIdx int, replicaValue str
 	return &task
 }
 
-// inflate is used by the constructor to finalize task runtime values
-func (task *Task) inflate(displayIdx int, replicaValue string) {
-
-	if task.Config.CmdString != "" || task.Config.URL != "" {
-		TaskStats.TotalTasks++
-	}
-
-	task.inflateCmd()
+// compile is used by the constructor to finalize task runtime values
+func (task *Task) compile(displayIdx int, replicaValue string) {
+	task.compileCmd()
 
 	task.Display.Template = lineDefaultTemplate
 	task.Display.Index = displayIdx
 	task.ErrorBuffer = bytes.NewBufferString("")
 
-	task.resultChan = make(chan CmdEvent)
+	task.resultChan = make(chan event)
 	task.status = statusPending
 }
 
-func (task *Task) inflateCmd() {
+func (task *Task) compileCmd() {
 	if eta, ok := config.Config.CommandTimeCache[task.Config.CmdString]; ok {
 		task.Command.EstimatedRuntime = eta
 	} else {
@@ -154,7 +133,6 @@ func (task *Task) inflateCmd() {
 	task.Command.Environment = map[string]string{}
 }
 
-
 func (task *Task) UpdateExec(execpath string) {
 	if task.Config.CmdString == "" {
 		task.Config.CmdString = config.Config.Options.ExecReplaceString
@@ -162,10 +140,10 @@ func (task *Task) UpdateExec(execpath string) {
 	task.Config.CmdString = strings.Replace(task.Config.CmdString, config.Config.Options.ExecReplaceString, execpath, -1)
 	task.Config.URL = strings.Replace(task.Config.URL, config.Config.Options.ExecReplaceString, execpath, -1)
 
-	task.inflateCmd()
+	task.compileCmd()
 }
 
-// Kill will stop any running command (including child tasks) with a -9 signal
+// Kill will stop any running command (including child Tasks) with a -9 signal
 func (task *Task) Kill() {
 	if task.Config.CmdString != "" && task.Command.Started && !task.Command.Complete {
 		syscall.Kill(-task.Command.Cmd.Process.Pid, syscall.SIGKILL)
@@ -250,12 +228,12 @@ func (task *Task) display() {
 
 		fillColor := color.ColorCode(strconv.Itoa(config.Config.Options.ColorSuccess) + "+i")
 		emptyColor := color.ColorCode(strconv.Itoa(config.Config.Options.ColorSuccess))
-		if TaskStats.TotalFailedTasks > 0 {
+		if len(task.invoker.FailedTasks) > 0 {
 			fillColor = color.ColorCode(strconv.Itoa(config.Config.Options.ColorError) + "+i")
 			emptyColor = color.ColorCode(strconv.Itoa(config.Config.Options.ColorError))
 		}
 
-		numFill := int(effectiveWidth) * TaskStats.CompletedTasks / TaskStats.TotalTasks
+		numFill := int(effectiveWidth) * len(task.invoker.CompletedTasks) / task.invoker.TotalTasks
 
 		if config.Config.Options.ShowSummaryTimes {
 			duration := time.Since(StartTime)
@@ -266,16 +244,16 @@ func (task *Task) display() {
 			etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 		}
 
-		if TaskStats.CompletedTasks == TaskStats.TotalTasks {
+		if len(task.invoker.CompletedTasks) == task.invoker.TotalTasks {
 			etaString = ""
 		}
 
 		if config.Config.Options.ShowSummarySteps {
-			stepString = fmt.Sprintf(" Tasks[%d/%d]", TaskStats.CompletedTasks, TaskStats.TotalTasks)
+			stepString = fmt.Sprintf(" Tasks[%d/%d]", len(task.invoker.CompletedTasks), task.invoker.TotalTasks)
 		}
 
 		if config.Config.Options.ShowSummaryErrors {
-			errorString = fmt.Sprintf(" Errors[%d]", TaskStats.TotalFailedTasks)
+			errorString = fmt.Sprintf(" Errors[%d]", len(task.invoker.FailedTasks))
 		}
 
 		valueStr := stepString + errorString + durString + etaString
@@ -290,10 +268,24 @@ func (task *Task) display() {
 
 }
 
+func (task *Task) requiresSudoPasswd() bool {
+	if task.Config.Sudo {
+		return true
+	}
+	for _, subTask := range task.Children {
+		if subTask.Config.Sudo {
+			return true
+		}
+	}
+
+	return false
+}
+
+
 // EstimateRuntime returns the ETA in seconds until command completion
 func (task *Task) EstimateRuntime() float64 {
 	var etaSeconds float64
-	// finalize task by appending to the set of final tasks
+	// finalize task by appending to the set of final Tasks
 	if task.Config.CmdString != "" && task.Command.EstimatedRuntime != -1 {
 		etaSeconds += task.Command.EstimatedRuntime.Seconds()
 	}
@@ -309,7 +301,7 @@ func (task *Task) EstimateRuntime() float64 {
 			// this is a sub task with an eta
 			if remainingParallelTasks == 0 {
 
-				// we've started all possible tasks, now they should stop...
+				// we've started all possible Tasks, now they should stop...
 				// select the first task to stop
 				remainingParallelTasks++
 				minEndSecond, _, err := utils.MinMax(taskEndSecond)
@@ -318,7 +310,7 @@ func (task *Task) EstimateRuntime() float64 {
 				currentSecond = minEndSecond
 			}
 
-			// we are still starting tasks
+			// we are still starting Tasks
 			taskEndSecond = append(taskEndSecond, currentSecond+subTask.Command.EstimatedRuntime.Seconds())
 			remainingParallelTasks--
 
@@ -366,15 +358,15 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 	return
 }
 
-// runSingleCmd executes a tasks primary command (not child task commands) and monitors command events
-func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup, environment map[string]string) {
+// runSingleCmd executes a Tasks primary command (not child task commands) and monitors command events
+func (task *Task) runSingleCmd(owningResultChan chan event, owningWaiter *sync.WaitGroup, environment map[string]string) {
 	log.LogToMain("Started Task: "+task.Config.Name, infoFormat)
 
 	task.Command.StartTime = time.Now()
 
-	resultChan <- CmdEvent{Task: task, Status: statusRunning, ReturnCode: -1}
-	waiter.Add(1)
-	defer waiter.Done()
+	owningResultChan <- event{Task: task, Status: statusRunning, ReturnCode: -1}
+	owningWaiter.Add(1)
+	defer owningWaiter.Done()
 
 	tempFile, _ := ioutil.TempFile(config.Config.LogCachePath, "")
 	task.LogFile = tempFile
@@ -418,7 +410,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 
 				if task.Config.EventDriven {
 					// this is event driven... (signal this event)
-					resultChan <- CmdEvent{Task: task, Status: statusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
+					owningResultChan <- event{Task: task, Status: statusRunning, Stdout: blue(stdoutMsg), ReturnCode: -1}
 				} else {
 					// on a polling interval... (do not create an event)
 					task.Display.Values.Msg = blue(stdoutMsg)
@@ -433,7 +425,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 
 				if task.Config.EventDriven {
 					// either this is event driven... (signal this event)
-					resultChan <- CmdEvent{Task: task, Status: statusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
+					owningResultChan <- event{Task: task, Status: statusRunning, Stderr: red(stderrMsg), ReturnCode: -1}
 				} else {
 					// or on a polling interval... (do not create an event)
 					task.Display.Values.Msg = red(stderrMsg)
@@ -460,7 +452,7 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 		} else {
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
-			resultChan <- CmdEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
+			owningResultChan <- event{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
 			task.LogChan <- log.LogItem{Name: task.Config.Name, Message: red(returnCodeMsg) + "\n"}
 			task.ErrorBuffer.WriteString(returnCodeMsg + "\n")
 		}
@@ -487,9 +479,9 @@ func (task *Task) runSingleCmd(resultChan chan CmdEvent, waiter *sync.WaitGroup,
 	}
 
 	if returnCode == 0 || task.Config.IgnoreFailure {
-		resultChan <- CmdEvent{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
+		owningResultChan <- event{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
 	} else {
-		resultChan <- CmdEvent{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
+		owningResultChan <- event{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
 		if task.Config.StopOnFailure {
 			ExitSignaled = true
 		}
@@ -511,33 +503,34 @@ func (task *Task) Pave() {
 	// make room for the title of a parallel proc group
 	if hasHeader {
 		message.Reset()
-		lineObj := LineInfo{Status: statusRunning.Color("i"), Title: task.Config.Name, Msg: "", Prefix: config.Config.Options.BulletChar}
+		lineObj := lineInfo{Status: statusRunning.Color("i"), Title: task.Config.Name, Msg: "", Prefix: config.Config.Options.BulletChar}
 		task.Display.Template.Execute(&message, lineObj)
 		scr.DisplayHeader(message.String())
 	}
 
 	if hasParentCmd {
-		task.Display.Values = LineInfo{Status: statusPending.Color("i"), Title: task.Config.Name}
+		task.Display.Values = lineInfo{Status: statusPending.Color("i"), Title: task.Config.Name}
 		task.display()
 	}
 
 	for line := 0; line < len(task.Children); line++ {
-		task.Children[line].Display.Values = LineInfo{Status: statusPending.Color("i"), Title: task.Children[line].Config.Name}
+		task.Children[line].Display.Values = lineInfo{Status: statusPending.Color("i"), Title: task.Children[line].Config.Name}
 		task.Children[line].display()
 	}
 }
 
-// StartAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
-func (task *Task) StartAvailableTasks(environment map[string]string) {
-	if task.Config.CmdString != "" && !task.Command.Started && TaskStats.RunningCmds < config.Config.Options.MaxParallelCmds {
+// startAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
+func (task *Task) startAvailableTasks(environment map[string]string) {
+	// Note that the parent task result channel and waiter are used for all Tasks and child Tasks
+	if task.Config.CmdString != "" && !task.Command.Started && task.invoker.RunningTasks < config.Config.Options.MaxParallelCmds {
 		go task.runSingleCmd(task.resultChan, &task.waiter, environment)
 		task.Command.Started = true
-		TaskStats.RunningCmds++
+		task.invoker.RunningTasks++
 	}
-	for ; TaskStats.RunningCmds < config.Config.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
+	for ; task.invoker.RunningTasks < config.Config.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
 		go task.Children[task.lastStartedTask].runSingleCmd(task.resultChan, &task.waiter, nil)
 		task.Children[task.lastStartedTask].Command.Started = true
-		TaskStats.RunningCmds++
+		task.invoker.RunningTasks++
 	}
 }
 
@@ -547,9 +540,9 @@ func (task *Task) Completed(rc int) {
 	task.Command.ReturnCode = rc
 	close(task.LogChan)
 
-	TaskStats.CompletedTasks++
+	task.invoker.CompletedTasks = append(task.invoker.CompletedTasks, task)
 	config.Config.CommandTimeCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
-	TaskStats.RunningCmds--
+	task.invoker.RunningTasks--
 }
 
 // listenAndDisplay updates the screen frame with the latest task and child task updates as they occur (either in realtime or in a polling loop). Returns when all child processes have been completed.
@@ -557,7 +550,7 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 	scr := NewScreen()
 	// just wait for stuff to come back
 
-	for TaskStats.RunningCmds > 0 {
+	for task.invoker.RunningTasks > 0 {
 		select {
 		case <-Ticker.C:
 			spinner.Next()
@@ -580,7 +573,7 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 
 			// update the summary line
 			if config.Config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(statusPending, ""))
+				scr.DisplayFooter(footer(statusPending, "", task.invoker))
 			}
 
 		case msgObj := <-task.resultChan:
@@ -589,14 +582,12 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 			// update the state before displaying...
 			if msgObj.Complete {
 				eventTask.Completed(msgObj.ReturnCode)
-				task.StartAvailableTasks(environment)
+				task.startAvailableTasks(environment)
 				task.status = msgObj.Status
 				if msgObj.Status == StatusError {
-					// update the group status to indicate a failed subtask
-					TaskStats.TotalFailedTasks++
-
 					// keep note of the failed task for an after task report
-					task.FailedTasks = append(task.FailedTasks, eventTask)
+					task.FailedChildren++
+					task.invoker.FailedTasks = append(task.invoker.FailedTasks, eventTask)
 				}
 			}
 
@@ -606,16 +597,16 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 			}
 
 			if msgObj.Stderr != "" {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stderr, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
+				eventTask.Display.Values = lineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stderr, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
 			} else {
-				eventTask.Display.Values = LineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stdout, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
+				eventTask.Display.Values = lineInfo{Status: msgObj.Status.Color("i"), Title: eventTask.Config.Name, Msg: msgObj.Stdout, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
 			}
 
 			eventTask.display()
 
 			// update the summary line
 			if config.Config.Options.ShowSummaryFooter {
-				scr.DisplayFooter(footer(statusPending, ""))
+				scr.DisplayFooter(footer(statusPending, "", task.invoker))
 			} else {
 				scr.MovePastFrame(false)
 			}
@@ -630,7 +621,7 @@ func (task *Task) listenAndDisplay(environment map[string]string) {
 
 }
 
-// Run will run the current tasks primary command and/or all child commands. When execution has completed, the screen frame will advance.
+// Run will run the current Tasks primary command and/or all child commands. When execution has completed, the screen frame will advance.
 func (task *Task) Run(environment map[string]string) {
 
 	var message bytes.Buffer
@@ -638,25 +629,25 @@ func (task *Task) Run(environment map[string]string) {
 	if !config.Config.Options.SingleLineDisplay {
 		task.Pave()
 	}
-	task.StartAvailableTasks(environment)
+	task.startAvailableTasks(environment)
 	task.listenAndDisplay(environment)
 
 	scr := NewScreen()
 	hasHeader := len(task.Children) > 0 && !config.Config.Options.SingleLineDisplay
-	collapseSection := task.Config.CollapseOnCompletion && hasHeader && len(task.FailedTasks) == 0
+	collapseSection := task.Config.CollapseOnCompletion && hasHeader && task.FailedChildren == 0
 
 	// complete the proc group status
 	if hasHeader {
 		message.Reset()
 		collapseSummary := ""
 		if collapseSection {
-			collapseSummary = purple(" (" + strconv.Itoa(len(task.Children)) + " tasks hidden)")
+			collapseSummary = purple(" (" + strconv.Itoa(len(task.Children)) + " Tasks hidden)")
 		}
-		task.Display.Template.Execute(&message, LineInfo{Status: task.status.Color("i"), Title: task.Config.Name + collapseSummary, Prefix: config.Config.Options.BulletChar})
+		task.Display.Template.Execute(&message, lineInfo{Status: task.status.Color("i"), Title: task.Config.Name + collapseSummary, Prefix: config.Config.Options.BulletChar})
 		scr.DisplayHeader(message.String())
 	}
 
-	// collapse sections or parallel tasks...
+	// collapse sections or parallel Tasks...
 	if collapseSection {
 
 		// head to the top of the section (below the header) and erase all lines

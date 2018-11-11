@@ -77,7 +77,7 @@ var (
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	blue               = color.ColorFunc("blue+h")
-	bold               = color.ColorFunc("default+b")
+	Bold               = color.ColorFunc("default+b")
 )
 
 // SingleLogger creats a separatly managed log (typically for an individual task to be later concatenated with the mainlog)
@@ -93,7 +93,7 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 	}()
 
 	logger := log.New(file, "", log.Ldate|log.Ltime)
-	logger.Println(bold("Task full output: " + name))
+	logger.Println(Bold("Task full output: " + name))
 	logger.SetFlags(0)
 
 	for {
@@ -158,5 +158,5 @@ func mainLogger(logPath string) {
 		}
 	}
 
-	logger.Println(bold("Finished!"))
+	logger.Println(Bold("Finished!"))
 }

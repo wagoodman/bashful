@@ -7,13 +7,17 @@ import (
 	"time"
 	"errors"
 	color "github.com/mgutz/ansi"
+	"bytes"
+	"os/exec"
+	"github.com/howeyc/gopass"
+	"strings"
 )
 
 var (
-	purple             = color.ColorFunc("magenta+h")
-	red                = color.ColorFunc("red+h")
-	blue               = color.ColorFunc("blue+h")
-	bold               = color.ColorFunc("default+b")
+	Purple             = color.ColorFunc("magenta+h")
+	Red                = color.ColorFunc("red+h")
+	Blue               = color.ColorFunc("blue+h")
+	Bold               = color.ColorFunc("default+b")
 )
 
 // MinMax returns the min and max values from an array of float64 values
@@ -74,7 +78,7 @@ func TrimToVisualLength(message string, length int) string {
 
 func ExitWithErrorMessage(msg string) {
 	cleanup()
-	fmt.Fprintln(os.Stderr, red(msg))
+	fmt.Fprintln(os.Stderr, Red(msg))
 	os.Exit(1)
 }
 
@@ -86,7 +90,7 @@ func Exit(rc int) {
 
 func CheckError(err error, message string) {
 	if err != nil {
-		fmt.Println(red("Error:"))
+		fmt.Println(Red("Error:"))
 		_, file, line, _ := runtime.Caller(1)
 		fmt.Println("Line:", line, "\tFile:", file, "\n", err)
 		ExitWithErrorMessage(message)
@@ -127,5 +131,34 @@ func ShowDuration(duration time.Duration) string {
 	minutes := int64(duration.Minutes()) % 60
 	hours := int64(duration.Hours()) % 24
 	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
+func GetSudoPasswd() string {
+	var sout bytes.Buffer
+	var sudoPasswd string
+
+	// test if a password is even required for sudo
+	cmd := exec.Command("/bin/sh", "-c", "sudo -Sn /bin/true")
+	cmd.Stderr = &sout
+	err := cmd.Run()
+	requiresPassword := sout.String() == "sudo: a password is required\n"
+
+	if requiresPassword {
+		fmt.Print("[bashful] sudo password required: ")
+		sudoPasswd, err := gopass.GetPasswd()
+		CheckError(err, "Could get sudo password from user.")
+
+		// test the given password
+		cmdTest := exec.Command("/bin/sh", "-c", "sudo -S /bin/true")
+		cmdTest.Stdin = strings.NewReader(string(sudoPasswd) + "\n")
+		err = cmdTest.Run()
+		if err != nil {
+			ExitWithErrorMessage("Given sudo password did not work.")
+		}
+	} else {
+		CheckError(err, "Could not determine sudo access for user.")
+	}
+
+	return sudoPasswd
 }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/deckarep/golang-set"
 	"github.com/dustin/go-humanize"
 	"github.com/gosuri/uiprogress"
-	"github.com/wagoodman/bashful/task"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/log"
@@ -23,7 +22,7 @@ import (
 
 var registry struct {
 	urlToRequest  map[string]*grab.Request
-	requestToTask map[*grab.Request][]*task.Task
+	requestToTask map[*grab.Request][]*Task
 	urltoFilename map[string]string
 }
 
@@ -36,7 +35,7 @@ func getFilename(urlStr string) string {
 	return pathElements[len(pathElements)-1]
 }
 
-func monitorDownload(requests map[*grab.Request][]*task.Task, response *grab.Response, waiter *sync.WaitGroup) {
+func monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response, waiter *sync.WaitGroup) {
 	bar := uiprogress.AddBar(100)
 	bar.AppendFunc(func(b *uiprogress.Bar) string {
 
@@ -47,7 +46,7 @@ func monitorDownload(requests map[*grab.Request][]*task.Task, response *grab.Res
 
 		if response.IsComplete() {
 			if response.HTTPResponse.StatusCode > 399 || response.HTTPResponse.StatusCode < 200 {
-				return red("Failed!")
+				return utils.Red("Failed!")
 			}
 			return fmt.Sprintf("%7s [%v]",
 				"100.00%",
@@ -102,7 +101,7 @@ Loop:
 	err := os.Chmod(expectedFilepath, 0755)
 	utils.CheckError(err, "Unable to make asset executable: "+expectedFilepath)
 
-	// update all tasks using this asset to use the final filepath
+	// update all Tasks using this asset to use the final filepath
 	for _, task := range registry.requestToTask[response.Request] {
 		task.UpdateExec(expectedFilepath)
 	}
@@ -111,8 +110,8 @@ Loop:
 
 }
 
-// AddRequest extracts all URLS configured for a given task (does not examine child tasks) and queues them for download
-func AddRequest(task *task.Task) {
+// AddRequest extracts all URLS configured for a given task (does not examine child Tasks) and queues them for download
+func AddRequest(task *Task) {
 	if task.Config.URL != "" {
 		request, ok := registry.urlToRequest[task.Config.URL]
 		if !ok {
@@ -158,9 +157,9 @@ func md5OfFile(filepath string) string {
 }
 
 // DownloadAssets fetches all assets for the given task
-func DownloadAssets(tasks []*task.Task) {
+func DownloadAssets(tasks []*Task) {
 	registry.urlToRequest = make(map[string]*grab.Request)
-	registry.requestToTask = make(map[*grab.Request][]*task.Task)
+	registry.requestToTask = make(map[*grab.Request][]*Task)
 	registry.urltoFilename = make(map[string]string)
 
 	client := grab.NewClient()
@@ -195,7 +194,7 @@ func DownloadAssets(tasks []*task.Task) {
 		return
 	}
 
-	fmt.Println(bold("Downloading referenced assets"))
+	fmt.Println(utils.Bold("Downloading referenced assets"))
 	log.LogToMain("Downloading referenced assets", majorFormat)
 
 	uiprogress.Empty = ' '
@@ -222,11 +221,11 @@ func DownloadAssets(tasks []*task.Task) {
 	foundFailedAsset := false
 	for _, response := range responses {
 		if err := response.Err(); err != nil {
-			log.LogToMain(fmt.Sprintf(red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
+			log.LogToMain(fmt.Sprintf(utils.Red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
 			foundFailedAsset = true
 		}
 		if response.HTTPResponse.StatusCode > 399 || response.HTTPResponse.StatusCode < 200 {
-			log.LogToMain(fmt.Sprintf(red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
+			log.LogToMain(fmt.Sprintf(utils.Red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
 			foundFailedAsset = true
 		}
 	}

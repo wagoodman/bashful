@@ -14,7 +14,7 @@ func Setup() {
 	go func() {
 		for sig := range sigChannel {
 			if sig == syscall.SIGINT {
-				utils.ExitWithErrorMessage(red("Keyboard Interrupt"))
+				utils.ExitWithErrorMessage(utils.Red("Keyboard Interrupt"))
 			} else if sig == syscall.SIGTERM {
 				utils.Exit(0)
 			} else {

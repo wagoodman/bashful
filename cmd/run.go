@@ -28,8 +28,17 @@ import (
 	"io/ioutil"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/wagoodman/bashful/core"
 	"github.com/wagoodman/bashful/log"
+	"github.com/wagoodman/bashful/core"
+	"time"
+	"math/rand"
+)
+
+// TODO: this is duplicated
+const (
+	majorFormat = "cyan+b"
+	infoFormat  = "blue+b"
+	errorFormat = "utils.Red+b"
 )
 
 var tags, onlyTags string
@@ -66,19 +75,12 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		// Since this is an empty map, no env vars will be loaded explicitly into the first exec.Command
-		// which will cause the current processes env vars to be loaded instead
-		environment := map[string]string{}
-
 		yamlString, err := ioutil.ReadFile(userYamlPath)
 		utils.CheckError(err, "Unable to read yaml config.")
 
 		fmt.Print("\033[?25l") // hide cursor
-		failedTasks := core.Run(yamlString, environment)
+		Run(yamlString)
 
-		log.LogToMain("Exiting", "")
-
-		utils.Exit(len(failedTasks))
 	},
 }
 
@@ -88,3 +90,45 @@ func init() {
 	runCmd.Flags().StringVar(&tags, "tags", "", "A comma delimited list of matching task tags. If a task's tag matches *or if it is not tagged* then it will be executed (also see --only-tags)")
 	runCmd.Flags().StringVar(&onlyTags, "only-tags", "", "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag")
 }
+
+
+func Run(yamlString []byte) {
+	var err error
+
+	client := core.NewClientFromConfig(yamlString)
+
+	if config.Config.Options.LogPath != "" {
+		log.SetupLogging()
+	}
+
+	rand.Seed(time.Now().UnixNano())
+
+	tagInfo := ""
+	if len(config.Config.Cli.RunTags) > 0 {
+		if config.Config.Cli.ExecuteOnlyMatchedTags {
+			tagInfo = " only matching tags: "
+		} else {
+			tagInfo = " non-tagged and matching tags: "
+		}
+		tagInfo += strings.Join(config.Config.Cli.RunTags, ", ")
+	}
+
+	fmt.Println(utils.Bold("Running " + tagInfo))
+	log.LogToMain("Running "+tagInfo, majorFormat)
+
+	failedTasksErr := client.Run()
+	log.LogToMain("Complete", majorFormat)
+
+	err = config.Save(config.Config.EtaCachePath, &config.Config.CommandTimeCache)
+	utils.CheckError(err, "Unable to save command eta cache.")
+
+	log.LogToMain("Exiting", "")
+
+	if failedTasksErr != nil {
+		utils.Exit(1)
+	}
+}
+
+
+
+

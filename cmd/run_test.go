@@ -1,8 +1,9 @@
-package core
+package cmd
 
 import (
 	"strconv"
 	"testing"
+	"github.com/wagoodman/bashful/task"
 )
 
 func TestTaskErrorPolicy(t *testing.T) {
@@ -53,3 +54,5 @@ tasks:
 	}
 
 }
+
+

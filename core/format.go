@@ -1,4 +1,4 @@
-package task
+package core
 
 import (
 	"bytes"
@@ -17,11 +17,11 @@ var (
 	purple             = color.ColorFunc("magenta+h")
 	red                = color.ColorFunc("red+h")
 	blue               = color.ColorFunc("blue+h")
-	bold               = color.ColorFunc("default+b")
+	Bold               = color.ColorFunc("default+b")
 )
 
-// Color returns the ansi color value represented by the given CommandStatus
-func (status CommandStatus) Color(attributes string) string {
+// Color returns the ansi color value represented by the given status
+func (status status) Color(attributes string) string {
 	switch status {
 	case statusRunning:
 		return color.ColorCode(strconv.Itoa(config.Config.Options.ColorRunning) + "+" + attributes)
@@ -40,7 +40,7 @@ func (status CommandStatus) Color(attributes string) string {
 }
 
 
-func footer(status CommandStatus, message string) string {
+func footer(status status, message string, invoker *Executor) string {
 	var tpl bytes.Buffer
 	var durString, etaString, stepString, errorString string
 
@@ -53,23 +53,23 @@ func footer(status CommandStatus, message string) string {
 		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
 
-	if TaskStats.CompletedTasks == TaskStats.TotalTasks {
+	if len(invoker.CompletedTasks) == invoker.TotalTasks {
 		etaString = ""
 	}
 
 	if config.Config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", TaskStats.CompletedTasks, TaskStats.TotalTasks)
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(invoker.CompletedTasks), invoker.TotalTasks)
 	}
 
 	if config.Config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", TaskStats.TotalFailedTasks)
+		errorString = fmt.Sprintf(" Errors[%d]", len(invoker.FailedTasks))
 	}
 
 	// get a string with the summary line without a split gap (eta floats left)
-	percentValue := (float64(TaskStats.CompletedTasks) * float64(100)) / float64(TaskStats.TotalTasks)
+	percentValue := (float64(len(invoker.CompletedTasks)) * float64(100)) / float64(invoker.TotalTasks)
 	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
 
-	if TaskStats.CompletedTasks == TaskStats.TotalTasks {
+	if len(invoker.CompletedTasks) == invoker.TotalTasks {
 		percentStr = status.Color("b") + percentStr + color.Reset
 	} else {
 		percentStr = color.Color(percentStr, "default+b")
@@ -85,7 +85,7 @@ func footer(status CommandStatus, message string) string {
 	}
 
 	tpl.Reset()
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: bold(durString), Eta: bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: bold(stepString), Errors: bold(errorString), Msg: message})
+	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: Bold(durString), Eta: Bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: Bold(stepString), Errors: Bold(errorString), Msg: message})
 
 	return tpl.String()
 }
@@ -100,7 +100,7 @@ func (task *Task) CurrentEta() string {
 		if task.Command.EstimatedRuntime > 0 {
 			etaValue = utils.ShowDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}
-		eta = fmt.Sprintf(bold("[%s]"), etaValue)
+		eta = fmt.Sprintf(Bold("[%s]"), etaValue)
 	}
 	return eta
 }
