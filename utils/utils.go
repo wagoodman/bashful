@@ -105,7 +105,7 @@ func cleanup() {
 	// }
 	//
 	// // move the cursor past the used screen realestate
-	// NewScreen().MovePastFrame(true)
+	// GetScreen().MovePastFrame(true)
 	//
 	// // show the cursor again
 	// fmt.Print("\033[?25h") // show cursor

@@ -37,7 +37,6 @@ import (
 
 	"github.com/lunixbochs/vtclean"
 	color "github.com/mgutz/ansi"
-	"github.com/tj/go-spin"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
@@ -49,15 +48,11 @@ var (
 	sudoPassword       string
 	exitSignaled       bool
 	startTime          time.Time
-	ticker             *time.Ticker
 	summaryTemplate, _     = template.New("summary line").Parse(` {{.Status}}    ` + color.Reset + ` {{printf "%-16s" .Percent}}` + color.Reset + ` {{.Steps}}{{.Errors}}{{.Msg}}{{.Split}}{{.Runtime}}{{.Eta}}`)
 )
 
 
 var (
-	// spinner generates the spin icon character in front of running Tasks
-	spinner = spin.New()
-
 	// nextDisplayIdx is the next available screen row to use based off of the task / sub-task order.
 	nextDisplayIdx = 0
 
@@ -448,45 +443,17 @@ func (task *Task) Completed(rc int) {
 
 // listen updates the screen frame with the latest task and child task updates as they occur (either in realtime or in a polling loop). Returns when all child processes have been completed.
 func (task *Task) listen(environment map[string]string) {
-	// scr := NewScreen()
+	// scr := GetScreen()
 	// just wait for stuff to come back
 
 	for task.Executor.RunningTasks > 0 {
-		select {
-
-		// todo: the way the ticker is done needs to be fundementally rethought
-		case <-ticker.C:
-			spinner.Next()
-
-			// if task.Config.CmdString != "" {
-			// 	if !task.Command.Complete && task.Command.Started {
-			// 		task.Display.Values.Prefix = spinner.Current()
-			// 		task.Display.Values.Eta = task.CurrentEta()
-			// 	}
-			// 	task.display()
-			// }
-			//
-			// for _, taskObj := range task.Children {
-			// 	if !taskObj.Command.Complete && taskObj.Command.Started {
-			// 		taskObj.Display.Values.Prefix = spinner.Current()
-			// 		taskObj.Display.Values.Eta = taskObj.CurrentEta()
-			// 	}
-			// 	taskObj.display()
-			// }
-			//
-			// // update the summary line
-			// if config.Config.Options.ShowSummaryFooter {
-			// 	scr.DisplayFooter(footer(statusPending, "", task.Executor))
-			// }
-
-		case msgObj := <-task.events:
-
-			for _, handler := range task.Executor.eventHandlers {
-				handler.onEvent(task, msgObj)
-			}
-
+	    msgObj := <-task.events
+	 	for _, handler := range task.Executor.eventHandlers {
+			handler.onEvent(task, msgObj)
 		}
-
+	}
+	for _, handler := range task.Executor.eventHandlers {
+		handler.unregister(task)
 	}
 
 	if !exitSignaled {
@@ -511,7 +478,7 @@ func (task *Task) Run(environment map[string]string) {
 	task.startAvailableTasks(environment)
 	task.listen(environment)
 
-	scr := NewScreen()
+	scr := GetScreen()
 	hasHeader := len(task.Children) > 0 && !config.Config.Options.SingleLineDisplay
 	collapseSection := task.Config.CollapseOnCompletion && hasHeader && task.FailedChildren == 0
 

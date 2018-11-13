@@ -25,6 +25,10 @@ func (handler *LogHandler) register(task *Task) {
 
 }
 
+func (handler *LogHandler) unregister(task *Task) {
+
+}
+
 func (handler *LogHandler) onEvent(task *Task, e event) {
 	// defer handler.logFile.Sync()
 	if _, err := handler.logFile.WriteString(fmt.Sprintf("%+v\n", e)); err != nil {

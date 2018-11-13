@@ -90,7 +90,12 @@ func Run(yamlString []byte) {
 
 	client := runtime.NewClientFromConfig(yamlString)
 	client.AddEventHandler(runtime.NewLogHandler())
-	client.AddEventHandler(runtime.NewUIHandler())
+
+	updateInterval := 150 * time.Millisecond
+	if config.Config.Options.UpdateInterval > 150 {
+		updateInterval = time.Duration(config.Config.Options.UpdateInterval) * time.Millisecond
+	}
+	client.AddEventHandler(runtime.NewUIHandler(updateInterval))
 
 	if config.Config.Options.LogPath != "" {
 		log.SetupLogging()

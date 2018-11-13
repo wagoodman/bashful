@@ -41,13 +41,7 @@ func NewClientFromConfig(yamlString []byte) *Client {
 }
 
 func NewClient(taskConfigs []config.TaskConfig, options config.OptionsConfig) *Client {
-
 	startTime = time.Now()
-	if options.UpdateInterval > 150 {
-		ticker = time.NewTicker(time.Duration(options.UpdateInterval) * time.Millisecond)
-	} else {
-		ticker = time.NewTicker(150 * time.Millisecond)
-	}
 
 	// initialize Tasks with default values
 	var tasks []*Task
@@ -90,14 +84,14 @@ func (client *Client) Run() error {
 	if client.Options.ShowSummaryFooter {
 		// todo: add footer update via Executor stats
 		message := ""
-		NewScreen().ResetFrame(0, false, true)
+		GetScreen().ResetFrame(0, false, true)
 		if len(client.Executor.FailedTasks) > 0 {
 			if config.Config.Options.LogPath != "" {
 				message = utils.Bold(" See log for details (" + config.Config.Options.LogPath + ")")
 			}
-			NewScreen().DisplayFooter(footer(StatusError, message, client.Executor))
+			GetScreen().DisplayFooter(footer(StatusError, message, client.Executor))
 		} else {
-			NewScreen().DisplayFooter(footer(StatusSuccess, message, client.Executor))
+			GetScreen().DisplayFooter(footer(StatusSuccess, message, client.Executor))
 		}
 	}
 

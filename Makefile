@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := ci
-TARGETS := $(shell ls scripts)
+TARGETS := $(shell ls .scripts)
 .PHONY: run clean $(TARGETS)
 
 $(TARGETS): 

@@ -10,20 +10,81 @@ import (
 	"github.com/wayneashleyberry/terminal-dimensions"
 	color "github.com/mgutz/ansi"
 	"bytes"
+	"github.com/tj/go-spin"
+	"github.com/google/uuid"
+	"sync"
 )
 
 type UIHandler struct {
-
+	lock    sync.Mutex
+	tasks   map[uuid.UUID]*Task
+	spinner *spin.Spinner
+	ticker  *time.Ticker
 }
 
-func NewUIHandler() *UIHandler {
-	return &UIHandler{
+func NewUIHandler(updateInterval time.Duration) *UIHandler {
+	handler := &UIHandler{
+		tasks:   make(map[uuid.UUID]*Task, 0),
+		spinner: spin.New(),
+		ticker:  time.NewTicker(updateInterval),
+	}
+
+	go handler.spinnerHandler()
+
+	return handler
+}
+
+func (handler *UIHandler) spinnerHandler() {
+	scr := GetScreen()
+	for {
+		select {
+
+		case <-handler.ticker.C:
+			handler.lock.Lock()
+
+			handler.spinner.Next()
+			for _, task := range handler.tasks {
+
+				if task.Config.CmdString != "" {
+					if !task.Command.Complete && task.Command.Started {
+						task.Display.Values.Prefix = handler.spinner.Current()
+						task.Display.Values.Eta = task.CurrentEta()
+					}
+					handler.displayTask(task)
+				}
+
+				for _, taskObj := range task.Children {
+					if !taskObj.Command.Complete && taskObj.Command.Started {
+						taskObj.Display.Values.Prefix = handler.spinner.Current()
+						taskObj.Display.Values.Eta = taskObj.CurrentEta()
+					}
+					handler.displayTask(taskObj)
+				}
+
+				// update the summary line
+				if config.Config.Options.ShowSummaryFooter {
+					scr.DisplayFooter(footer(statusPending, "", task.Executor))
+				}
+			}
+			handler.lock.Unlock()
+		}
 
 	}
 }
 
-func (handler *UIHandler) register(task *Task) {
+func (handler *UIHandler) unregister(task *Task) {
+	handler.lock.Lock()
+	defer handler.lock.Unlock()
+	delete(handler.tasks, task.Id)
+}
 
+func (handler *UIHandler) register(task *Task) {
+	handler.lock.Lock()
+	defer handler.lock.Unlock()
+
+	handler.tasks[task.Id] = task
+
+	// pave the screen...
 	var message bytes.Buffer
 	hasParentCmd := task.Config.CmdString != ""
 	hasHeader := len(task.Children) > 0
@@ -31,7 +92,7 @@ func (handler *UIHandler) register(task *Task) {
 	if hasParentCmd {
 		numTasks++
 	}
-	scr := NewScreen()
+	scr := GetScreen()
 	scr.ResetFrame(numTasks, hasHeader, config.Config.Options.ShowSummaryFooter)
 
 	// make room for the title of a parallel proc group
@@ -55,8 +116,10 @@ func (handler *UIHandler) register(task *Task) {
 }
 
 func (handler *UIHandler) onEvent(task *Task, e event) {
+	handler.lock.Lock()
+	defer handler.lock.Unlock()
 
-	scr := NewScreen()
+	scr := GetScreen()
 	eventTask := e.Task
 
 	// update the state before displaying...
@@ -81,9 +144,21 @@ func (handler *UIHandler) onEvent(task *Task, e event) {
 	}
 
 	if e.Stderr != "" {
-		eventTask.Display.Values = lineInfo{Status: e.Status.Color("i"), Title: eventTask.Config.Name, Msg: e.Stderr, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
+		eventTask.Display.Values = lineInfo{
+			Status: e.Status.Color("i"),
+			Title: eventTask.Config.Name,
+			Msg: e.Stderr,
+			Prefix: handler.spinner.Current(),
+			Eta: eventTask.CurrentEta(),
+		}
 	} else {
-		eventTask.Display.Values = lineInfo{Status: e.Status.Color("i"), Title: eventTask.Config.Name, Msg: e.Stdout, Prefix: spinner.Current(), Eta: eventTask.CurrentEta()}
+		eventTask.Display.Values = lineInfo{
+			Status: e.Status.Color("i"),
+			Title: eventTask.Config.Name,
+			Msg: e.Stdout,
+			Prefix: handler.spinner.Current(),
+			Eta: eventTask.CurrentEta(),
+		}
 	}
 
 	handler.displayTask(eventTask)
@@ -99,7 +174,7 @@ func (handler *UIHandler) onEvent(task *Task, e event) {
 
 func (handler *UIHandler) displayTask(task *Task) {
 	terminalWidth, _ := terminaldimensions.Width()
-	theScreen := NewScreen()
+	theScreen := GetScreen()
 	if config.Config.Options.SingleLineDisplay {
 
 		var durString, etaString, stepString, errorString string

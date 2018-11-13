@@ -34,6 +34,7 @@ import (
 
 type EventHandler interface {
 	register(task *Task)
+	unregister(task *Task)
 	onEvent(task *Task, e event)
 }
 

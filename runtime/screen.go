@@ -43,8 +43,8 @@ type screen struct {
 	hasFooter bool
 }
 
-// NewScreen is a singleton that represents the screen frame being actively written to
-func NewScreen() *screen {
+// GetScreen is a singleton that represents the screen frame being actively written to
+func GetScreen() *screen {
 	once.Do(func() {
 		instance = &screen{}
 	})
