@@ -33,13 +33,6 @@ import (
 	"strconv"
 )
 
-var (
-	purple             = color.ColorFunc("magenta+h")
-	red                = color.ColorFunc("red+h")
-	blue               = color.ColorFunc("blue+h")
-	Bold               = color.ColorFunc("default+b")
-)
-
 // Color returns the ansi color value represented by the given status
 func (status status) Color(attributes string) string {
 	switch status {
@@ -65,7 +58,7 @@ func footer(status status, message string, invoker *Executor) string {
 	var durString, etaString, stepString, errorString string
 
 	if config.Config.Options.ShowSummaryTimes {
-		duration := time.Since(StartTime)
+		duration := time.Since(startTime)
 		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
 
 		totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
@@ -105,7 +98,7 @@ func footer(status status, message string, invoker *Executor) string {
 	}
 
 	tpl.Reset()
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: Bold(durString), Eta: Bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: Bold(stepString), Errors: Bold(errorString), Msg: message})
+	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: utils.Bold(durString), Eta: utils.Bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: utils.Bold(stepString), Errors: utils.Bold(errorString), Msg: message})
 
 	return tpl.String()
 }
@@ -120,7 +113,7 @@ func (task *Task) CurrentEta() string {
 		if task.Command.EstimatedRuntime > 0 {
 			etaValue = utils.ShowDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}
-		eta = fmt.Sprintf(Bold("[%s]"), etaValue)
+		eta = fmt.Sprintf(utils.Bold("[%s]"), etaValue)
 	}
 	return eta
 }

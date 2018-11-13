@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	Purple             = color.ColorFunc("magenta+h")
-	Red                = color.ColorFunc("red+h")
-	Blue               = color.ColorFunc("blue+h")
-	Bold               = color.ColorFunc("default+b")
+	Purple = color.ColorFunc("magenta+h")
+	Red    = color.ColorFunc("red+h")
+	Blue   = color.ColorFunc("blue+h")
+	Bold   = color.ColorFunc("default+b")
 )
 
 // MinMax returns the min and max values from an array of float64 values
@@ -134,23 +134,23 @@ func ShowDuration(duration time.Duration) string {
 }
 
 func GetSudoPasswd() string {
-	var sout bytes.Buffer
-	var sudoPasswd string
+	var stdOut bytes.Buffer
+	var password string
 
 	// test if a password is even required for sudo
 	cmd := exec.Command("/bin/sh", "-c", "sudo -Sn /bin/true")
-	cmd.Stderr = &sout
+	cmd.Stderr = &stdOut
 	err := cmd.Run()
-	requiresPassword := sout.String() == "sudo: a password is required\n"
+	requiresPassword := stdOut.String() == "sudo: a password is required\n"
 
 	if requiresPassword {
 		fmt.Print("[bashful] sudo password required: ")
-		sudoPasswd, err := gopass.GetPasswd()
+		password, err := gopass.GetPasswd()
 		CheckError(err, "Could get sudo password from user.")
 
 		// test the given password
 		cmdTest := exec.Command("/bin/sh", "-c", "sudo -S /bin/true")
-		cmdTest.Stdin = strings.NewReader(string(sudoPasswd) + "\n")
+		cmdTest.Stdin = strings.NewReader(string(password) + "\n")
 		err = cmdTest.Run()
 		if err != nil {
 			ExitWithErrorMessage("Given sudo password did not work.")
@@ -159,6 +159,6 @@ func GetSudoPasswd() string {
 		CheckError(err, "Could not determine sudo access for user.")
 	}
 
-	return sudoPasswd
+	return password
 }
 

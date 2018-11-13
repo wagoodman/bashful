@@ -12,6 +12,12 @@ import (
 	"github.com/wagoodman/bashful/config"
 )
 
+const (
+	StyleMajor = "cyan+b"
+	StyleInfo  = "blue+b"
+	StyleError = "red+b"
+)
+
 var (
 	mainLogChan       = make(chan LogItem)
 	mainLogConcatChan = make(chan LogConcat)
@@ -72,14 +78,6 @@ func SetupLogging() {
 	go mainLogger(config.Config.Options.LogPath)
 }
 
-// todo: this is in a bunch of spots
-var (
-	purple             = color.ColorFunc("magenta+h")
-	red                = color.ColorFunc("red+h")
-	blue               = color.ColorFunc("blue+h")
-	Bold               = color.ColorFunc("default+b")
-)
-
 // SingleLogger creats a separatly managed log (typically for an individual task to be later concatenated with the mainlog)
 func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 
@@ -93,7 +91,7 @@ func SingleLogger(SingleLogChan chan LogItem, name, logPath string) {
 	}()
 
 	logger := log.New(file, "", log.Ldate|log.Ltime)
-	logger.Println(Bold("Task full output: " + name))
+	logger.Println(utils.Bold("Task full output: " + name))
 	logger.SetFlags(0)
 
 	for {
@@ -158,5 +156,5 @@ func mainLogger(logPath string) {
 		}
 	}
 
-	logger.Println(Bold("Finished!"))
+	logger.Println(utils.Bold("Finished!"))
 }

@@ -12,3 +12,4 @@ archive
 /vendor
 /dist
 *.bundle
+/tmp

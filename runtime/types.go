@@ -29,17 +29,23 @@ import (
 	"os/exec"
 	"time"
 	"text/template"
+	"github.com/google/uuid"
 )
 
-type Client struct {
-	Options     config.OptionsConfig
-	TaskConfigs []config.TaskConfig
-	Executor    *Executor
+type EventHandler interface {
+	register(task *Task)
+	onEvent(task *Task, e event)
 }
 
+type Client struct {
+	Options       config.OptionsConfig
+	TaskConfigs   []config.TaskConfig
+	Executor      *Executor
+}
 
 type Executor struct {
 	environment map[string]string
+	eventHandlers []EventHandler
 
 	// Tasks is a list of all Task objects that will be invoked
 	Tasks       []*Task
@@ -55,12 +61,12 @@ type Executor struct {
 
 	// TotalTasks indicates the number of tasks that can be run (Note: this is not necessarily the same number of tasks planned to be run)
 	TotalTasks int
-
 }
-
 
 // Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to execute, track, and display the task.
 type Task struct {
+	Id uuid.UUID
+
 	// Config is the user-defined values parsed from the run yaml
 	Config config.TaskConfig
 
@@ -70,6 +76,7 @@ type Task struct {
 	// Command represents all non-Config items used to execute and track task progress
 	Command command
 
+	// todo: do we need both logfile and logchan in a task?
 	// LogChan is a channel with event log items written to the temporary logfile
 	LogChan chan log.LogItem
 
@@ -85,8 +92,9 @@ type Task struct {
 	// lastStartedTask is the index of the last child task that was started
 	lastStartedTask int
 
-	// resultChan is a channel where all raw command events are queued to
-	resultChan chan event
+	// TODO: this should be removed from a task?
+	// events is a channel where all raw command events are queued to
+	events chan event
 
 	// waiter is a synchronization object which returns when all child task command executions have been completed
 	waiter sync.WaitGroup
@@ -97,7 +105,7 @@ type Task struct {
 	// FailedTasks is a list of Tasks with a non-zero return value
 	FailedChildren int
 
-	invoker *Executor
+	Executor *Executor
 }
 
 // display represents all non-Config items that control how the task line should be printed to the screen
@@ -120,7 +128,7 @@ type command struct {
 	// TempExecFromURL is the path to a temporary file downloaded from a TaskConfig url reference
 	TempExecFromURL string
 
-	// StartTime indicates when the Cmd was started
+	// startTime indicates when the Cmd was started
 	StartTime time.Time
 
 	// StopTime indicates when the Cmd completed execution

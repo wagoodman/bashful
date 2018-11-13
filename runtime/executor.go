@@ -21,30 +21,35 @@
 package runtime
 
 func newExecutor(tasks []*Task) *Executor {
-	invoker := &Executor{
+	executor := &Executor{
 		environment: make(map[string]string, 0),
 		FailedTasks: make([]*Task, 0),
 		Tasks:       tasks,
 		CompletedTasks: make([]*Task, 0),
+		eventHandlers: make([]EventHandler, 0),
 	}
 
 	// todo: assigning to the Executor plan should be somewhere else
 	for _, task := range tasks {
-		task.invoker = invoker
+		task.Executor = executor
 		if task.Config.CmdString != "" || task.Config.URL != "" {
-			invoker.TotalTasks++
+			executor.TotalTasks++
 		}
 
 		for _, subTask := range task.Children {
-			subTask.invoker = invoker
+			subTask.Executor = executor
 			if subTask.Config.CmdString != "" || subTask.Config.URL != "" {
-				invoker.TotalTasks++
+				executor.TotalTasks++
 			}
 		}
 
 	}
 
-	return invoker
+	return executor
+}
+
+func (executor *Executor) addEventHandler(handler EventHandler) {
+	executor.eventHandlers = append(executor.eventHandlers, handler)
 }
 
 func (executor *Executor) execute(task *Task) error {
@@ -56,7 +61,7 @@ func (executor *Executor) run() error {
 	for _, task := range executor.Tasks {
 		executor.execute(task)
 
-		if ExitSignaled {
+		if exitSignaled {
 			break
 		}
 	}

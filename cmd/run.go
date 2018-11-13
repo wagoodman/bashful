@@ -34,13 +34,6 @@ import (
 	"github.com/wagoodman/bashful/runtime"
 )
 
-// TODO: this is duplicated
-const (
-	majorFormat = "cyan+b"
-	infoFormat  = "blue+b"
-	errorFormat = "utils.Red+b"
-)
-
 var tags, onlyTags string
 
 // runCmd represents the run command
@@ -96,6 +89,8 @@ func Run(yamlString []byte) {
 	var err error
 
 	client := runtime.NewClientFromConfig(yamlString)
+	client.AddEventHandler(runtime.NewLogHandler())
+	client.AddEventHandler(runtime.NewUIHandler())
 
 	if config.Config.Options.LogPath != "" {
 		log.SetupLogging()
@@ -114,10 +109,10 @@ func Run(yamlString []byte) {
 	}
 
 	fmt.Println(utils.Bold("Running " + tagInfo))
-	log.LogToMain("Running "+tagInfo, majorFormat)
+	log.LogToMain("Running "+tagInfo, log.StyleMajor)
 
 	failedTasksErr := client.Run()
-	log.LogToMain("Complete", majorFormat)
+	log.LogToMain("Complete", log.StyleMajor)
 
 	err = config.Save(config.Config.EtaCachePath, &config.Config.CommandTimeCache)
 	utils.CheckError(err, "Unable to save command eta cache.")

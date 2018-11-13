@@ -210,12 +210,12 @@ func DownloadAssets(tasks []*Task) {
 	}
 
 	if len(allRequests) == 0 {
-		log.LogToMain("No assets to download", majorFormat)
+		log.LogToMain("No assets to download", log.StyleMajor)
 		return
 	}
 
 	fmt.Println(utils.Bold("Downloading referenced assets"))
-	log.LogToMain("Downloading referenced assets", majorFormat)
+	log.LogToMain("Downloading referenced assets", log.StyleMajor)
 
 	uiprogress.Empty = ' '
 	uiprogress.Fill = '|'
@@ -241,11 +241,11 @@ func DownloadAssets(tasks []*Task) {
 	foundFailedAsset := false
 	for _, response := range responses {
 		if err := response.Err(); err != nil {
-			log.LogToMain(fmt.Sprintf(utils.Red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), errorFormat)
+			log.LogToMain(fmt.Sprintf(utils.Red("Failed to download '%s': %s"), response.Request.URL(), err.Error()), log.StyleError)
 			foundFailedAsset = true
 		}
 		if response.HTTPResponse.StatusCode > 399 || response.HTTPResponse.StatusCode < 200 {
-			log.LogToMain(fmt.Sprintf(utils.Red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), errorFormat)
+			log.LogToMain(fmt.Sprintf(utils.Red("Failed to download '%s': Bad HTTP response code (%d)"), response.Request.URL(), response.HTTPResponse.StatusCode), log.StyleError)
 			foundFailedAsset = true
 		}
 	}
@@ -267,5 +267,5 @@ func DownloadAssets(tasks []*Task) {
 		utils.ExitWithErrorMessage("Asset download failed")
 	}
 
-	log.LogToMain("Asset download complete", majorFormat)
+	log.LogToMain("Asset download complete", log.StyleMajor)
 }

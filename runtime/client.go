@@ -42,11 +42,11 @@ func NewClientFromConfig(yamlString []byte) *Client {
 
 func NewClient(taskConfigs []config.TaskConfig, options config.OptionsConfig) *Client {
 
-	StartTime = time.Now()
+	startTime = time.Now()
 	if options.UpdateInterval > 150 {
-		Ticker = time.NewTicker(time.Duration(options.UpdateInterval) * time.Millisecond)
+		ticker = time.NewTicker(time.Duration(options.UpdateInterval) * time.Millisecond)
 	} else {
-		Ticker = time.NewTicker(150 * time.Millisecond)
+		ticker = time.NewTicker(150 * time.Millisecond)
 	}
 
 	// initialize Tasks with default values
@@ -72,11 +72,14 @@ func NewClient(taskConfigs []config.TaskConfig, options config.OptionsConfig) *C
 	}
 }
 
+func (client *Client) AddEventHandler(handler EventHandler) {
+	client.Executor.addEventHandler(handler)
+}
 
 func (client *Client) Run() error {
 	for _, task := range client.Executor.Tasks {
 		if task.requiresSudoPasswd() {
-			SudoPassword = utils.GetSudoPasswd()
+			sudoPassword = utils.GetSudoPasswd()
 			break
 		}
 	}
@@ -90,7 +93,7 @@ func (client *Client) Run() error {
 		NewScreen().ResetFrame(0, false, true)
 		if len(client.Executor.FailedTasks) > 0 {
 			if config.Config.Options.LogPath != "" {
-				message = Bold(" See log for details (" + config.Config.Options.LogPath + ")")
+				message = utils.Bold(" See log for details (" + config.Config.Options.LogPath + ")")
 			}
 			NewScreen().DisplayFooter(footer(StatusError, message, client.Executor))
 		} else {
