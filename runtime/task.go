@@ -40,7 +40,6 @@ import (
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/wagoodman/bashful/log"
 	"github.com/google/uuid"
 )
 
@@ -287,18 +286,12 @@ func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err 
 
 // runSingleCmd executes a Tasks primary command (not child task commands) and monitors command events
 func (task *Task) runSingleCmd(owningResultChan chan event, owningWaiter *sync.WaitGroup, environment map[string]string) {
-	log.LogToMain("Started Task: "+task.Config.Name, log.StyleInfo)
 
 	task.Command.StartTime = time.Now()
 
 	owningResultChan <- event{Task: task, Status: statusRunning, ReturnCode: -1}
 	owningWaiter.Add(1)
 	defer owningWaiter.Done()
-
-	tempFile, _ := ioutil.TempFile(config.Config.LogCachePath, "")
-	task.LogFile = tempFile
-	task.LogChan = make(chan log.LogItem)
-	go log.SingleLogger(task.LogChan, task.Config.Name, tempFile.Name())
 
 	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := task.Command.Cmd.StderrPipe()
@@ -335,6 +328,7 @@ func (task *Task) runSingleCmd(owningResultChan chan event, owningWaiter *sync.W
 					continue
 				}
 
+				// todo: we should always throw the event? let the event handler deal with event/polling...
 				if task.Config.EventDriven {
 					// this is event driven... (signal this event)
 					owningResultChan <- event{Task: task, Status: statusRunning, Stdout: utils.Blue(stdoutMsg), ReturnCode: -1}
@@ -342,7 +336,6 @@ func (task *Task) runSingleCmd(owningResultChan chan event, owningWaiter *sync.W
 					// on a polling interval... (do not create an event)
 					task.Display.Values.Msg = utils.Blue(stdoutMsg)
 				}
-				task.LogChan <- log.LogItem{Name: task.Config.Name, Message: stdoutMsg + "\n"}
 
 			} else {
 				stdoutChan = nil
@@ -350,6 +343,7 @@ func (task *Task) runSingleCmd(owningResultChan chan event, owningWaiter *sync.W
 		case stderrMsg, ok := <-stderrChan:
 			if ok {
 
+				// todo: we should always throw the event? let the event handler deal with event/polling...
 				if task.Config.EventDriven {
 					// either this is event driven... (signal this event)
 					owningResultChan <- event{Task: task, Status: statusRunning, Stderr: utils.Red(stderrMsg), ReturnCode: -1}
@@ -357,7 +351,6 @@ func (task *Task) runSingleCmd(owningResultChan chan event, owningWaiter *sync.W
 					// or on a polling interval... (do not create an event)
 					task.Display.Values.Msg = utils.Red(stderrMsg)
 				}
-				task.LogChan <- log.LogItem{Name: task.Config.Name, Message: utils.Red(stderrMsg) + "\n"}
 				task.ErrorBuffer.WriteString(stderrMsg + "\n")
 			} else {
 				stderrChan = nil
@@ -380,13 +373,10 @@ func (task *Task) runSingleCmd(owningResultChan chan event, owningWaiter *sync.W
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
 			owningResultChan <- event{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
-			task.LogChan <- log.LogItem{Name: task.Config.Name, Message: utils.Red(returnCodeMsg) + "\n"}
 			task.ErrorBuffer.WriteString(returnCodeMsg + "\n")
 		}
 	}
 	task.Command.StopTime = time.Now()
-
-	log.LogToMain("Completed Task: "+task.Config.Name+" (rc:"+strconv.Itoa(returnCode)+")", log.StyleInfo)
 
 	// close the write end of the pipe since the child shell is positively no longer writting to it
 	task.Command.Cmd.ExtraFiles[0].Close()
@@ -434,7 +424,6 @@ func (task *Task) startAvailableTasks(environment map[string]string) {
 func (task *Task) Completed(rc int) {
 	task.Command.Complete = true
 	task.Command.ReturnCode = rc
-	close(task.LogChan)
 
 	task.Executor.CompletedTasks = append(task.Executor.CompletedTasks, task)
 	config.Config.CommandTimeCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
@@ -449,11 +438,20 @@ func (task *Task) listen(environment map[string]string) {
 	for task.Executor.RunningTasks > 0 {
 	    msgObj := <-task.events
 	 	for _, handler := range task.Executor.eventHandlers {
-			handler.onEvent(task, msgObj)
+			handler.OnEvent(task, msgObj)
+			if msgObj.Complete {
+				handler.Unregister(msgObj.Task)
+			}
+		}
+	}
+	// we should be done with all tasks/subtasks at this point, unregister everything
+	for _, subTask := range task.Children {
+		for _, handler := range subTask.Executor.eventHandlers {
+			handler.Unregister(subTask)
 		}
 	}
 	for _, handler := range task.Executor.eventHandlers {
-		handler.unregister(task)
+		handler.Unregister(task)
 	}
 
 	if !exitSignaled {
@@ -467,12 +465,8 @@ func (task *Task) Run(environment map[string]string) {
 
 	var message bytes.Buffer
 
-	// todo: replace this!!!!!!
-	// if !config.Config.Options.SingleLineDisplay {
-	// 	task.Pave()
-	// }
 	for _, handler := range task.Executor.eventHandlers {
-		handler.register(task)
+		handler.Register(task)
 	}
 
 	task.startAvailableTasks(environment)

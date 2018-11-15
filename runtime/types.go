@@ -22,7 +22,6 @@ package runtime
 
 import (
 	"github.com/wagoodman/bashful/config"
-	"github.com/wagoodman/bashful/log"
 	"os"
 	"bytes"
 	"sync"
@@ -33,9 +32,9 @@ import (
 )
 
 type EventHandler interface {
-	register(task *Task)
-	unregister(task *Task)
-	onEvent(task *Task, e event)
+	Register(task *Task)
+	Unregister(task *Task)
+	OnEvent(task *Task, e event)
 }
 
 type Client struct {
@@ -76,13 +75,6 @@ type Task struct {
 
 	// Command represents all non-Config items used to execute and track task progress
 	Command command
-
-	// todo: do we need both logfile and logchan in a task?
-	// LogChan is a channel with event log items written to the temporary logfile
-	LogChan chan log.LogItem
-
-	// LogFile is the temporary log file where all formatted stdout/stderr events are recorded
-	LogFile *os.File
 
 	// ErrorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
 	ErrorBuffer *bytes.Buffer

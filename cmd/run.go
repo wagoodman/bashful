@@ -89,17 +89,14 @@ func Run(yamlString []byte) {
 	var err error
 
 	client := runtime.NewClientFromConfig(yamlString)
-	client.AddEventHandler(runtime.NewLogHandler())
 
 	updateInterval := 150 * time.Millisecond
 	if config.Config.Options.UpdateInterval > 150 {
 		updateInterval = time.Duration(config.Config.Options.UpdateInterval) * time.Millisecond
 	}
 	client.AddEventHandler(runtime.NewUIHandler(updateInterval))
-
-	if config.Config.Options.LogPath != "" {
-		log.SetupLogging()
-	}
+	client.AddEventHandler(runtime.NewTaskLogger())
+	client.AddEventHandler(runtime.NewSimpleLogger())
 
 	rand.Seed(time.Now().UnixNano())
 

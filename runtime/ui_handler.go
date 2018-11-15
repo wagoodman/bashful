@@ -72,13 +72,21 @@ func (handler *UIHandler) spinnerHandler() {
 	}
 }
 
-func (handler *UIHandler) unregister(task *Task) {
+func (handler *UIHandler) Unregister(task *Task) {
+	if _, ok := handler.tasks[task.Id]; !ok {
+		// ignore tasks that have already been unregistered
+		return
+	}
 	handler.lock.Lock()
 	defer handler.lock.Unlock()
 	delete(handler.tasks, task.Id)
 }
 
-func (handler *UIHandler) register(task *Task) {
+func (handler *UIHandler) Register(task *Task) {
+	if _, ok := handler.tasks[task.Id]; ok {
+		// ignore tasks that have already been registered
+		return
+	}
 	handler.lock.Lock()
 	defer handler.lock.Unlock()
 
@@ -115,7 +123,7 @@ func (handler *UIHandler) register(task *Task) {
 
 }
 
-func (handler *UIHandler) onEvent(task *Task, e event) {
+func (handler *UIHandler) OnEvent(task *Task, e event) {
 	handler.lock.Lock()
 	defer handler.lock.Unlock()
 
