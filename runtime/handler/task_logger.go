@@ -1,6 +1,7 @@
-package runtime
+package handler
 
 import (
+	"github.com/wagoodman/bashful/runtime"
 	"github.com/wagoodman/bashful/log"
 	"github.com/wagoodman/bashful/config"
 	"io/ioutil"
@@ -18,6 +19,8 @@ type bufferedLog struct {
 
 	// LogFile is the temporary log file where all formatted stdout/stderr events are recorded
 	LogFile *os.File
+
+	Task *runtime.Task
 }
 
 type TaskLogger struct {
@@ -35,20 +38,21 @@ func NewTaskLogger() *TaskLogger {
 	}
 }
 
-func (handler *TaskLogger) doRegister(task *Task) {
+func (handler *TaskLogger) doRegister(task *runtime.Task) {
 	tempFile, _ := ioutil.TempFile(config.Config.LogCachePath, "")
 
 	handler.logs[task.Id] = &bufferedLog{
 		LogFile: tempFile,
 		LogChan: make(chan log.LogItem),
+		Task: task,
 	}
 	log.LogToMain("Started Task: "+task.Config.Name, log.StyleInfo)
 	go log.SingleLogger(handler.logs[task.Id].LogChan, task.Config.Name, tempFile.Name())
 }
 
-func (handler *TaskLogger) Register(task *Task) {
+func (handler *TaskLogger) Register(task *runtime.Task) {
 	if _, ok := handler.logs[task.Id]; ok {
-		// ignore tasks that have already been registered
+		// ignore data that have already been registered
 		return
 	}
 	handler.lock.Lock()
@@ -57,9 +61,9 @@ func (handler *TaskLogger) Register(task *Task) {
 	handler.doRegister(task)
 }
 
-func (handler *TaskLogger) Unregister(task *Task) {
+func (handler *TaskLogger) Unregister(task *runtime.Task) {
 	if _, ok := handler.logs[task.Id]; !ok {
-		// ignore tasks that have already been unregistered
+		// ignore data that have already been unregistered
 		return
 	}
 	handler.lock.Lock()
@@ -67,10 +71,10 @@ func (handler *TaskLogger) Unregister(task *Task) {
 
 	close(handler.logs[task.Id].LogChan)
 	delete(handler.logs, task.Id)
-	log.LogToMain("Completed Task: "+task.Config.Name+" (rc:"+strconv.Itoa(task.Command.ReturnCode)+")", log.StyleInfo)
+	log.LogToMain("completed Task: "+task.Config.Name+" (rc:"+strconv.Itoa(task.Command.ReturnCode)+")", log.StyleInfo)
 }
 
-func (handler *TaskLogger) OnEvent(task *Task, e event) {
+func (handler *TaskLogger) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 	handler.lock.Lock()
 	defer handler.lock.Unlock()
 
@@ -86,3 +90,10 @@ func (handler *TaskLogger) OnEvent(task *Task, e event) {
 	}
 
 }
+
+func (handler *TaskLogger) Close() {
+	for _, data := range handler.logs {
+		handler.Unregister(data.Task)
+	}
+}
+

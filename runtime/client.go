@@ -22,7 +22,6 @@ package runtime
 
 import (
 	"github.com/wagoodman/bashful/config"
-	"time"
 	"bytes"
 	"github.com/wagoodman/bashful/utils"
 	"os"
@@ -41,15 +40,11 @@ func NewClientFromConfig(yamlString []byte) *Client {
 }
 
 func NewClient(taskConfigs []config.TaskConfig, options config.OptionsConfig) *Client {
-	startTime = time.Now()
-
 	// initialize Tasks with default values
 	var tasks []*Task
 	for _, taskConfig := range taskConfigs {
-		nextDisplayIdx = 0
-
 		// finalize task by appending to the set of final Tasks
-		task := NewTask(taskConfig, nextDisplayIdx, "")
+		task := NewTask(taskConfig, "")
 		tasks = append(tasks, task)
 	}
 
@@ -80,20 +75,6 @@ func (client *Client) Run() error {
 
 	DownloadAssets(client.Executor.Tasks)
 	client.Executor.run()
-
-	if client.Options.ShowSummaryFooter {
-		// todo: add footer update via Executor stats
-		message := ""
-		GetScreen().ResetFrame(0, false, true)
-		if len(client.Executor.FailedTasks) > 0 {
-			if config.Config.Options.LogPath != "" {
-				message = utils.Bold(" See log for details (" + config.Config.Options.LogPath + ")")
-			}
-			GetScreen().DisplayFooter(footer(StatusError, message, client.Executor))
-		} else {
-			GetScreen().DisplayFooter(footer(StatusSuccess, message, client.Executor))
-		}
-	}
 
 	if len(client.Executor.FailedTasks) > 0 {
 		var buffer bytes.Buffer

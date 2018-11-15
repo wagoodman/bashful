@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"strings"
 	"io/ioutil"
+	"github.com/wagoodman/bashful/runtime/handler"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/log"
@@ -94,9 +95,13 @@ func Run(yamlString []byte) {
 	if config.Config.Options.UpdateInterval > 150 {
 		updateInterval = time.Duration(config.Config.Options.UpdateInterval) * time.Millisecond
 	}
-	client.AddEventHandler(runtime.NewUIHandler(updateInterval))
-	client.AddEventHandler(runtime.NewTaskLogger())
-	client.AddEventHandler(runtime.NewSimpleLogger())
+	if config.Config.Options.SingleLineDisplay {
+		client.AddEventHandler(handler.NewCompressedUI())
+	} else {
+		client.AddEventHandler(handler.NewVerticalUI(updateInterval))
+	}
+	client.AddEventHandler(handler.NewTaskLogger())
+	client.AddEventHandler(handler.NewSimpleLogger())
 
 	rand.Seed(time.Now().UnixNano())
 

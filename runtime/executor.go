@@ -22,11 +22,11 @@ package runtime
 
 func newExecutor(tasks []*Task) *Executor {
 	executor := &Executor{
-		environment: make(map[string]string, 0),
-		FailedTasks: make([]*Task, 0),
-		Tasks:       tasks,
+		Environment:    make(map[string]string, 0),
+		FailedTasks:    make([]*Task, 0),
+		Tasks:          tasks,
 		CompletedTasks: make([]*Task, 0),
-		eventHandlers: make([]EventHandler, 0),
+		eventHandlers:  make([]EventHandler, 0),
 	}
 
 	// todo: assigning to the Executor plan should be somewhere else
@@ -53,7 +53,7 @@ func (executor *Executor) addEventHandler(handler EventHandler) {
 }
 
 func (executor *Executor) execute(task *Task) error {
-	task.Run(executor.environment)
+	task.Run(executor.Environment)
 	return nil
 }
 

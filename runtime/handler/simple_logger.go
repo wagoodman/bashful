@@ -1,8 +1,9 @@
-package runtime
+package handler
 
 import (
 	"os"
 	"fmt"
+	"github.com/wagoodman/bashful/runtime"
 )
 
 // this was just a (successful) experiment :) needs to be reworked
@@ -21,17 +22,24 @@ func NewSimpleLogger() *SimpleLogger {
 	}
 }
 
-func (handler *SimpleLogger) Register(task *Task) {
+func (handler *SimpleLogger) Register(task *runtime.Task) {
 
 }
 
-func (handler *SimpleLogger) Unregister(task *Task) {
+func (handler *SimpleLogger) Unregister(task *runtime.Task) {
 
 }
 
-func (handler *SimpleLogger) OnEvent(task *Task, e event) {
+func (handler *SimpleLogger) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 	// defer handler.logFile.Sync()
 	if _, err := handler.logFile.WriteString(fmt.Sprintf("%+v\n", e)); err != nil {
 		panic(err)
 	}
 }
+
+
+func (handler *SimpleLogger) Close() {
+	handler.logFile.Close()
+}
+
+

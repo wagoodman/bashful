@@ -21,25 +21,21 @@
 package runtime
 
 import (
-	"bytes"
 	"time"
 	"fmt"
 	"github.com/wagoodman/bashful/utils"
 	color "github.com/mgutz/ansi"
-	"strings"
 	"github.com/wagoodman/bashful/config"
-	terminal "github.com/wayneashleyberry/terminal-dimensions"
-
 	"strconv"
 )
 
-// Color returns the ansi color value represented by the given status
-func (status status) Color(attributes string) string {
+// Color returns the ansi color value represented by the given TaskStatus
+func (status TaskStatus) Color(attributes string) string {
 	switch status {
-	case statusRunning:
+	case StatusRunning:
 		return color.ColorCode(strconv.Itoa(config.Config.Options.ColorRunning) + "+" + attributes)
 
-	case statusPending:
+	case StatusPending:
 		return color.ColorCode(strconv.Itoa(config.Config.Options.ColorPending) + "+" + attributes)
 
 	case StatusSuccess:
@@ -50,57 +46,6 @@ func (status status) Color(attributes string) string {
 
 	}
 	return "INVALID COMMAND STATUS"
-}
-
-
-func footer(status status, message string, invoker *Executor) string {
-	var tpl bytes.Buffer
-	var durString, etaString, stepString, errorString string
-
-	if config.Config.Options.ShowSummaryTimes {
-		duration := time.Since(startTime)
-		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
-
-		totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
-		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
-	}
-
-	if len(invoker.CompletedTasks) == invoker.TotalTasks {
-		etaString = ""
-	}
-
-	if config.Config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(invoker.CompletedTasks), invoker.TotalTasks)
-	}
-
-	if config.Config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", len(invoker.FailedTasks))
-	}
-
-	// get a string with the summary line without a split gap (eta floats left)
-	percentValue := (float64(len(invoker.CompletedTasks)) * float64(100)) / float64(invoker.TotalTasks)
-	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
-
-	if len(invoker.CompletedTasks) == invoker.TotalTasks {
-		percentStr = status.Color("b") + percentStr + color.Reset
-	} else {
-		percentStr = color.Color(percentStr, "default+b")
-	}
-
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
-
-	// calculate a space buffer to push the eta to the right
-	terminalWidth, _ := terminal.Width()
-	splitWidth := int(terminalWidth) - utils.VisualLength(tpl.String())
-	if splitWidth < 0 {
-		splitWidth = 0
-	}
-
-	tpl.Reset()
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: utils.Bold(durString), Eta: utils.Bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: utils.Bold(stepString), Errors: utils.Bold(errorString), Msg: message})
-
-	return tpl.String()
 }
 
 // CurrentEta returns a formatted string indicating a countdown until command completion
