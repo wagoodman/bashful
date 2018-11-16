@@ -65,6 +65,9 @@ func (executor *Executor) run() error {
 			break
 		}
 	}
+	for _, handler := range executor.eventHandlers {
+		handler.Close()
+	}
 
 	return nil
 }

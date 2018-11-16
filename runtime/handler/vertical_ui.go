@@ -1,21 +1,22 @@
 package handler
 
 import (
-	"github.com/wagoodman/bashful/config"
-	"strconv"
-	"time"
-	"fmt"
-	"github.com/wagoodman/bashful/utils"
-
-	"github.com/wayneashleyberry/terminal-dimensions"
-	color "github.com/mgutz/ansi"
 	"bytes"
-	"github.com/tj/go-spin"
+	"fmt"
 	"github.com/google/uuid"
-	"sync"
+	color "github.com/mgutz/ansi"
+	"github.com/tj/go-spin"
+	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/runtime"
+	"github.com/wagoodman/bashful/utils"
+	"github.com/wagoodman/jotframe"
+	"github.com/wayneashleyberry/terminal-dimensions"
+	"io"
+	"strconv"
 	"strings"
+	"sync"
 	"text/template"
+	"time"
 )
 
 type VerticalUI struct {
@@ -25,6 +26,7 @@ type VerticalUI struct {
 	ticker          *time.Ticker
 	startTime       time.Time
 	executor        *runtime.Executor
+	frame           *jotframe.FixedFrame
 }
 
 // display represents all non-Config items that control how the task line should be printed to the screen
@@ -39,6 +41,8 @@ type display struct {
 
 	// Values holds all template values that represent the task TaskStatus
 	Values lineInfo
+
+	line *jotframe.Line
 }
 
 type summary struct {
@@ -101,7 +105,7 @@ func NewVerticalUI(updateInterval time.Duration) *VerticalUI {
 }
 
 func (handler *VerticalUI) spinnerHandler() {
-	scr := GetScreen()
+
 	for {
 		select {
 
@@ -131,7 +135,8 @@ func (handler *VerticalUI) spinnerHandler() {
 
 				// update the summary line
 				if config.Config.Options.ShowSummaryFooter {
-					scr.DisplayFooter(handler.footer(runtime.StatusPending, "", task.Executor))
+					renderedFooter := handler.footer(runtime.StatusPending, "", task.Executor)
+					io.WriteString(handler.frame.Footer(), renderedFooter)
 				}
 			}
 			handler.lock.Unlock()
@@ -146,17 +151,21 @@ func (handler *VerticalUI) Close() {
 	if config.Config.Options.ShowSummaryFooter {
 		// todo: add footer update via Executor stats
 		message := ""
-		GetScreen().ResetFrame(0, false, true)
+
+		handler.frame.Footer().Open()
 		if len(handler.executor.FailedTasks) > 0 {
 			if config.Config.Options.LogPath != "" {
 				message = utils.Bold(" See log for details (" + config.Config.Options.LogPath + ")")
 			}
-			GetScreen().DisplayFooter(handler.footer(runtime.StatusError, message, handler.executor))
-		} else {
-			GetScreen().DisplayFooter(handler.footer(runtime.StatusSuccess, message, handler.executor))
-		}
-	}
 
+			renderedFooter := handler.footer(runtime.StatusError, message, handler.executor)
+			handler.frame.Footer().WriteStringAndClose(renderedFooter)
+		} else {
+			renderedFooter := handler.footer(runtime.StatusSuccess, message, handler.executor)
+			handler.frame.Footer().WriteStringAndClose(renderedFooter)
+		}
+		handler.frame.Footer().Close()
+	}
 }
 
 func (handler *VerticalUI) Unregister(task *runtime.Task) {
@@ -170,41 +179,33 @@ func (handler *VerticalUI) Unregister(task *runtime.Task) {
 	if len(task.Children) > 0 {
 
 		displayData := handler.data[task.Id]
-		var message bytes.Buffer
 
-		scr := GetScreen()
-		hasHeader := len(task.Children) > 0 && !config.Config.Options.SingleLineDisplay
+		hasHeader := len(task.Children) > 0
 		collapseSection := task.Config.CollapseOnCompletion && hasHeader && task.FailedChildren == 0
 
 		// complete the proc group TaskStatus
 		if hasHeader {
-			message.Reset()
+			handler.frame.Header().Open()
+			var message bytes.Buffer
 			collapseSummary := ""
 			if collapseSection {
 				collapseSummary = utils.Purple(" (" + strconv.Itoa(len(task.Children)) + " Tasks hidden)")
 			}
 			displayData.Template.Execute(&message, lineInfo{Status: task.Status.Color("i"), Title: task.Config.Name + collapseSummary, Prefix: config.Config.Options.BulletChar})
-			scr.DisplayHeader(message.String())
+
+			handler.frame.Header().WriteStringAndClose(message.String())
 		}
 
 		// collapse sections or parallel Tasks...
 		if collapseSection {
-
-			// head to the top of the section (below the header) and erase all lines
-			scr.EraseBelowHeader()
-
-			// head back to the top of the section
-			scr.MoveCursorToFirstLine()
-		} else {
-			// ... or this is a single task or configured not to collapse
-
-			// instead, leave all of the text on the screen...
-			// ...reset the cursor to the bottom of the section
-			scr.MovePastFrame(false)
+			// todo: enhance jotframe to take care of this
+			length := len(handler.frame.Lines())
+			for idx := 0; idx < length; idx++ {
+				handler.frame.Remove(handler.frame.Lines()[0])
+			}
 		}
-
 	}
-
+	handler.frame.Close()
 
 	delete(handler.data, task.Id)
 }
@@ -220,16 +221,40 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 		handler.executor = task.Executor
 	}
 
+	hasParentCmd := task.Config.CmdString != ""
+	hasHeader := len(task.Children) > 0
+	numTasks := len(task.Children)
+	if hasParentCmd {
+		numTasks++
+	}
+
+	// todo: remove isFirst logic
+	isFirst := handler.frame == nil
+	handler.frame = jotframe.NewFixedFrame(0, hasHeader, config.Config.Options.ShowSummaryFooter, false)
+	if !isFirst {
+		handler.frame.Move(-1)
+	}
+
+	var line *jotframe.Line
+	if hasParentCmd {
+		line, _ = handler.frame.Append()
+		// todo: check err
+	}
+
 	handler.data[task.Id] = &display{
 		Template: lineDefaultTemplate,
 		Index: 0,
 		Task: task,
+		line: line,
 	}
 	for idx, subTask := range task.Children {
+		line, _ := handler.frame.Append()
+		// todo: check err
 		handler.data[subTask.Id] = &display{
 			Template: lineParallelTemplate,
 			Index: idx+1,
 			Task: subTask,
+			line: line,
 		}
 		if idx == len(task.Children)-1 {
 			handler.data[subTask.Id].Template = lineLastParallelTemplate
@@ -238,23 +263,13 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 
 	displayData := handler.data[task.Id]
 
-	// pave the screen...
-	var message bytes.Buffer
-	hasParentCmd := task.Config.CmdString != ""
-	hasHeader := len(task.Children) > 0
-	numTasks := len(task.Children)
-	if hasParentCmd {
-		numTasks++
-	}
-	scr := GetScreen()
-	scr.ResetFrame(numTasks, hasHeader, config.Config.Options.ShowSummaryFooter)
-
-	// make room for the title of a parallel proc group
+	// initialize each line in the frame
 	if hasHeader {
-		message.Reset()
+		var message bytes.Buffer
 		lineObj := lineInfo{Status: runtime.StatusRunning.Color("i"), Title: task.Config.Name, Msg: "", Prefix: config.Config.Options.BulletChar}
 		displayData.Template.Execute(&message, lineObj)
-		scr.DisplayHeader(message.String())
+
+		io.WriteString(handler.frame.Header(), message.String())
 	}
 
 	if hasParentCmd {
@@ -281,7 +296,6 @@ func (handler *VerticalUI) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 	handler.lock.Lock()
 	defer handler.lock.Unlock()
 
-	scr := GetScreen()
 	eventTask := e.Task
 
 	if !eventTask.Config.ShowTaskOutput {
@@ -312,9 +326,8 @@ func (handler *VerticalUI) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 
 	// update the summary line
 	if config.Config.Options.ShowSummaryFooter {
-		scr.DisplayFooter(handler.footer(runtime.StatusPending, "", task.Executor))
-	} else {
-		scr.MovePastFrame(false)
+		renderedFooter := handler.footer(runtime.StatusPending, "", task.Executor)
+		handler.frame.Footer().WriteString(renderedFooter)
 	}
 }
 
@@ -326,10 +339,11 @@ func (handler *VerticalUI) displayTask(task *runtime.Task) {
 	}
 
 	terminalWidth, _ := terminaldimensions.Width()
-	theScreen := GetScreen()
 
 	displayData := handler.data[task.Id]
-	theScreen.Display(handler.renderTask(task, int(terminalWidth)), displayData.Index)
+
+	renderedLine := handler.renderTask(task, int(terminalWidth))
+	io.WriteString(displayData.line, renderedLine)
 
 }
 
@@ -361,12 +375,7 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, exe
 	// get a string with the summary line without a split gap (eta floats left)
 	percentValue := (float64(len(executor.CompletedTasks)) * float64(100)) / float64(executor.TotalTasks)
 	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
-
-	if len(executor.CompletedTasks) == executor.TotalTasks {
-		percentStr = status.Color("b") + percentStr + color.Reset
-	} else {
-		percentStr = color.Color(percentStr, "default+b")
-	}
+	percentStr = color.Color(percentStr, "default+b")
 
 	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
 
