@@ -25,13 +25,13 @@ import (
 	"strings"
 )
 
-// NewTaskConfig creates a new TaskConfig populated with sane default values (derived from the global OptionsConfig)
+// NewTaskConfig creates a new TaskConfig populated with sane default values (derived from the global Options)
 func NewTaskConfig() (obj TaskConfig) {
-	obj.IgnoreFailure = Config.Options.IgnoreFailure
-	obj.StopOnFailure = Config.Options.StopOnFailure
-	obj.ShowTaskOutput = Config.Options.ShowTaskOutput
-	obj.EventDriven = Config.Options.EventDriven
-	obj.CollapseOnCompletion = Config.Options.CollapseOnCompletion
+	obj.IgnoreFailure = globalOptions.IgnoreFailure
+	obj.StopOnFailure = globalOptions.StopOnFailure
+	obj.ShowTaskOutput = globalOptions.ShowTaskOutput
+	obj.EventDriven = globalOptions.EventDriven
+	obj.CollapseOnCompletion = globalOptions.CollapseOnCompletion
 
 	return obj
 }
@@ -46,11 +46,6 @@ func (taskConfig *TaskConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	}
 
 	*taskConfig = TaskConfig(defaultValues)
-
-	if Config.Options.SingleLineDisplay {
-		taskConfig.ShowTaskOutput = false
-		taskConfig.CollapseOnCompletion = false
-	}
 
 	return nil
 }
@@ -72,12 +67,12 @@ func (a *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func (taskConfig *TaskConfig) compile() (tasks []TaskConfig) {
-	taskConfig.CmdString = replaceArguments(taskConfig.CmdString)
+func (taskConfig *TaskConfig) compile(config *Config) (tasks []TaskConfig) {
+	taskConfig.CmdString = config.replaceArguments(taskConfig.CmdString)
 	if taskConfig.Name == "" {
 		taskConfig.Name = taskConfig.CmdString
 	} else {
-		taskConfig.Name = replaceArguments(taskConfig.Name)
+		taskConfig.Name = config.replaceArguments(taskConfig.Name)
 	}
 
 	if len(taskConfig.ForEach) > 0 {
@@ -91,13 +86,13 @@ func (taskConfig *TaskConfig) compile() (tasks []TaskConfig) {
 			if newConfig.Name == "" {
 				newConfig.Name = newConfig.CmdString
 			}
-			newConfig.Name = strings.Replace(newConfig.Name, Config.Options.ReplicaReplaceString, replicaValue, -1)
-			newConfig.CmdString = strings.Replace(newConfig.CmdString, Config.Options.ReplicaReplaceString, replicaValue, -1)
-			newConfig.URL = strings.Replace(newConfig.URL, Config.Options.ReplicaReplaceString, replicaValue, -1)
+			newConfig.Name = strings.Replace(newConfig.Name, config.Options.ReplicaReplaceString, replicaValue, -1)
+			newConfig.CmdString = strings.Replace(newConfig.CmdString, config.Options.ReplicaReplaceString, replicaValue, -1)
+			newConfig.URL = strings.Replace(newConfig.URL, config.Options.ReplicaReplaceString, replicaValue, -1)
 
 			newConfig.Tags = make(stringArray, len(taskConfig.Tags))
 			for k := range taskConfig.Tags {
-				newConfig.Tags[k] = strings.Replace(taskConfig.Tags[k], Config.Options.ReplicaReplaceString, replicaValue, -1)
+				newConfig.Tags[k] = strings.Replace(taskConfig.Tags[k], config.Options.ReplicaReplaceString, replicaValue, -1)
 			}
 
 			// insert the copy after current index

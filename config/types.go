@@ -26,16 +26,43 @@ import (
 
 type stringArray []string
 
-// CliOptions is the exhaustive set of all command line options available on bashful
-type CliOptions struct {
+// Config represents a superset of options parsed from the user yaml file (or derived from user values)
+type Config struct {
+	Cli Cli
+
+	// Options is a global set of values to be applied to all tasks
+	Options Options `yaml:"config"`
+
+	// TaskConfigs is a list of task definitions and their metadata
+	TaskConfigs []TaskConfig `yaml:"tasks"`
+
+	// CachePath is the dir path to place any temporary files
+	CachePath string
+
+	// LogCachePath is the dir path to place temporary logs
+	LogCachePath string
+
+	// EtaCachePath is the file path for per-task ETA values (derived from a tasks CmdString)
+	EtaCachePath string
+
+	// DownloadCachePath is the dir path to place downloaded resources (from url references)
+	DownloadCachePath string
+
+	// TotalEtaSeconds is the calculated ETA given the tree of tasks to execute
+	TotalEtaSeconds float64
+}
+
+// Cli is the exhaustive set of all command line options available on bashful
+type Cli struct {
+	YamlPath               string
 	RunTags                []string
 	RunTagSet              mapset.Set
 	ExecuteOnlyMatchedTags bool
 	Args                   []string
 }
 
-// OptionsConfig is the set of values to be applied to all tasks or affect general behavior
-type OptionsConfig struct {
+// Options is the set of values to be applied to all tasks or affect general behavior
+type Options struct {
 	// BulletChar is a character (or short string) that should prefix any displayed task name
 	BulletChar string `yaml:"bullet-char"`
 
@@ -150,4 +177,10 @@ type TaskConfig struct {
 
 	// URL is the http/https link to a bash/executable resource
 	URL string `yaml:"url"`
+}
+
+type includeMatch struct {
+	includeFile string
+	startIdx    int
+	endIdx      int
 }

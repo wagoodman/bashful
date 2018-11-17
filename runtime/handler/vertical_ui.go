@@ -21,6 +21,7 @@ import (
 
 type VerticalUI struct {
 	lock      sync.Mutex
+	config    *config.Config
 	data      map[uuid.UUID]*display
 	spinner   *spin.Spinner
 	ticker    *time.Ticker
@@ -90,13 +91,19 @@ var (
 	lineLastParallelTemplate, _ = template.New("last parallel line").Parse(` {{.Status}}  ` + color.Reset + ` {{printf "%1s" .Prefix}} └─ {{printf "%-25s" .Title}} {{.Msg}}{{.Split}}{{.Eta}}`)
 )
 
-func NewVerticalUI(updateInterval time.Duration) *VerticalUI {
+func NewVerticalUI(cfg *config.Config) *VerticalUI {
+
+	updateInterval := 150 * time.Millisecond
+	if cfg.Options.UpdateInterval > 150 {
+		updateInterval = time.Duration(cfg.Options.UpdateInterval) * time.Millisecond
+	}
 
 	handler := &VerticalUI{
 		data:      make(map[uuid.UUID]*display, 0),
 		spinner:   spin.New(),
 		ticker:    time.NewTicker(updateInterval),
 		startTime: time.Now(),
+		config:    cfg,
 	}
 
 	go handler.spinnerHandler()
@@ -119,7 +126,7 @@ func (handler *VerticalUI) spinnerHandler() {
 				if task.Config.CmdString != "" {
 					if !task.Command.Complete && task.Command.Started {
 						displayData.Values.Prefix = handler.spinner.Current()
-						displayData.Values.Eta = task.CurrentEta()
+						displayData.Values.Eta = handler.CurrentEta(task)
 					}
 					handler.displayTask(task)
 				}
@@ -128,13 +135,13 @@ func (handler *VerticalUI) spinnerHandler() {
 					childDisplayData := handler.data[subTask.Id]
 					if !subTask.Command.Complete && subTask.Command.Started {
 						childDisplayData.Values.Prefix = handler.spinner.Current()
-						childDisplayData.Values.Eta = subTask.CurrentEta()
+						childDisplayData.Values.Eta = handler.CurrentEta(subTask)
 					}
 					handler.displayTask(subTask)
 				}
 
 				// update the summary line
-				if config.Config.Options.ShowSummaryFooter {
+				if handler.config.Options.ShowSummaryFooter {
 					renderedFooter := handler.footer(runtime.StatusPending, "", task.Executor)
 					io.WriteString(handler.frame.Footer(), renderedFooter)
 				}
@@ -148,14 +155,14 @@ func (handler *VerticalUI) spinnerHandler() {
 // todo: move footer logic based on jotframe requirements
 func (handler *VerticalUI) Close() {
 	// todo: remove config references
-	if config.Config.Options.ShowSummaryFooter {
+	if handler.config.Options.ShowSummaryFooter {
 		// todo: add footer update via Executor stats
 		message := ""
 
 		handler.frame.Footer().Open()
 		if len(handler.executor.FailedTasks) > 0 {
-			if config.Config.Options.LogPath != "" {
-				message = utils.Bold(" See log for details (" + config.Config.Options.LogPath + ")")
+			if handler.config.Options.LogPath != "" {
+				message = utils.Bold(" See log for details (" + handler.config.Options.LogPath + ")")
 			}
 
 			renderedFooter := handler.footer(runtime.StatusError, message, handler.executor)
@@ -191,7 +198,7 @@ func (handler *VerticalUI) Unregister(task *runtime.Task) {
 			if collapseSection {
 				collapseSummary = utils.Purple(" (" + strconv.Itoa(len(task.Children)) + " Tasks hidden)")
 			}
-			displayData.Template.Execute(&message, lineInfo{Status: task.Status.Color("i"), Title: task.Config.Name + collapseSummary, Prefix: config.Config.Options.BulletChar})
+			displayData.Template.Execute(&message, lineInfo{Status: handler.TaskStatusColor(task.Status, "i"), Title: task.Config.Name + collapseSummary, Prefix: handler.config.Options.BulletChar})
 
 			handler.frame.Header().WriteStringAndClose(message.String())
 		}
@@ -216,7 +223,7 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 		return
 	}
 
-	// todo: this is hackey
+	// todo: replace this messy hack
 	if handler.executor == nil && task.Executor != nil {
 		handler.executor = task.Executor
 	}
@@ -228,9 +235,9 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 		numTasks++
 	}
 
-	// todo: remove isFirst logic
+	// we should overwrite the footer of the last frame when creating a new frame (kinda hacky... todo: replace this)
 	isFirst := handler.frame == nil
-	handler.frame = jotframe.NewFixedFrame(0, hasHeader, config.Config.Options.ShowSummaryFooter, false)
+	handler.frame = jotframe.NewFixedFrame(0, hasHeader, handler.config.Options.ShowSummaryFooter, false)
 	if !isFirst {
 		handler.frame.Move(-1)
 	}
@@ -266,20 +273,20 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 	// initialize each line in the frame
 	if hasHeader {
 		var message bytes.Buffer
-		lineObj := lineInfo{Status: runtime.StatusRunning.Color("i"), Title: task.Config.Name, Msg: "", Prefix: config.Config.Options.BulletChar}
+		lineObj := lineInfo{Status: handler.TaskStatusColor(runtime.StatusRunning, "i"), Title: task.Config.Name, Msg: "", Prefix: handler.config.Options.BulletChar}
 		displayData.Template.Execute(&message, lineObj)
 
 		io.WriteString(handler.frame.Header(), message.String())
 	}
 
 	if hasParentCmd {
-		displayData.Values = lineInfo{Status: runtime.StatusPending.Color("i"), Title: task.Config.Name}
+		displayData.Values = lineInfo{Status: handler.TaskStatusColor(runtime.StatusPending, "i"), Title: task.Config.Name}
 		handler.displayTask(task)
 	}
 
 	for line := 0; line < len(task.Children); line++ {
 		childDisplayData := handler.data[task.Children[line].Id]
-		childDisplayData.Values = lineInfo{Status: runtime.StatusPending.Color("i"), Title: task.Children[line].Config.Name}
+		childDisplayData.Values = lineInfo{Status: handler.TaskStatusColor(runtime.StatusPending, "i"), Title: task.Children[line].Config.Name}
 		handler.displayTask(task.Children[line])
 	}
 }
@@ -306,26 +313,26 @@ func (handler *VerticalUI) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 
 	if e.Stderr != "" {
 		eventDisplayData.Values = lineInfo{
-			Status: e.Status.Color("i"),
+			Status: handler.TaskStatusColor(e.Status, "i"),
 			Title:  eventTask.Config.Name,
 			Msg:    e.Stderr,
 			Prefix: handler.spinner.Current(),
-			Eta:    eventTask.CurrentEta(),
+			Eta:    handler.CurrentEta(eventTask),
 		}
 	} else {
 		eventDisplayData.Values = lineInfo{
-			Status: e.Status.Color("i"),
+			Status: handler.TaskStatusColor(e.Status, "i"),
 			Title:  eventTask.Config.Name,
 			Msg:    e.Stdout,
 			Prefix: handler.spinner.Current(),
-			Eta:    eventTask.CurrentEta(),
+			Eta:    handler.CurrentEta(eventTask),
 		}
 	}
 
 	handler.displayTask(eventTask)
 
 	// update the summary line
-	if config.Config.Options.ShowSummaryFooter {
+	if handler.config.Options.ShowSummaryFooter {
 		renderedFooter := handler.footer(runtime.StatusPending, "", task.Executor)
 		handler.frame.Footer().WriteString(renderedFooter)
 	}
@@ -351,11 +358,11 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, exe
 	var tpl bytes.Buffer
 	var durString, etaString, stepString, errorString string
 
-	if config.Config.Options.ShowSummaryTimes {
+	if handler.config.Options.ShowSummaryTimes {
 		duration := time.Since(handler.startTime)
 		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
 
-		totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
+		totalEta := time.Duration(handler.config.TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
 		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
@@ -364,11 +371,11 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, exe
 		etaString = ""
 	}
 
-	if config.Config.Options.ShowSummarySteps {
+	if handler.config.Options.ShowSummarySteps {
 		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(executor.CompletedTasks), executor.TotalTasks)
 	}
 
-	if config.Config.Options.ShowSummaryErrors {
+	if handler.config.Options.ShowSummaryErrors {
 		errorString = fmt.Sprintf(" Errors[%d]", len(executor.FailedTasks))
 	}
 
@@ -377,7 +384,7 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, exe
 	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
 	percentStr = color.Color(percentStr, "default+b")
 
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
+	summaryTemplate.Execute(&tpl, summary{Status: handler.TaskStatusColor(status, "i"), Percent: percentStr, Runtime: durString, Eta: etaString, Steps: stepString, Errors: errorString, Msg: message})
 
 	// calculate a space buffer to push the eta to the right
 	terminalWidth, _ := terminaldimensions.Width()
@@ -387,7 +394,7 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, exe
 	}
 
 	tpl.Reset()
-	summaryTemplate.Execute(&tpl, summary{Status: status.Color("i"), Percent: percentStr, Runtime: utils.Bold(durString), Eta: utils.Bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: utils.Bold(stepString), Errors: utils.Bold(errorString), Msg: message})
+	summaryTemplate.Execute(&tpl, summary{Status: handler.TaskStatusColor(status, "i"), Percent: percentStr, Runtime: utils.Bold(durString), Eta: utils.Bold(etaString), Split: strings.Repeat(" ", splitWidth), Steps: utils.Bold(stepString), Errors: utils.Bold(errorString), Msg: message})
 
 	return tpl.String()
 }
@@ -438,9 +445,9 @@ func (handler *VerticalUI) renderTask(task *runtime.Task, terminalWidth int) str
 
 	message.Reset()
 
-	// override the current spinner to empty or a config.Config.Options.BulletChar
+	// override the current spinner to empty or a handler.config.Options.BulletChar
 	if (!task.Command.Started || task.Command.Complete) && len(task.Children) == 0 && displayData.Template == lineDefaultTemplate {
-		displayData.Values.Prefix = config.Config.Options.BulletChar
+		displayData.Values.Prefix = handler.config.Options.BulletChar
 	} else if task.Command.Complete {
 		displayData.Values.Prefix = ""
 	}
@@ -449,4 +456,38 @@ func (handler *VerticalUI) renderTask(task *runtime.Task, terminalWidth int) str
 	displayData.Template.Execute(&message, displayData.Values)
 
 	return message.String()
+}
+
+// TaskStatusColor returns the ansi color value represented by the given TaskStatus
+func (handler *VerticalUI) TaskStatusColor(status runtime.TaskStatus, attributes string) string {
+	switch status {
+	case runtime.StatusRunning:
+		return color.ColorCode(strconv.Itoa(handler.config.Options.ColorRunning) + "+" + attributes)
+
+	case runtime.StatusPending:
+		return color.ColorCode(strconv.Itoa(handler.config.Options.ColorPending) + "+" + attributes)
+
+	case runtime.StatusSuccess:
+		return color.ColorCode(strconv.Itoa(handler.config.Options.ColorSuccess) + "+" + attributes)
+
+	case runtime.StatusError:
+		return color.ColorCode(strconv.Itoa(handler.config.Options.ColorError) + "+" + attributes)
+
+	}
+	return "INVALID COMMAND STATUS"
+}
+
+// CurrentEta returns a formatted string indicating a countdown until command completion
+func (handler *VerticalUI) CurrentEta(task *runtime.Task) string {
+	var eta, etaValue string
+
+	if task.Options.ShowTaskEta {
+		running := time.Since(task.Command.StartTime)
+		etaValue = "Unknown!"
+		if task.Command.EstimatedRuntime > 0 {
+			etaValue = utils.ShowDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
+		}
+		eta = fmt.Sprintf(utils.Bold("[%s]"), etaValue)
+	}
+	return eta
 }

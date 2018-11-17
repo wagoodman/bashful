@@ -38,7 +38,7 @@ type EventHandler interface {
 }
 
 type Client struct {
-	Options     config.OptionsConfig
+	Config      *config.Config
 	TaskConfigs []config.TaskConfig
 	Executor    *Executor
 }
@@ -46,6 +46,8 @@ type Client struct {
 type Executor struct {
 	Environment   map[string]string
 	eventHandlers []EventHandler
+
+	config *config.Config
 
 	// Tasks is a list of all Task objects that will be invoked
 	Tasks []*Task
@@ -61,6 +63,9 @@ type Executor struct {
 
 	// TotalTasks indicates the number of tasks that can be run (Note: this is not necessarily the same number of tasks planned to be run)
 	TotalTasks int
+
+	// CommandTimeCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
+	CommandTimeCache map[string]time.Duration
 }
 
 // Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to execute, track, and display the task.
@@ -69,6 +74,8 @@ type Task struct {
 
 	// Config is the user-defined values parsed from the run yaml
 	Config config.TaskConfig
+
+	Options *config.Options
 
 	// Command represents all non-Config items used to execute and track task progress
 	Command command

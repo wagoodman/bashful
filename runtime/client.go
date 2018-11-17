@@ -33,31 +33,17 @@ import (
 	"text/template"
 )
 
-func NewClientFromConfig(yamlString []byte) *Client {
-	config.ParseConfig(yamlString)
-	return NewClient(config.Config.TaskConfigs, config.Config.Options)
-
+func NewClientFromConfig(yamlString []byte, cli *config.Cli) *Client {
+	cfg := config.NewConfig(yamlString, cli)
+	return NewClient(cfg.TaskConfigs, cfg)
 }
 
-func NewClient(taskConfigs []config.TaskConfig, options config.OptionsConfig) *Client {
-	// initialize Tasks with default values
-	var tasks []*Task
-	for _, taskConfig := range taskConfigs {
-		// finalize task by appending to the set of final Tasks
-		task := NewTask(taskConfig, "")
-		tasks = append(tasks, task)
-	}
-
-	// TODO: move this to the Executor?
-	// now that all Tasks have been inflated, set the total eta
-	for _, task := range tasks {
-		config.Config.TotalEtaSeconds += task.EstimateRuntime()
-	}
+func NewClient(taskConfigs []config.TaskConfig, cfg *config.Config) *Client {
 
 	return &Client{
-		Options:     options,
+		Config:      cfg,
 		TaskConfigs: taskConfigs,
-		Executor:    newExecutor(tasks),
+		Executor:    newExecutor(taskConfigs, cfg),
 	}
 }
 
@@ -73,7 +59,8 @@ func (client *Client) Run() error {
 		}
 	}
 
-	DownloadAssets(client.Executor.Tasks)
+	assetManager := NewAssetDownloader(client.Executor.Tasks, client.Config.DownloadCachePath, client.Config.Options.MaxParallelCmds)
+	assetManager.Download()
 	client.Executor.run()
 
 	if len(client.Executor.FailedTasks) > 0 {
@@ -92,7 +79,7 @@ func (client *Client) Run() error {
 		log.LogToMain(buffer.String(), "")
 
 		// we may not show the error report, but we always log it.
-		if config.Config.Options.ShowFailureReport {
+		if client.Config.Options.ShowFailureReport {
 			fmt.Print(buffer.String())
 		}
 
@@ -106,7 +93,8 @@ func (client *Client) Run() error {
 }
 
 func (client *Client) Bundle(userYamlPath, outputPath string) error {
-	DownloadAssets(client.Executor.Tasks)
+	assetManager := NewAssetDownloader(client.Executor.Tasks, client.Config.DownloadCachePath, client.Config.Options.MaxParallelCmds)
+	assetManager.Download()
 
 	archivePath := "bundle.tar.gz"
 
@@ -120,7 +108,7 @@ func (client *Client) Bundle(userYamlPath, outputPath string) error {
 		utils.CheckError(err, "Unable to add '"+path+"' to bundle")
 	}
 
-	for _, path := range append([]string{config.Config.CachePath}, config.Config.Options.Bundle...) {
+	for _, path := range append([]string{client.Config.CachePath}, client.Config.Options.Bundle...) {
 		err = archive.Archive(path, true)
 		utils.CheckError(err, "Unable to add '"+path+"' to bundle")
 	}

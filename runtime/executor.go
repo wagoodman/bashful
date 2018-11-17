@@ -20,32 +20,69 @@
 
 package runtime
 
-func newExecutor(tasks []*Task) *Executor {
+import (
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/utils"
+	"os"
+	"time"
+)
+
+func newExecutor(taskConfigs []config.TaskConfig, cfg *config.Config) *Executor {
 	executor := &Executor{
-		Environment:    make(map[string]string, 0),
-		FailedTasks:    make([]*Task, 0),
-		Tasks:          tasks,
-		CompletedTasks: make([]*Task, 0),
-		eventHandlers:  make([]EventHandler, 0),
+		Environment:      make(map[string]string, 0),
+		FailedTasks:      make([]*Task, 0),
+		CompletedTasks:   make([]*Task, 0),
+		eventHandlers:    make([]EventHandler, 0),
+		config:           cfg,
+		CommandTimeCache: make(map[string]time.Duration, 0),
 	}
 
-	// todo: assigning to the Executor plan should be somewhere else
+	var tasks []*Task
+	for _, taskConfig := range taskConfigs {
+		// finalize task by appending to the set of final Tasks
+		task := NewTask(taskConfig, executor, &cfg.Options)
+		tasks = append(tasks, task)
+	}
+
+	executor.Tasks = tasks
+
+	executor.readTimeCache()
 	for _, task := range tasks {
-		task.Executor = executor
 		if task.Config.CmdString != "" || task.Config.URL != "" {
 			executor.TotalTasks++
-		}
-
-		for _, subTask := range task.Children {
-			subTask.Executor = executor
-			if subTask.Config.CmdString != "" || subTask.Config.URL != "" {
-				executor.TotalTasks++
+			if eta, ok := executor.CommandTimeCache[task.Config.CmdString]; ok {
+				task.Command.addEstimatedRuntime(eta)
 			}
 		}
 
+		for _, subTask := range task.Children {
+			if subTask.Config.CmdString != "" || subTask.Config.URL != "" {
+				executor.TotalTasks++
+				if eta, ok := executor.CommandTimeCache[subTask.Config.CmdString]; ok {
+					subTask.Command.addEstimatedRuntime(eta)
+				}
+			}
+		}
+
+		cfg.TotalEtaSeconds += task.EstimateRuntime()
 	}
 
 	return executor
+}
+
+// readTimeCache fetches and reads a cache file from disk containing CmdString-to-ETASeconds. Note: this this must be done before fetching/parsing the run.yaml
+func (executor *Executor) readTimeCache() {
+
+	// create the cache dirs if they do not already exist
+	if _, err := os.Stat(executor.config.CachePath); os.IsNotExist(err) {
+		os.Mkdir(executor.config.CachePath, 0755)
+	}
+
+	executor.CommandTimeCache = make(map[string]time.Duration)
+	if utils.DoesFileExist(executor.config.EtaCachePath) {
+		err := utils.Load(executor.config.EtaCachePath, &executor.CommandTimeCache)
+		utils.CheckError(err, "Unable to load command eta cache.")
+	}
 }
 
 func (executor *Executor) addEventHandler(handler EventHandler) {
@@ -68,6 +105,9 @@ func (executor *Executor) run() error {
 	for _, handler := range executor.eventHandlers {
 		handler.Close()
 	}
+
+	err := utils.Save(executor.config.EtaCachePath, &executor.CommandTimeCache)
+	utils.CheckError(err, "Unable to save command eta cache.")
 
 	return nil
 }

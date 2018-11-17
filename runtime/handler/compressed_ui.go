@@ -20,18 +20,20 @@ type cUiData struct {
 
 type CompressedUI struct {
 	lock      sync.Mutex
+	config    *config.Config
 	data      map[uuid.UUID]*cUiData
 	startTime time.Time
 	executor  *runtime.Executor
 	frame     *jotframe.FixedFrame
 }
 
-func NewCompressedUI() *CompressedUI {
+func NewCompressedUI(config *config.Config) *CompressedUI {
 
 	handler := &CompressedUI{
 		data:      make(map[uuid.UUID]*cUiData, 0),
 		startTime: time.Now(),
 		frame:     jotframe.NewFixedFrame(1, false, false, false),
+		config:    config,
 	}
 
 	return handler
@@ -101,20 +103,20 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 
 	effectiveWidth := int(terminalWidth)
 
-	fillColor := color.ColorCode(strconv.Itoa(config.Config.Options.ColorSuccess) + "+i")
-	emptyColor := color.ColorCode(strconv.Itoa(config.Config.Options.ColorSuccess))
+	fillColor := color.ColorCode(strconv.Itoa(handler.config.Options.ColorSuccess) + "+i")
+	emptyColor := color.ColorCode(strconv.Itoa(handler.config.Options.ColorSuccess))
 	if len(task.Executor.FailedTasks) > 0 {
-		fillColor = color.ColorCode(strconv.Itoa(config.Config.Options.ColorError) + "+i")
-		emptyColor = color.ColorCode(strconv.Itoa(config.Config.Options.ColorError))
+		fillColor = color.ColorCode(strconv.Itoa(handler.config.Options.ColorError) + "+i")
+		emptyColor = color.ColorCode(strconv.Itoa(handler.config.Options.ColorError))
 	}
 
 	numFill := int(effectiveWidth) * len(task.Executor.CompletedTasks) / task.Executor.TotalTasks
 
-	if config.Config.Options.ShowSummaryTimes {
+	if handler.config.Options.ShowSummaryTimes {
 		duration := time.Since(handler.startTime)
 		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
 
-		totalEta := time.Duration(config.Config.TotalEtaSeconds) * time.Second
+		totalEta := time.Duration(handler.config.TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
 		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
@@ -123,11 +125,11 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 		etaString = ""
 	}
 
-	if config.Config.Options.ShowSummarySteps {
+	if handler.config.Options.ShowSummarySteps {
 		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(task.Executor.CompletedTasks), task.Executor.TotalTasks)
 	}
 
-	if config.Config.Options.ShowSummaryErrors {
+	if handler.config.Options.ShowSummaryErrors {
 		errorString = fmt.Sprintf(" Errors[%d]", len(task.Executor.FailedTasks))
 	}
 

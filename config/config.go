@@ -21,94 +21,151 @@
 package config
 
 import (
-	"encoding/gob"
 	"fmt"
-	"os"
-	"path"
-	"regexp"
-	"strings"
-	"time"
-
 	"github.com/deckarep/golang-set"
 	"github.com/spf13/afero"
 	"github.com/wagoodman/bashful/utils"
 	"gopkg.in/yaml.v2"
+	"os"
+	"path"
+	"regexp"
+	"strings"
 )
 
-// Config represents a superset of options parsed from the user yaml file (or derived from user values)
-var Config struct {
-	Cli CliOptions
+var globalOptions *Options
 
-	// Options is a global set of values to be applied to all tasks
-	Options OptionsConfig `yaml:"config"`
+func NewConfig(yamlString []byte, options *Cli) *Config {
+	config := Config{}
+	if options != nil {
+		config.Cli = *options
+	}
 
-	// TaskConfigs is a list of task definitions and their metadata
-	TaskConfigs []TaskConfig `yaml:"tasks"`
-
-	// CachePath is the dir path to place any temporary files
-	CachePath string
-
-	// LogCachePath is the dir path to place temporary logs
-	LogCachePath string
-
-	// EtaCachePath is the file path for per-task ETA values (derived from a tasks CmdString)
-	EtaCachePath string
-
-	// DownloadCachePath is the dir path to place downloaded resources (from url references)
-	DownloadCachePath string
-
-	// TotalEtaSeconds is the calculated ETA given the tree of tasks to execute
-	TotalEtaSeconds float64
-
-	// CommandTimeCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
-	CommandTimeCache map[string]time.Duration
-}
-
-// readTimeCache fetches and reads a cache file from disk containing CmdString-to-ETASeconds. Note: this this must be done before fetching/parsing the run.yaml
-func readTimeCache() {
-	if Config.CachePath == "" {
+	if config.CachePath == "" {
 		cwd, err := os.Getwd()
 		utils.CheckError(err, "Unable to get CWD.")
-		Config.CachePath = path.Join(cwd, ".bashful")
+		config.CachePath = path.Join(cwd, ".bashful")
 	}
 
-	Config.DownloadCachePath = path.Join(Config.CachePath, "downloads")
-	Config.LogCachePath = path.Join(Config.CachePath, "logs")
-	Config.EtaCachePath = path.Join(Config.CachePath, "eta")
+	config.DownloadCachePath = path.Join(config.CachePath, "downloads")
+	config.LogCachePath = path.Join(config.CachePath, "logs")
+	config.EtaCachePath = path.Join(config.CachePath, "eta")
 
-	// create the cache dirs if they do not already exist
-	if _, err := os.Stat(Config.CachePath); os.IsNotExist(err) {
-		os.Mkdir(Config.CachePath, 0755)
-	}
-	if _, err := os.Stat(Config.DownloadCachePath); os.IsNotExist(err) {
-		os.Mkdir(Config.DownloadCachePath, 0755)
-	}
-	if _, err := os.Stat(Config.LogCachePath); os.IsNotExist(err) {
-		os.Mkdir(Config.LogCachePath, 0755)
-	}
+	config.parseRunYaml(yamlString)
+	return &config
+}
 
-	Config.CommandTimeCache = make(map[string]time.Duration)
-	if utils.DoesFileExist(Config.EtaCachePath) {
-		err := Load(Config.EtaCachePath, &Config.CommandTimeCache)
-		utils.CheckError(err, "Unable to load command eta cache.")
+func (config *Config) validate() {
+
+	// ensure not too many nestings of parallel tasks has been configured
+	for _, taskConfig := range config.TaskConfigs {
+		for _, subTaskConfig := range taskConfig.ParallelTasks {
+			if len(subTaskConfig.ParallelTasks) > 0 {
+				utils.ExitWithErrorMessage("Nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
+			}
+			subTaskConfig.validate()
+		}
+		taskConfig.validate()
 	}
 }
 
 // replaceArguments replaces the command line arguments in the given string
-func replaceArguments(source string) string {
+func (config *Config) replaceArguments(source string) string {
 	replaced := source
-	for i, arg := range Config.Cli.Args {
+	for i, arg := range config.Cli.Args {
 		replaced = strings.Replace(replaced, fmt.Sprintf("$%v", i+1), arg, -1)
 	}
-	replaced = strings.Replace(replaced, "$*", strings.Join(Config.Cli.Args, " "), -1)
+	replaced = strings.Replace(replaced, "$*", strings.Join(config.Cli.Args, " "), -1)
 	return replaced
 }
 
-type includeMatch struct {
-	includeFile string
-	startIdx    int
-	endIdx      int
+// readRunYaml fetches and reads the user given yaml file from disk and populates the global Config object
+func (config *Config) parseRunYaml(yamlString []byte) {
+	// fetch and parse the run.yaml user file...
+	globalOptions = NewOptions()
+
+	yamlString = assembleIncludes(yamlString)
+	err := yaml.Unmarshal(yamlString, &config)
+	utils.CheckError(err, "Error: Unable to parse given yaml")
+
+	config.validate()
+
+	// duplicate tasks with for-each clauses
+	for i := 0; i < len(config.TaskConfigs); i++ {
+		taskConfig := &config.TaskConfigs[i]
+		newTaskConfigs := taskConfig.compile(config)
+		if len(newTaskConfigs) > 0 {
+			for _, newConfig := range newTaskConfigs {
+				// insert the copy after current index
+				config.TaskConfigs = append(config.TaskConfigs[:i], append([]TaskConfig{newConfig}, config.TaskConfigs[i:]...)...)
+				i++
+			}
+			// remove current index
+			config.TaskConfigs = append(config.TaskConfigs[:i], config.TaskConfigs[i+1:]...)
+			i--
+		}
+
+		for j := 0; j < len(taskConfig.ParallelTasks); j++ {
+			subTaskConfig := &taskConfig.ParallelTasks[j]
+			newSubTaskConfigs := subTaskConfig.compile(config)
+
+			if len(newSubTaskConfigs) > 0 {
+				// remove the index with the template taskConfig
+				taskConfig.ParallelTasks = append(taskConfig.ParallelTasks[:j], taskConfig.ParallelTasks[j+1:]...)
+				for _, newConfig := range newSubTaskConfigs {
+					// insert the copy after current index
+					taskConfig.ParallelTasks = append(taskConfig.ParallelTasks[:j], append([]TaskConfig{newConfig}, taskConfig.ParallelTasks[j:]...)...)
+					j++
+				}
+			}
+		}
+	}
+
+	// child tasks should inherit parent Config tags
+	for index := range config.TaskConfigs {
+		taskConfig := &config.TaskConfigs[index]
+		taskConfig.TagSet = mapset.NewSet()
+		for _, tag := range taskConfig.Tags {
+			taskConfig.TagSet.Add(tag)
+		}
+		for subIndex := range taskConfig.ParallelTasks {
+			subTaskConfig := &taskConfig.ParallelTasks[subIndex]
+			subTaskConfig.Tags = append(subTaskConfig.Tags, taskConfig.Tags...)
+			subTaskConfig.TagSet = mapset.NewSet()
+			for _, tag := range subTaskConfig.Tags {
+				subTaskConfig.TagSet.Add(tag)
+			}
+		}
+	}
+
+	// prune the set of tasks that will not run given the set of cli options
+	if len(config.Cli.RunTags) > 0 {
+		for i := 0; i < len(config.TaskConfigs); i++ {
+			taskConfig := &config.TaskConfigs[i]
+			subTasksWithActiveTag := false
+
+			for j := 0; j < len(taskConfig.ParallelTasks); j++ {
+				subTaskConfig := &taskConfig.ParallelTasks[j]
+				matchedTaskTags := config.Cli.RunTagSet.Intersect(subTaskConfig.TagSet)
+				if len(matchedTaskTags.ToSlice()) > 0 || (len(subTaskConfig.Tags) == 0 && !config.Cli.ExecuteOnlyMatchedTags) {
+					subTasksWithActiveTag = true
+					continue
+				}
+				// this particular subtask does not have a matching tag: prune this task
+				taskConfig.ParallelTasks = append(taskConfig.ParallelTasks[:j], taskConfig.ParallelTasks[j+1:]...)
+				j--
+			}
+
+			matchedTaskTags := config.Cli.RunTagSet.Intersect(taskConfig.TagSet)
+			if !subTasksWithActiveTag && len(matchedTaskTags.ToSlice()) == 0 && (len(taskConfig.Tags) > 0 || config.Cli.ExecuteOnlyMatchedTags) {
+				// this task does not have matching tags and there are no children with matching tags: prune this task
+				config.TaskConfigs = append(config.TaskConfigs[:i], config.TaskConfigs[i+1:]...)
+				i--
+			}
+		}
+	}
 }
+
+// todo: should the remaining functions below be placed somewhere else?
 
 func getIndentSize(yamlString []byte, startIdx int) int {
 	spaces := 0
@@ -171,126 +228,4 @@ func assembleIncludes(yamlString []byte) []byte {
 	}
 
 	return yamlString
-}
-
-// readRunYaml fetches and reads the user given yaml file from disk and populates the global Config object
-func ParseRunYaml(yamlString []byte) {
-	// fetch and parse the run.yaml user file...
-	Config.Options = NewOptionsConfig()
-
-	yamlString = assembleIncludes(yamlString)
-	err := yaml.Unmarshal(yamlString, &Config)
-	utils.CheckError(err, "Error: Unable to parse given yaml")
-
-	Config.Options.validate()
-
-	// duplicate tasks with for-each clauses
-	for i := 0; i < len(Config.TaskConfigs); i++ {
-		taskConfig := &Config.TaskConfigs[i]
-		newTaskConfigs := taskConfig.compile()
-		if len(newTaskConfigs) > 0 {
-			for _, newConfig := range newTaskConfigs {
-				// insert the copy after current index
-				Config.TaskConfigs = append(Config.TaskConfigs[:i], append([]TaskConfig{newConfig}, Config.TaskConfigs[i:]...)...)
-				i++
-			}
-			// remove current index
-			Config.TaskConfigs = append(Config.TaskConfigs[:i], Config.TaskConfigs[i+1:]...)
-			i--
-		}
-
-		for j := 0; j < len(taskConfig.ParallelTasks); j++ {
-			subTaskConfig := &taskConfig.ParallelTasks[j]
-			newSubTaskConfigs := subTaskConfig.compile()
-
-			if len(newSubTaskConfigs) > 0 {
-				// remove the index with the template taskConfig
-				taskConfig.ParallelTasks = append(taskConfig.ParallelTasks[:j], taskConfig.ParallelTasks[j+1:]...)
-				for _, newConfig := range newSubTaskConfigs {
-					// insert the copy after current index
-					taskConfig.ParallelTasks = append(taskConfig.ParallelTasks[:j], append([]TaskConfig{newConfig}, taskConfig.ParallelTasks[j:]...)...)
-					j++
-				}
-			}
-		}
-	}
-
-	// child tasks should inherit parent Config tags
-	for index := range Config.TaskConfigs {
-		taskConfig := &Config.TaskConfigs[index]
-		taskConfig.TagSet = mapset.NewSet()
-		for _, tag := range taskConfig.Tags {
-			taskConfig.TagSet.Add(tag)
-		}
-		for subIndex := range taskConfig.ParallelTasks {
-			subTaskConfig := &taskConfig.ParallelTasks[subIndex]
-			subTaskConfig.Tags = append(subTaskConfig.Tags, taskConfig.Tags...)
-			subTaskConfig.TagSet = mapset.NewSet()
-			for _, tag := range subTaskConfig.Tags {
-				subTaskConfig.TagSet.Add(tag)
-			}
-		}
-	}
-
-	// prune the set of tasks that will not run given the set of cli options
-	if len(Config.Cli.RunTags) > 0 {
-		for i := 0; i < len(Config.TaskConfigs); i++ {
-			taskConfig := &Config.TaskConfigs[i]
-			subTasksWithActiveTag := false
-
-			for j := 0; j < len(taskConfig.ParallelTasks); j++ {
-				subTaskConfig := &taskConfig.ParallelTasks[j]
-				matchedTaskTags := Config.Cli.RunTagSet.Intersect(subTaskConfig.TagSet)
-				if len(matchedTaskTags.ToSlice()) > 0 || (len(subTaskConfig.Tags) == 0 && !Config.Cli.ExecuteOnlyMatchedTags) {
-					subTasksWithActiveTag = true
-					continue
-				}
-				// this particular subtask does not have a matching tag: prune this task
-				taskConfig.ParallelTasks = append(taskConfig.ParallelTasks[:j], taskConfig.ParallelTasks[j+1:]...)
-				j--
-			}
-
-			matchedTaskTags := Config.Cli.RunTagSet.Intersect(taskConfig.TagSet)
-			if !subTasksWithActiveTag && len(matchedTaskTags.ToSlice()) == 0 && (len(taskConfig.Tags) > 0 || Config.Cli.ExecuteOnlyMatchedTags) {
-				// this task does not have matching tags and there are no children with matching tags: prune this task
-				Config.TaskConfigs = append(Config.TaskConfigs[:i], Config.TaskConfigs[i+1:]...)
-				i--
-			}
-		}
-	}
-}
-
-// ParseConfig is the entrypoint for all Config fetching and parsing. This returns a list of Task runtime objects to execute.
-func ParseConfig(yamlString []byte) {
-	Config.Cli.RunTagSet = mapset.NewSet()
-	for _, tag := range Config.Cli.RunTags {
-		Config.Cli.RunTagSet.Add(tag)
-	}
-
-	readTimeCache()
-
-	ParseRunYaml(yamlString)
-
-}
-
-// Save encodes a generic object via Gob to the given file path
-func Save(path string, object interface{}) error {
-	file, err := os.Create(path)
-	if err == nil {
-		encoder := gob.NewEncoder(file)
-		encoder.Encode(object)
-	}
-	file.Close()
-	return err
-}
-
-// Load decodes via Gob the contents of the given file to an object
-func Load(path string, object interface{}) error {
-	file, err := os.Open(path)
-	if err == nil {
-		decoder := gob.NewDecoder(file)
-		err = decoder.Decode(object)
-	}
-	file.Close()
-	return err
 }

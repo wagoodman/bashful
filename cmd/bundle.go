@@ -38,10 +38,17 @@ var bundleCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 
-		userYamlPath := args[0]
-		bundlePath := filepath.Base(userYamlPath[0:len(userYamlPath)-len(filepath.Ext(userYamlPath))]) + ".bundle"
+		cli := config.Cli{
+			YamlPath: args[0],
+		}
 
-		Bundle(userYamlPath, bundlePath)
+		bundlePath := filepath.Base(cli.YamlPath[0:len(cli.YamlPath)-len(filepath.Ext(cli.YamlPath))]) + ".bundle"
+
+		yamlString, err := ioutil.ReadFile(cli.YamlPath)
+		utils.CheckError(err, "Unable to read yaml config.")
+
+		fmt.Print("\033[?25l") // hide cursor
+		Bundle(yamlString, bundlePath, cli)
 	},
 }
 
@@ -49,16 +56,15 @@ func init() {
 	rootCmd.AddCommand(bundleCmd)
 }
 
-func Bundle(userYamlPath, outputPath string) {
+func Bundle(yamlString []byte, outputPath string, cli config.Cli) {
 
-	yamlString, err := ioutil.ReadFile(userYamlPath)
+	yamlString, err := ioutil.ReadFile(cli.YamlPath)
 	utils.CheckError(err, "Unable to read yaml Config.")
 
-	config.ParseConfig(yamlString)
-	client := runtime.NewClient(config.Config.TaskConfigs, config.Config.Options)
+	client := runtime.NewClientFromConfig(yamlString, &cli)
 
-	fmt.Println(utils.Bold("Bundling " + userYamlPath + " to " + outputPath))
+	fmt.Println(utils.Bold("Bundling " + cli.YamlPath + " to " + outputPath))
 
-	client.Bundle(userYamlPath, outputPath)
+	client.Bundle(cli.YamlPath, outputPath)
 
 }

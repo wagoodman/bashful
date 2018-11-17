@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/deckarep/golang-set"
 
 	"github.com/spf13/cobra"
 	"github.com/wagoodman/bashful/config"
@@ -45,35 +46,43 @@ var runCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 
-		userYamlPath := args[0]
-		if len(args) > 1 {
-			config.Config.Cli.Args = args[1:]
-		} else {
-			config.Config.Cli.Args = []string{}
-		}
-
 		if tags != "" && onlyTags != "" {
 			utils.ExitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
 		}
 
+		cli := config.Cli{
+			YamlPath: args[0],
+		}
+
+		if len(args) > 1 {
+			cli.Args = args[1:]
+		} else {
+			cli.Args = []string{}
+		}
+
 		for _, value := range strings.Split(tags, ",") {
 			if value != "" {
-				config.Config.Cli.RunTags = append(config.Config.Cli.RunTags, value)
+				cli.RunTags = append(cli.RunTags, value)
 			}
 		}
 
 		for _, value := range strings.Split(onlyTags, ",") {
 			if value != "" {
-				config.Config.Cli.ExecuteOnlyMatchedTags = true
-				config.Config.Cli.RunTags = append(config.Config.Cli.RunTags, value)
+				cli.ExecuteOnlyMatchedTags = true
+				cli.RunTags = append(cli.RunTags, value)
 			}
 		}
 
-		yamlString, err := ioutil.ReadFile(userYamlPath)
+		cli.RunTagSet = mapset.NewSet()
+		for _, tag := range cli.RunTags {
+			cli.RunTagSet.Add(tag)
+		}
+
+		yamlString, err := ioutil.ReadFile(cli.YamlPath)
 		utils.CheckError(err, "Unable to read yaml config.")
 
 		fmt.Print("\033[?25l") // hide cursor
-		Run(yamlString)
+		Run(yamlString, cli)
 
 	},
 }
@@ -85,33 +94,28 @@ func init() {
 	runCmd.Flags().StringVar(&onlyTags, "only-tags", "", "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag")
 }
 
-func Run(yamlString []byte) {
-	var err error
+func Run(yamlString []byte, cli config.Cli) {
 
-	client := runtime.NewClientFromConfig(yamlString)
+	client := runtime.NewClientFromConfig(yamlString, &cli)
 
-	updateInterval := 150 * time.Millisecond
-	if config.Config.Options.UpdateInterval > 150 {
-		updateInterval = time.Duration(config.Config.Options.UpdateInterval) * time.Millisecond
-	}
-	if config.Config.Options.SingleLineDisplay {
-		client.AddEventHandler(handler.NewCompressedUI())
+	if client.Config.Options.SingleLineDisplay {
+		client.AddEventHandler(handler.NewCompressedUI(client.Config))
 	} else {
-		client.AddEventHandler(handler.NewVerticalUI(updateInterval))
+		client.AddEventHandler(handler.NewVerticalUI(client.Config))
 	}
-	client.AddEventHandler(handler.NewTaskLogger())
-	client.AddEventHandler(handler.NewSimpleLogger())
+	client.AddEventHandler(handler.NewTaskLogger(client.Config))
+	client.AddEventHandler(handler.NewSimpleLogger(client.Config))
 
 	rand.Seed(time.Now().UnixNano())
 
 	tagInfo := ""
-	if len(config.Config.Cli.RunTags) > 0 {
-		if config.Config.Cli.ExecuteOnlyMatchedTags {
+	if len(cli.RunTags) > 0 {
+		if cli.ExecuteOnlyMatchedTags {
 			tagInfo = " only matching tags: "
 		} else {
 			tagInfo = " non-tagged and matching tags: "
 		}
-		tagInfo += strings.Join(config.Config.Cli.RunTags, ", ")
+		tagInfo += strings.Join(cli.RunTags, ", ")
 	}
 
 	fmt.Println(utils.Bold("Running " + tagInfo))
@@ -119,9 +123,6 @@ func Run(yamlString []byte) {
 
 	failedTasksErr := client.Run()
 	log.LogToMain("Complete", log.StyleMajor)
-
-	err = config.Save(config.Config.EtaCachePath, &config.Config.CommandTimeCache)
-	utils.CheckError(err, "Unable to save command eta cache.")
 
 	log.LogToMain("Exiting", "")
 

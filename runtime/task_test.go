@@ -35,7 +35,6 @@ func TestTaskString(t *testing.T) {
 
 }
 
-
 func TestSerialTaskEnvPersistence(t *testing.T) {
 	var expStr, actStr string
 	var failedTasks []*Task
@@ -99,7 +98,6 @@ Tasks:
 
 }
 
-
 func TestCommandArguments(t *testing.T) {
 	yamlStr := `
 Tasks:
@@ -110,7 +108,7 @@ Tasks:
 `
 
 	config.Config.Cli.Args = []string{"First", "Second"}
-	config.ParseRunYaml([]byte(yamlStr))
+	config.parseRunYaml([]byte(yamlStr))
 	tasks := CreateTasks()
 	if len(tasks) != 2 {
 		t.Error("Expected two Tasks. Got: ", len(tasks))
@@ -168,7 +166,7 @@ Tasks:
 	config.Config.CommandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
 
 	// load test Config yaml
-	config.ParseRunYaml([]byte(simpleYamlStr))
+	config.parseRunYaml([]byte(simpleYamlStr))
 	// create and compile Tasks
 	tasks := CreateTasks()
 

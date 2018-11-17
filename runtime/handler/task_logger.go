@@ -24,22 +24,24 @@ type bufferedLog struct {
 }
 
 type TaskLogger struct {
-	lock sync.Mutex
-	logs map[uuid.UUID]*bufferedLog
+	lock   sync.Mutex
+	config *config.Config
+	logs   map[uuid.UUID]*bufferedLog
 }
 
-func NewTaskLogger() *TaskLogger {
-	if config.Config.Options.LogPath != "" {
-		log.SetupLogging()
+func NewTaskLogger(config *config.Config) *TaskLogger {
+	if config.Options.LogPath != "" {
+		log.SetupLogging(config.Options.LogPath, config.LogCachePath)
 	}
 
 	return &TaskLogger{
-		logs: make(map[uuid.UUID]*bufferedLog, 0),
+		logs:   make(map[uuid.UUID]*bufferedLog, 0),
+		config: config,
 	}
 }
 
 func (handler *TaskLogger) doRegister(task *runtime.Task) {
-	tempFile, _ := ioutil.TempFile(config.Config.LogCachePath, "")
+	tempFile, _ := ioutil.TempFile(handler.config.LogCachePath, "")
 
 	handler.logs[task.Id] = &bufferedLog{
 		LogFile: tempFile,

@@ -53,45 +53,39 @@ const (
 )
 
 // NewTask creates a new task in the context of the user configuration at a particular screen location (row)
-func NewTask(taskConfig config.TaskConfig, replicaValue string) *Task {
+func NewTask(taskConfig config.TaskConfig, executor *Executor, runtimeOptions *config.Options) *Task {
 	task := Task{
-		Id:     uuid.New(),
-		Config: taskConfig,
+		Id:       uuid.New(),
+		Config:   taskConfig,
+		Options:  runtimeOptions,
+		Executor: executor,
 	}
-	task.compile(replicaValue)
+
+	task.Command = newCommand(task.Config)
+	task.ErrorBuffer = bytes.NewBufferString("")
+	task.events = make(chan TaskEvent)
+	task.Status = StatusPending
 
 	for subIndex := range taskConfig.ParallelTasks {
 		subTaskConfig := &taskConfig.ParallelTasks[subIndex]
 
-		subTask := NewTask(*subTaskConfig, replicaValue)
+		subTask := NewTask(*subTaskConfig, executor, runtimeOptions)
 		task.Children = append(task.Children, subTask)
 	}
 
 	return &task
 }
 
-// compile is used by the constructor to finalize task runtime values
-func (task *Task) compile(replicaValue string) {
-	task.Command = newCommand(task.Config)
-	if eta, ok := config.Config.CommandTimeCache[task.Config.CmdString]; ok {
-		task.Command.addEstimatedRuntime(eta)
-	}
-
-	task.ErrorBuffer = bytes.NewBufferString("")
-
-	task.events = make(chan TaskEvent)
-	task.Status = StatusPending
-}
-
 func (task *Task) UpdateExec(execpath string) {
+	// todo: this needs to be rethought
 	if task.Config.CmdString == "" {
-		task.Config.CmdString = config.Config.Options.ExecReplaceString
+		task.Config.CmdString = task.Options.ExecReplaceString
 	}
-	task.Config.CmdString = strings.Replace(task.Config.CmdString, config.Config.Options.ExecReplaceString, execpath, -1)
-	task.Config.URL = strings.Replace(task.Config.URL, config.Config.Options.ExecReplaceString, execpath, -1)
+	task.Config.CmdString = strings.Replace(task.Config.CmdString, task.Options.ExecReplaceString, execpath, -1)
+	task.Config.URL = strings.Replace(task.Config.URL, task.Options.ExecReplaceString, execpath, -1)
 
 	task.Command = newCommand(task.Config)
-	if eta, ok := config.Config.CommandTimeCache[task.Config.CmdString]; ok {
+	if eta, ok := task.Executor.CommandTimeCache[task.Config.CmdString]; ok {
 		task.Command.addEstimatedRuntime(eta)
 	}
 }
@@ -133,7 +127,7 @@ func (task *Task) EstimateRuntime() float64 {
 	var maxParallelEstimatedRuntime float64
 	var taskEndSecond []float64
 	var currentSecond float64
-	var remainingParallelTasks = config.Config.Options.MaxParallelCmds
+	var remainingParallelTasks = task.Options.MaxParallelCmds
 
 	for subIndex := range task.Children {
 		subTask := task.Children[subIndex]
@@ -324,12 +318,12 @@ func (task *Task) runSingleCmd(owningResultChan chan TaskEvent, owningWaiter *sy
 // startAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
 func (task *Task) startAvailableTasks(environment map[string]string) {
 	// Note that the parent task result channel and waiter are used for all Tasks and child Tasks
-	if task.Config.CmdString != "" && !task.Command.Started && task.Executor.RunningTasks < config.Config.Options.MaxParallelCmds {
+	if task.Config.CmdString != "" && !task.Command.Started && task.Executor.RunningTasks < task.Options.MaxParallelCmds {
 		go task.runSingleCmd(task.events, &task.waiter, environment)
 		task.Command.Started = true
 		task.Executor.RunningTasks++
 	}
-	for ; task.Executor.RunningTasks < config.Config.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
+	for ; task.Executor.RunningTasks < task.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
 		go task.Children[task.lastStartedTask].runSingleCmd(task.events, &task.waiter, nil)
 		task.Children[task.lastStartedTask].Command.Started = true
 		task.Executor.RunningTasks++
@@ -342,7 +336,7 @@ func (task *Task) completed(rc int) {
 	task.Command.ReturnCode = rc
 
 	task.Executor.CompletedTasks = append(task.Executor.CompletedTasks, task)
-	config.Config.CommandTimeCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
+	task.Executor.CommandTimeCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
 	task.Executor.RunningTasks--
 }
 

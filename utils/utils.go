@@ -2,10 +2,14 @@ package utils
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/howeyc/gopass"
 	color "github.com/mgutz/ansi"
+	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -128,6 +132,7 @@ func ShowDuration(duration time.Duration) string {
 	return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 }
 
+// todo: return error and have caller handle
 func GetSudoPasswd() string {
 	var stdOut bytes.Buffer
 	var password string
@@ -155,4 +160,49 @@ func GetSudoPasswd() string {
 	}
 
 	return password
+}
+
+// Save encodes a generic object via Gob to the given file path
+func Save(path string, object interface{}) error {
+	file, err := os.Create(path)
+	if err == nil {
+		encoder := gob.NewEncoder(file)
+		encoder.Encode(object)
+	}
+	file.Close()
+	return err
+}
+
+// Load decodes via Gob the contents of the given file to an object
+func Load(path string, object interface{}) error {
+	file, err := os.Open(path)
+	if err == nil {
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(object)
+	}
+	file.Close()
+	return err
+}
+
+// todo: return error and have caller handle
+func GetFilenameFromUrl(urlStr string) string {
+	uri, err := url.Parse(urlStr)
+	CheckError(err, "Unable to parse URI")
+
+	pathElements := strings.Split(uri.Path, "/")
+
+	return pathElements[len(pathElements)-1]
+}
+
+// todo: return error and have caller handle
+func Md5OfFile(filepath string) string {
+	f, err := os.Open(filepath)
+	CheckError(err, "File does not exist: "+filepath)
+	defer f.Close()
+
+	h := md5.New()
+	_, err = io.Copy(h, f)
+	CheckError(err, "Could not calculate md5 checksum of "+filepath)
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

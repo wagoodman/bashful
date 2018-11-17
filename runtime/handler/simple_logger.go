@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/runtime"
 	"os"
 )
@@ -10,15 +11,19 @@ import (
 
 type SimpleLogger struct {
 	logFile *os.File
+	config  *config.Config
 }
 
-func NewSimpleLogger() *SimpleLogger {
+func NewSimpleLogger(config *config.Config) *SimpleLogger {
+	// todo: drive this off of the config
+	// todo: add logging types?
 	f, err := os.OpenFile("./tmp/bashful.log", os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		panic(err)
 	}
 	return &SimpleLogger{
 		logFile: f,
+		config:  config,
 	}
 }
 
