@@ -178,9 +178,3 @@ type TaskConfig struct {
 	// URL is the http/https link to a bash/executable resource
 	URL string `yaml:"url"`
 }
-
-type includeMatch struct {
-	includeFile string
-	startIdx    int
-	endIdx      int
-}
