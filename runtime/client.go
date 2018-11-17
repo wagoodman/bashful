@@ -21,16 +21,16 @@
 package runtime
 
 import (
-	"github.com/wagoodman/bashful/config"
 	"bytes"
+	"fmt"
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/log"
 	"github.com/wagoodman/bashful/utils"
+	"io"
 	"os"
 	"path/filepath"
-	"io"
-	"text/template"
 	"strconv"
-	"github.com/wagoodman/bashful/log"
-	"fmt"
+	"text/template"
 )
 
 func NewClientFromConfig(yamlString []byte) *Client {
@@ -105,7 +105,6 @@ func (client *Client) Run() error {
 	return nil
 }
 
-
 func (client *Client) Bundle(userYamlPath, outputPath string) error {
 	DownloadAssets(client.Executor.Tasks)
 
@@ -177,4 +176,3 @@ __BASHFUL_ARCHIVE__
 
 	return nil
 }
-

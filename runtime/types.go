@@ -21,13 +21,13 @@
 package runtime
 
 import (
+	"bytes"
+	"github.com/google/uuid"
 	"github.com/wagoodman/bashful/config"
 	"os"
-	"bytes"
-	"sync"
 	"os/exec"
+	"sync"
 	"time"
-	"github.com/google/uuid"
 )
 
 type EventHandler interface {
@@ -38,9 +38,9 @@ type EventHandler interface {
 }
 
 type Client struct {
-	Options       config.OptionsConfig
-	TaskConfigs   []config.TaskConfig
-	Executor      *Executor
+	Options     config.OptionsConfig
+	TaskConfigs []config.TaskConfig
+	Executor    *Executor
 }
 
 type Executor struct {
@@ -48,7 +48,7 @@ type Executor struct {
 	eventHandlers []EventHandler
 
 	// Tasks is a list of all Task objects that will be invoked
-	Tasks       []*Task
+	Tasks []*Task
 
 	// FailedTasks is a list of Task objects with non-zero return codes upon invocation
 	FailedTasks []*Task

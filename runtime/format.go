@@ -21,12 +21,12 @@
 package runtime
 
 import (
-	"time"
 	"fmt"
-	"github.com/wagoodman/bashful/utils"
 	color "github.com/mgutz/ansi"
 	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/utils"
 	"strconv"
+	"time"
 )
 
 // Color returns the ansi color value represented by the given TaskStatus

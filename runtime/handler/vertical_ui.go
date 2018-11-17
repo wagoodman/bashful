@@ -20,13 +20,13 @@ import (
 )
 
 type VerticalUI struct {
-	lock            sync.Mutex
-	data            map[uuid.UUID]*display
-	spinner         *spin.Spinner
-	ticker          *time.Ticker
-	startTime       time.Time
-	executor        *runtime.Executor
-	frame           *jotframe.FixedFrame
+	lock      sync.Mutex
+	data      map[uuid.UUID]*display
+	spinner   *spin.Spinner
+	ticker    *time.Ticker
+	startTime time.Time
+	executor  *runtime.Executor
+	frame     *jotframe.FixedFrame
 }
 
 // display represents all non-Config items that control how the task line should be printed to the screen
@@ -93,10 +93,10 @@ var (
 func NewVerticalUI(updateInterval time.Duration) *VerticalUI {
 
 	handler := &VerticalUI{
-		data:            make(map[uuid.UUID]*display, 0),
-		spinner:         spin.New(),
-		ticker:          time.NewTicker(updateInterval),
-		startTime:       time.Now(),
+		data:      make(map[uuid.UUID]*display, 0),
+		spinner:   spin.New(),
+		ticker:    time.NewTicker(updateInterval),
+		startTime: time.Now(),
 	}
 
 	go handler.spinnerHandler()
@@ -243,18 +243,18 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 
 	handler.data[task.Id] = &display{
 		Template: lineDefaultTemplate,
-		Index: 0,
-		Task: task,
-		line: line,
+		Index:    0,
+		Task:     task,
+		line:     line,
 	}
 	for idx, subTask := range task.Children {
 		line, _ := handler.frame.Append()
 		// todo: check err
 		handler.data[subTask.Id] = &display{
 			Template: lineParallelTemplate,
-			Index: idx+1,
-			Task: subTask,
-			line: line,
+			Index:    idx + 1,
+			Task:     subTask,
+			line:     line,
 		}
 		if idx == len(task.Children)-1 {
 			handler.data[subTask.Id].Template = lineLastParallelTemplate
@@ -307,18 +307,18 @@ func (handler *VerticalUI) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 	if e.Stderr != "" {
 		eventDisplayData.Values = lineInfo{
 			Status: e.Status.Color("i"),
-			Title: eventTask.Config.Name,
-			Msg: e.Stderr,
+			Title:  eventTask.Config.Name,
+			Msg:    e.Stderr,
 			Prefix: handler.spinner.Current(),
-			Eta: eventTask.CurrentEta(),
+			Eta:    eventTask.CurrentEta(),
 		}
 	} else {
 		eventDisplayData.Values = lineInfo{
 			Status: e.Status.Color("i"),
-			Title: eventTask.Config.Name,
-			Msg: e.Stdout,
+			Title:  eventTask.Config.Name,
+			Msg:    e.Stdout,
 			Prefix: handler.spinner.Current(),
-			Eta: eventTask.CurrentEta(),
+			Eta:    eventTask.CurrentEta(),
 		}
 	}
 

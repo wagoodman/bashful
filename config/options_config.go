@@ -71,7 +71,6 @@ func (options *OptionsConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 	return nil
 }
 
-
 func (options *OptionsConfig) validate() {
 
 	// ensure not too many nestings of parallel tasks has been configured

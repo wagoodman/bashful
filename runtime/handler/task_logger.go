@@ -1,15 +1,15 @@
 package handler
 
 import (
-	"github.com/wagoodman/bashful/runtime"
-	"github.com/wagoodman/bashful/log"
-	"github.com/wagoodman/bashful/config"
-	"io/ioutil"
-	"sync"
 	"github.com/google/uuid"
-	"os"
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/log"
+	"github.com/wagoodman/bashful/runtime"
 	"github.com/wagoodman/bashful/utils"
+	"io/ioutil"
+	"os"
 	"strconv"
+	"sync"
 )
 
 type bufferedLog struct {
@@ -24,8 +24,8 @@ type bufferedLog struct {
 }
 
 type TaskLogger struct {
-	lock    sync.Mutex
-	logs   map[uuid.UUID]*bufferedLog
+	lock sync.Mutex
+	logs map[uuid.UUID]*bufferedLog
 }
 
 func NewTaskLogger() *TaskLogger {
@@ -44,7 +44,7 @@ func (handler *TaskLogger) doRegister(task *runtime.Task) {
 	handler.logs[task.Id] = &bufferedLog{
 		LogFile: tempFile,
 		LogChan: make(chan log.LogItem),
-		Task: task,
+		Task:    task,
 	}
 	log.LogToMain("Started Task: "+task.Config.Name, log.StyleInfo)
 	go log.SingleLogger(handler.logs[task.Id].LogChan, task.Config.Name, tempFile.Name())
@@ -96,4 +96,3 @@ func (handler *TaskLogger) Close() {
 		handler.Unregister(data.Task)
 	}
 }
-

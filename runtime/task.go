@@ -33,16 +33,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lunixbochs/vtclean"
-	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/google/uuid"
+	terminal "github.com/wayneashleyberry/terminal-dimensions"
 )
 
 var (
-	sudoPassword       string
-	exitSignaled       bool
+	sudoPassword string
+	exitSignaled bool
 )
 
 const (
@@ -55,7 +55,7 @@ const (
 // NewTask creates a new task in the context of the user configuration at a particular screen location (row)
 func NewTask(taskConfig config.TaskConfig, replicaValue string) *Task {
 	task := Task{
-		Id: uuid.New(),
+		Id:     uuid.New(),
 		Config: taskConfig,
 	}
 	task.compile(replicaValue)
@@ -392,5 +392,3 @@ func (task *Task) Run(environment map[string]string) {
 	}
 
 }
-
-

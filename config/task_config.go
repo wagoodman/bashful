@@ -21,8 +21,8 @@
 package config
 
 import (
-	"strings"
 	"github.com/wagoodman/bashful/utils"
+	"strings"
 )
 
 // NewTaskConfig creates a new TaskConfig populated with sane default values (derived from the global OptionsConfig)
@@ -112,4 +112,3 @@ func (taskConfig *TaskConfig) validate() {
 		utils.ExitWithErrorMessage("Task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
 	}
 }
-

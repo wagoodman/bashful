@@ -1,18 +1,17 @@
 package handler
 
 import (
-	"github.com/wagoodman/bashful/config"
-	"strconv"
-	"time"
 	"fmt"
-	"github.com/wagoodman/bashful/utils"
-
-	"github.com/wayneashleyberry/terminal-dimensions"
-	color "github.com/mgutz/ansi"
 	"github.com/google/uuid"
-	"sync"
+	color "github.com/mgutz/ansi"
+	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/runtime"
-
+	"github.com/wagoodman/bashful/utils"
+	"github.com/wagoodman/jotframe"
+	"github.com/wayneashleyberry/terminal-dimensions"
+	"strconv"
+	"sync"
+	"time"
 )
 
 type cUiData struct {
@@ -20,25 +19,26 @@ type cUiData struct {
 }
 
 type CompressedUI struct {
-	lock            sync.Mutex
-	data            map[uuid.UUID]*cUiData
-	startTime       time.Time
-	executor        *runtime.Executor
+	lock      sync.Mutex
+	data      map[uuid.UUID]*cUiData
+	startTime time.Time
+	executor  *runtime.Executor
+	frame     *jotframe.FixedFrame
 }
 
 func NewCompressedUI() *CompressedUI {
 
 	handler := &CompressedUI{
-		data:            make(map[uuid.UUID]*cUiData, 0),
-		startTime:       time.Now(),
+		data:      make(map[uuid.UUID]*cUiData, 0),
+		startTime: time.Now(),
+		frame:     jotframe.NewFixedFrame(1, false, false, false),
 	}
 
 	return handler
 }
 
-// todo: move footer logic based on jotframe requirements
 func (handler *CompressedUI) Close() {
-
+	handler.frame.Close()
 }
 
 func (handler *CompressedUI) Unregister(task *runtime.Task) {
@@ -95,7 +95,6 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 	}
 
 	terminalWidth, _ := terminaldimensions.Width()
-	theScreen := GetScreen()
 
 	var durString, etaString, stepString, errorString string
 	displayString := ""
@@ -137,7 +136,6 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 	displayString = fmt.Sprintf("%[1]*s", -effectiveWidth, fmt.Sprintf("%[1]*s", (effectiveWidth+len(valueStr))/2, valueStr))
 	displayString = fillColor + displayString[:numFill] + color.Reset + emptyColor + displayString[numFill:] + color.Reset
 
-	theScreen.Display(displayString, 0)
-
+	handler.frame.Lines()[0].WriteString(displayString)
 
 }

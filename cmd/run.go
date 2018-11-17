@@ -24,15 +24,15 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"strings"
-	"io/ioutil"
-	"github.com/wagoodman/bashful/runtime/handler"
 	"github.com/wagoodman/bashful/config"
-	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/log"
-	"time"
-	"math/rand"
 	"github.com/wagoodman/bashful/runtime"
+	"github.com/wagoodman/bashful/runtime/handler"
+	"github.com/wagoodman/bashful/utils"
+	"io/ioutil"
+	"math/rand"
+	"strings"
+	"time"
 )
 
 var tags, onlyTags string
@@ -42,7 +42,7 @@ var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Execute the given yaml file with bashful",
 	Long:  `Execute the given yaml file with bashful`,
-	Args: cobra.MaximumNArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 
 		userYamlPath := args[0]
@@ -84,7 +84,6 @@ func init() {
 	runCmd.Flags().StringVar(&tags, "tags", "", "A comma delimited list of matching task tags. If a task's tag matches *or if it is not tagged* then it will be executed (also see --only-tags)")
 	runCmd.Flags().StringVar(&onlyTags, "only-tags", "", "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag")
 }
-
 
 func Run(yamlString []byte) {
 	var err error
@@ -130,7 +129,3 @@ func Run(yamlString []byte) {
 		utils.Exit(1)
 	}
 }
-
-
-
-

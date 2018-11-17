@@ -31,8 +31,8 @@ import (
 
 	"github.com/deckarep/golang-set"
 	"github.com/spf13/afero"
-	"gopkg.in/yaml.v2"
 	"github.com/wagoodman/bashful/utils"
+	"gopkg.in/yaml.v2"
 )
 
 // Config represents a superset of options parsed from the user yaml file (or derived from user values)

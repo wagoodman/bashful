@@ -21,13 +21,13 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
-	"path/filepath"
-	"io/ioutil"
-	"github.com/wagoodman/bashful/utils"
-	"github.com/wagoodman/bashful/config"
 	"fmt"
+	"github.com/spf13/cobra"
+	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/runtime"
+	"github.com/wagoodman/bashful/utils"
+	"io/ioutil"
+	"path/filepath"
 )
 
 // bundleCmd represents the bundle command
@@ -35,7 +35,7 @@ var bundleCmd = &cobra.Command{
 	Use:   "bundle",
 	Short: "Bundle yaml and referenced resources into a single executable (experimental)",
 	Long:  `Bundle yaml and referenced resources into a single executable (experimental)`,
-	Args: cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 
 		userYamlPath := args[0]
@@ -60,6 +60,5 @@ func Bundle(userYamlPath, outputPath string) {
 	fmt.Println(utils.Bold("Bundling " + userYamlPath + " to " + outputPath))
 
 	client.Bundle(userYamlPath, outputPath)
-
 
 }

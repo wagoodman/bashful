@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 
 	color "github.com/mgutz/ansi"
-	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/utils"
 )
 
 const (

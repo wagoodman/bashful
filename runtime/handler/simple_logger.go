@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"os"
 	"fmt"
 	"github.com/wagoodman/bashful/runtime"
+	"os"
 )
 
 // this was just a (successful) experiment :) needs to be reworked
@@ -37,9 +37,6 @@ func (handler *SimpleLogger) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 	}
 }
 
-
 func (handler *SimpleLogger) Close() {
 	handler.logFile.Close()
 }
-
-

@@ -1,12 +1,12 @@
 package config
 
 import (
-	"testing"
-	"github.com/alecthomas/repr"
-	"github.com/wagoodman/bashful/utils"
-	"github.com/spf13/afero"
-	"fmt"
 	"bytes"
+	"fmt"
+	"github.com/alecthomas/repr"
+	"github.com/spf13/afero"
+	"github.com/wagoodman/bashful/utils"
+	"testing"
 )
 
 func TestMinMax(t *testing.T) {
@@ -69,7 +69,6 @@ func TestRemoveOneValue(t *testing.T) {
 	tester([]float64{}, 3.14159, []float64{})
 
 }
-
 
 func TestYamlInclude(t *testing.T) {
 	var expStr, actStr []byte
@@ -222,4 +221,3 @@ tasks:
 		}
 	}
 }
-

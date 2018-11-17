@@ -1,16 +1,16 @@
 package utils
 
 import (
-	"fmt"
-	"runtime"
-	"os"
-	"time"
-	"errors"
-	color "github.com/mgutz/ansi"
 	"bytes"
-	"os/exec"
+	"errors"
+	"fmt"
 	"github.com/howeyc/gopass"
+	color "github.com/mgutz/ansi"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
+	"time"
 )
 
 var (
@@ -75,7 +75,6 @@ func TrimToVisualLength(message string, length int) string {
 	return message
 }
 
-
 func ExitWithErrorMessage(msg string) {
 	cleanup()
 	fmt.Fprintln(os.Stderr, Red(msg))
@@ -86,7 +85,6 @@ func Exit(rc int) {
 	cleanup()
 	os.Exit(rc)
 }
-
 
 func CheckError(err error, message string) {
 	if err != nil {
@@ -111,8 +109,6 @@ func cleanup() {
 	// fmt.Print("\033[?25h") // show cursor
 }
 
-
-
 func DoesFileExist(name string) bool {
 	if _, err := os.Stat(name); err != nil {
 		if os.IsNotExist(err) {
@@ -121,7 +117,6 @@ func DoesFileExist(name string) bool {
 	}
 	return true
 }
-
 
 func ShowDuration(duration time.Duration) string {
 	if duration < 0 {
@@ -161,4 +156,3 @@ func GetSudoPasswd() string {
 
 	return password
 }
-

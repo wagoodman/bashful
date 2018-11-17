@@ -2,8 +2,8 @@ package runtime
 
 import (
 	"github.com/wagoodman/bashful/config"
-	"os"
 	"github.com/wagoodman/bashful/utils"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -36,10 +36,10 @@ func newCommand(taskConfig config.TaskConfig) command {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	return command{
-		Environment: map[string]string{},
-		ReturnCode: -1,
-		EnvReadFile: readFd,
-		Cmd: cmd,
+		Environment:      map[string]string{},
+		ReturnCode:       -1,
+		EnvReadFile:      readFd,
+		Cmd:              cmd,
 		EstimatedRuntime: time.Duration(-1),
 	}
 }

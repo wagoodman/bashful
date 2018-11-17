@@ -106,7 +106,6 @@ type OptionsConfig struct {
 	UpdateInterval float64 `yaml:"update-interval"`
 }
 
-
 // TaskConfig represents a task definition and all metadata (Note: this is not the task runtime object)
 type TaskConfig struct {
 	// Name is the display name of the task (if not provided, then CmdString is used)
@@ -152,4 +151,3 @@ type TaskConfig struct {
 	// URL is the http/https link to a bash/executable resource
 	URL string `yaml:"url"`
 }
-

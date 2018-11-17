@@ -36,8 +36,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/gosuri/uiprogress"
 	"github.com/wagoodman/bashful/config"
-	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/bashful/log"
+	"github.com/wagoodman/bashful/utils"
 )
 
 var registry struct {

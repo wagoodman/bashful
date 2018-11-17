@@ -1,14 +1,14 @@
 package cmd
 
 import (
+	"github.com/wagoodman/bashful/runtime"
 	"strconv"
 	"testing"
-	"github.com/wagoodman/bashful/task"
 )
 
 func TestTaskErrorPolicy(t *testing.T) {
 	var simpleYamlStr string
-	var failedTasks []*task.Task
+	var failedTasks []*runtime.Task
 
 	simpleYamlStr = `
 tasks:
@@ -54,5 +54,3 @@ tasks:
 	}
 
 }
-
-
