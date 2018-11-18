@@ -33,7 +33,7 @@ import (
 
 var globalOptions *Options
 
-func NewConfig(yamlString []byte, options *Cli) *Config {
+func NewConfig(yamlString []byte, options *Cli) (*Config, error) {
 	config := Config{}
 	if options != nil {
 		config.Cli = *options
@@ -49,22 +49,30 @@ func NewConfig(yamlString []byte, options *Cli) *Config {
 	config.LogCachePath = path.Join(config.CachePath, "logs")
 	config.EtaCachePath = path.Join(config.CachePath, "eta")
 
-	config.parseRunYaml(yamlString)
-	return &config
+	err := config.compile(yamlString)
+	return &config, err
 }
 
-func (config *Config) validate() {
-
+func (config *Config) validate() error {
+	var err error
 	// ensure not too many nestings of parallel tasks has been configured
 	for _, taskConfig := range config.TaskConfigs {
 		for _, subTaskConfig := range taskConfig.ParallelTasks {
 			if len(subTaskConfig.ParallelTasks) > 0 {
-				utils.ExitWithErrorMessage("Nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
+				return fmt.Errorf("nested parallel tasks not allowed (violated by name:'" + subTaskConfig.Name + "' cmd:'" + subTaskConfig.CmdString + "')")
 			}
-			subTaskConfig.validate()
+			err = subTaskConfig.validate()
+			if err != nil {
+				return err
+			}
+
 		}
-		taskConfig.validate()
+		err = taskConfig.validate()
+		if err != nil {
+			return err
+		}
 	}
+	return err
 }
 
 // replaceArguments replaces the command line arguments in the given string
@@ -77,17 +85,27 @@ func (config *Config) replaceArguments(source string) string {
 	return replaced
 }
 
-// readRunYaml fetches and reads the user given yaml file from disk and populates the global Config object
-func (config *Config) parseRunYaml(yamlString []byte) {
-	// fetch and parse the run.yaml user file...
-	globalOptions = NewOptions()
+// compile parses the given user yaml and populates the config object based on the cli arguments
+func (config *Config) compile(yamlString []byte) error {
+	var err error
 
+	// setup default options used when unmarshalling the config
+	globalOptions = NewOptions()
+	config.Options = *globalOptions
+
+	// assemble the config from multiple files (if necessary)
 	configAssembler := newAssembler(afero.NewOsFs())
 	yamlString = configAssembler.assemble(yamlString)
-	err := yaml.Unmarshal(yamlString, &config)
-	utils.CheckError(err, "Error: Unable to parse given yaml")
 
-	config.validate()
+	err = yaml.Unmarshal(yamlString, &config)
+	if err != nil {
+		return fmt.Errorf("unable to parse yaml: %v", err)
+	}
+
+	err = config.validate()
+	if err != nil {
+		return fmt.Errorf("yaml invalid: %v", err)
+	}
 
 	// duplicate tasks with for-each clauses
 	for i := 0; i < len(config.TaskConfigs); i++ {
@@ -163,4 +181,5 @@ func (config *Config) parseRunYaml(yamlString []byte) {
 			}
 		}
 	}
+	return nil
 }

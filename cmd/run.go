@@ -36,6 +36,7 @@ import (
 	"time"
 )
 
+// todo: put these in a cli struct instance instead, then most logic can be in the cli struct
 var tags, onlyTags string
 
 // runCmd represents the run command
@@ -73,6 +74,7 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// todo: make this a function for CLI (addTag or something)
 		cli.RunTagSet = mapset.NewSet()
 		for _, tag := range cli.RunTags {
 			cli.RunTagSet.Add(tag)
@@ -96,7 +98,10 @@ func init() {
 
 func Run(yamlString []byte, cli config.Cli) {
 
-	client := runtime.NewClientFromConfig(yamlString, &cli)
+	client, err := runtime.NewClientFromConfig(yamlString, &cli)
+	if err != nil {
+		utils.ExitWithErrorMessage(err.Error())
+	}
 
 	if client.Config.Options.SingleLineDisplay {
 		client.AddEventHandler(handler.NewCompressedUI(client.Config))

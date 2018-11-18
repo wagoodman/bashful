@@ -21,7 +21,7 @@
 package config
 
 import (
-	"github.com/wagoodman/bashful/utils"
+	"fmt"
 	"strings"
 )
 
@@ -102,8 +102,9 @@ func (taskConfig *TaskConfig) compile(config *Config) (tasks []TaskConfig) {
 	return tasks
 }
 
-func (taskConfig *TaskConfig) validate() {
+func (taskConfig *TaskConfig) validate() error {
 	if taskConfig.CmdString == "" && len(taskConfig.ParallelTasks) == 0 && taskConfig.URL == "" {
-		utils.ExitWithErrorMessage("Task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
+		return fmt.Errorf("task '" + taskConfig.Name + "' misconfigured (A configured task must have at least 'cmd', 'url', or 'parallel-tasks' configured)")
 	}
+	return nil
 }

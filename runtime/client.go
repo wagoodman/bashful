@@ -33,18 +33,21 @@ import (
 	"text/template"
 )
 
-func NewClientFromConfig(yamlString []byte, cli *config.Cli) *Client {
-	cfg := config.NewConfig(yamlString, cli)
+func NewClientFromConfig(yamlString []byte, cli *config.Cli) (*Client, error) {
+	cfg, err := config.NewConfig(yamlString, cli)
+	if err != nil {
+		return nil, err
+	}
 	return NewClient(cfg.TaskConfigs, cfg)
 }
 
-func NewClient(taskConfigs []config.TaskConfig, cfg *config.Config) *Client {
+func NewClient(taskConfigs []config.TaskConfig, cfg *config.Config) (*Client, error) {
 
 	return &Client{
 		Config:      cfg,
 		TaskConfigs: taskConfigs,
 		Executor:    newExecutor(taskConfigs, cfg),
-	}
+	}, nil
 }
 
 func (client *Client) AddEventHandler(handler EventHandler) {
