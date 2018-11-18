@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestParseRunYaml_SingleTask(t *testing.T) {
+func Test_Compile_SingleTask(t *testing.T) {
 	runYaml := []byte(`
 tasks:
   - name: Thing-a-ma-bob
@@ -33,7 +33,7 @@ tasks:
 
 }
 
-func TestParseRunYaml_MultipleSerialTasks(t *testing.T) {
+func Test_Compile_MultipleSerialTasks(t *testing.T) {
 	runYaml := []byte(`
 tasks:
   - name: Do-a-thing
@@ -72,7 +72,7 @@ tasks:
 	utils.AssertTestCases(t, collection)
 }
 
-func TestParseRunYaml_ParallelTask(t *testing.T) {
+func Test_Compile_ParallelTask(t *testing.T) {
 	runYaml := []byte(`
 tasks:
   - name: Do-things
@@ -121,7 +121,7 @@ tasks:
 	utils.AssertTestCases(t, collection)
 }
 
-func TestParseRunYaml_TemplateLoop(t *testing.T) {
+func Test_Compile_TemplateLoop(t *testing.T) {
 	runYaml := []byte(`
 x-reference-data:
   all-apps: &app-names
@@ -184,7 +184,7 @@ tasks:
 	utils.AssertTestCases(t, collection)
 }
 
-func TestParseRunYaml_TagInheritance(t *testing.T) {
+func Test_Compile_TagInheritance(t *testing.T) {
 	runYaml := []byte(`
 x-reference-data:
   all-apps: &app-names
@@ -261,7 +261,7 @@ tasks:
 	}
 }
 
-func TestParseRunYaml_TagSelection(t *testing.T) {
+func Test_Compile_TagSelection(t *testing.T) {
 	runYaml := []byte(`
 x-reference-data:
   all-apps: &app-names
@@ -337,7 +337,7 @@ tasks:
 
 }
 
-func TestParseRunYaml_OnlyTagSelection(t *testing.T) {
+func Test_Compile_OnlyTagSelection(t *testing.T) {
 	runYaml := []byte(`
 x-reference-data:
   all-apps: &app-names
