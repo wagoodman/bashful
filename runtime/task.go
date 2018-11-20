@@ -37,7 +37,7 @@ import (
 	"github.com/lunixbochs/vtclean"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
-	terminal "github.com/wayneashleyberry/terminal-dimensions"
+	"github.com/wayneashleyberry/terminal-dimensions"
 )
 
 var (
@@ -77,7 +77,6 @@ func NewTask(taskConfig config.TaskConfig, executor *Executor, runtimeOptions *c
 }
 
 func (task *Task) UpdateExec(execpath string) {
-	// todo: this needs to be rethought
 	if task.Config.CmdString == "" {
 		task.Config.CmdString = task.Options.ExecReplaceString
 	}
@@ -85,7 +84,7 @@ func (task *Task) UpdateExec(execpath string) {
 	task.Config.URL = strings.Replace(task.Config.URL, task.Options.ExecReplaceString, execpath, -1)
 
 	task.Command = newCommand(task.Config)
-	if eta, ok := task.Executor.CommandTimeCache[task.Config.CmdString]; ok {
+	if eta, ok := task.Executor.cmdEtaCache[task.Config.CmdString]; ok {
 		task.Command.addEstimatedRuntime(eta)
 	}
 }
@@ -104,11 +103,11 @@ func (task *Task) Kill() {
 }
 
 func (task *Task) requiresSudoPasswd() bool {
-	if task.Config.Sudo {
+	if task.Config.Sudo && task.Config.CmdString != "" {
 		return true
 	}
 	for _, subTask := range task.Children {
-		if subTask.Config.Sudo {
+		if subTask.Config.Sudo && subTask.Config.CmdString != "" {
 			return true
 		}
 	}
@@ -116,8 +115,8 @@ func (task *Task) requiresSudoPasswd() bool {
 	return false
 }
 
-// EstimateRuntime returns the ETA in seconds until command completion
-func (task *Task) EstimateRuntime() float64 {
+// estimateRuntime returns the ETA in seconds until command completion
+func (task *Task) estimateRuntime() float64 {
 	var etaSeconds float64
 	// finalize task by appending to the set of final Tasks
 	if task.Config.CmdString != "" && task.Command.EstimatedRuntime != -1 {
@@ -158,42 +157,8 @@ func (task *Task) EstimateRuntime() float64 {
 	return etaSeconds
 }
 
-// variableSplitFunc splits a bytestream based on either newline characters or by length (if the string is too long)
-func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
-
-	// Return nothing if at end of file and no data passed
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-
-	// Case: \n
-	if i := strings.Index(string(data), "\n"); i >= 0 {
-		return i + 1, data[0:i], nil
-	}
-
-	// Case: \r
-	if i := strings.Index(string(data), "\r"); i >= 0 {
-		return i + 1, data[0:i], nil
-	}
-
-	// Case: it's just too long
-	terminalWidth, _ := terminal.Width()
-	if len(data) > int(terminalWidth*2) {
-		return int(terminalWidth * 2), data[0:int(terminalWidth*2)], nil
-	}
-
-	// TODO: by some ansi escape sequences
-
-	// If at end of file with data return the data
-	if atEOF {
-		return len(data), data, nil
-	}
-
-	return
-}
-
-// runSingleCmd executes a Tasks primary command (not child task commands) and monitors command events
-func (task *Task) runSingleCmd(owningResultChan chan TaskEvent, owningWaiter *sync.WaitGroup, environment map[string]string) {
+// run executes a Tasks primary command (not child task commands) and monitors command events
+func (task *Task) execute(owningResultChan chan TaskEvent, owningWaiter *sync.WaitGroup, environment map[string]string) {
 
 	task.Command.StartTime = time.Now()
 
@@ -315,46 +280,46 @@ func (task *Task) runSingleCmd(owningResultChan chan TaskEvent, owningWaiter *sy
 	}
 }
 
-// startAvailableTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already completed commands)
-func (task *Task) startAvailableTasks(environment map[string]string) {
+// startNextTask will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already markCompleted commands)
+func (task *Task) startNextTask(environment map[string]string) {
 	// Note that the parent task result channel and waiter are used for all Tasks and child Tasks
 	if task.Config.CmdString != "" && !task.Command.Started && task.Executor.RunningTasks < task.Options.MaxParallelCmds {
-		go task.runSingleCmd(task.events, &task.waiter, environment)
+		go task.execute(task.events, &task.waiter, environment)
 		task.Command.Started = true
 		task.Executor.RunningTasks++
 	}
 	for ; task.Executor.RunningTasks < task.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
-		go task.Children[task.lastStartedTask].runSingleCmd(task.events, &task.waiter, nil)
+		go task.Children[task.lastStartedTask].execute(task.events, &task.waiter, nil)
 		task.Children[task.lastStartedTask].Command.Started = true
 		task.Executor.RunningTasks++
 	}
 }
 
-// completed marks a task command as being completed
-func (task *Task) completed(rc int) {
+// markCompleted marks a task command as being markCompleted
+func (task *Task) markCompleted(rc int) {
 	task.Command.Complete = true
 	task.Command.ReturnCode = rc
 
 	task.Executor.CompletedTasks = append(task.Executor.CompletedTasks, task)
-	task.Executor.CommandTimeCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
+	task.Executor.cmdEtaCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
 	task.Executor.RunningTasks--
 }
 
-// Run will run the current Tasks primary command and/or all child commands. When execution has completed, the screen frame will advance.
-func (task *Task) Run(environment map[string]string) {
+// Execute will run the current Tasks primary command and/or all child commands. When execution has markCompleted, the screen frame will advance.
+func (task *Task) Execute(environment map[string]string) {
 	for _, handler := range task.Executor.eventHandlers {
 		handler.Register(task)
 	}
 
-	task.startAvailableTasks(environment)
+	task.startNextTask(environment)
 
 	for task.Executor.RunningTasks > 0 {
 		msgObj := <-task.events
 
-		// manage completed tasks...
+		// manage markCompleted tasks...
 		if msgObj.Complete {
-			msgObj.Task.completed(msgObj.ReturnCode)
-			task.startAvailableTasks(environment)
+			msgObj.Task.markCompleted(msgObj.ReturnCode)
+			task.startNextTask(environment)
 
 			task.Status = msgObj.Status
 
@@ -385,4 +350,38 @@ func (task *Task) Run(environment map[string]string) {
 		handler.Unregister(task)
 	}
 
+}
+
+// variableSplitFunc splits a bytestream based on either newline characters or by length (if the string is too long)
+func variableSplitFunc(data []byte, atEOF bool) (advance int, token []byte, err error) {
+
+	// Return nothing if at end of file and no data passed
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	// Case: \n
+	if i := strings.Index(string(data), "\n"); i >= 0 {
+		return i + 1, data[0:i], nil
+	}
+
+	// Case: \r
+	if i := strings.Index(string(data), "\r"); i >= 0 {
+		return i + 1, data[0:i], nil
+	}
+
+	// Case: it's just too long
+	terminalWidth, _ := terminaldimensions.Width()
+	if len(data) > int(terminalWidth*2) {
+		return int(terminalWidth * 2), data[0:int(terminalWidth*2)], nil
+	}
+
+	// TODO: by some ansi escape sequences
+
+	// If at end of file with data return the data
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	return
 }

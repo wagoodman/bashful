@@ -38,9 +38,8 @@ type EventHandler interface {
 }
 
 type Client struct {
-	Config      *config.Config
-	TaskConfigs []config.TaskConfig
-	Executor    *Executor
+	Config   *config.Config
+	Executor *Executor
 }
 
 type Executor struct {
@@ -64,8 +63,8 @@ type Executor struct {
 	// TotalTasks indicates the number of tasks that can be run (Note: this is not necessarily the same number of tasks planned to be run)
 	TotalTasks int
 
-	// CommandTimeCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
-	CommandTimeCache map[string]time.Duration
+	// cmdEtaCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
+	cmdEtaCache map[string]time.Duration
 }
 
 // Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to execute, track, and display the task.
@@ -92,7 +91,7 @@ type Task struct {
 	// events is a channel where all raw command events are queued to
 	events chan TaskEvent
 
-	// waiter is a synchronization object which returns when all child task command executions have been completed
+	// waiter is a synchronization object which returns when all child task command executions have been markCompleted
 	waiter sync.WaitGroup
 
 	// TaskStatus is the last known TaskStatus value that represents the entire list of child commands
@@ -115,7 +114,7 @@ type command struct {
 	// startTime indicates when the Cmd was started
 	StartTime time.Time
 
-	// StopTime indicates when the Cmd completed execution
+	// StopTime indicates when the Cmd markCompleted execution
 	StopTime time.Time
 
 	// EstimatedRuntime indicates the expected runtime for the given command (based off of cached values from previous runs)
@@ -137,10 +136,10 @@ type command struct {
 	Environment map[string]string
 }
 
-// TaskStatus represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
+// TaskStatus represents whether a task command is about to run, already running, or has markCompleted (in which case, was it successful or not)
 type TaskStatus int32
 
-// TaskEvent represents an output from stdout/stderr during command execution or when a command has completed
+// TaskEvent represents an output from stdout/stderr during command execution or when a command has markCompleted
 type TaskEvent struct {
 	// Task is the task which the command was run from
 	Task *Task

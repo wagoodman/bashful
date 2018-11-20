@@ -33,20 +33,19 @@ import (
 	"text/template"
 )
 
-func NewClientFromConfig(yamlString []byte, cli *config.Cli) (*Client, error) {
+func NewClientFromYaml(yamlString []byte, cli *config.Cli) (*Client, error) {
 	cfg, err := config.NewConfig(yamlString, cli)
 	if err != nil {
 		return nil, err
 	}
-	return NewClient(cfg.TaskConfigs, cfg)
+	return NewClientFromConfig(cfg)
 }
 
-func NewClient(taskConfigs []config.TaskConfig, cfg *config.Config) (*Client, error) {
+func NewClientFromConfig(cfg *config.Config) (*Client, error) {
 
 	return &Client{
-		Config:      cfg,
-		TaskConfigs: taskConfigs,
-		Executor:    newExecutor(taskConfigs, cfg),
+		Config:   cfg,
+		Executor: newExecutor(cfg),
 	}, nil
 }
 
@@ -55,6 +54,8 @@ func (client *Client) AddEventHandler(handler EventHandler) {
 }
 
 func (client *Client) Run() error {
+	client.Executor.estimateRuntime()
+
 	for _, task := range client.Executor.Tasks {
 		if task.requiresSudoPasswd() {
 			sudoPassword = utils.GetSudoPasswd()

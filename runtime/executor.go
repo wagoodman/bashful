@@ -27,30 +27,50 @@ import (
 	"time"
 )
 
-func newExecutor(taskConfigs []config.TaskConfig, cfg *config.Config) *Executor {
+func newExecutor(cfg *config.Config) *Executor {
 	executor := &Executor{
-		Environment:      make(map[string]string, 0),
-		FailedTasks:      make([]*Task, 0),
-		CompletedTasks:   make([]*Task, 0),
-		eventHandlers:    make([]EventHandler, 0),
-		config:           cfg,
-		CommandTimeCache: make(map[string]time.Duration, 0),
+		Environment:    make(map[string]string, 0),
+		FailedTasks:    make([]*Task, 0),
+		CompletedTasks: make([]*Task, 0),
+		eventHandlers:  make([]EventHandler, 0),
+		config:         cfg,
+		cmdEtaCache:    make(map[string]time.Duration, 0),
+		Tasks:          make([]*Task, 0),
 	}
 
-	var tasks []*Task
-	for _, taskConfig := range taskConfigs {
+	for _, taskConfig := range cfg.TaskConfigs {
 		// finalize task by appending to the set of final Tasks
 		task := NewTask(taskConfig, executor, &cfg.Options)
-		tasks = append(tasks, task)
+		executor.Tasks = append(executor.Tasks, task)
 	}
 
-	executor.Tasks = tasks
+	return executor
+}
 
-	executor.readTimeCache()
-	for _, task := range tasks {
+// estimateRuntime fetches and reads a cache file from disk containing CmdString-to-ETASeconds. Note: this this must be done before fetching/parsing the run.yaml
+func (executor *Executor) readEtaCache() {
+	// create the cache dirs if they do not already exist
+	if _, err := os.Stat(executor.config.CachePath); os.IsNotExist(err) {
+		os.Mkdir(executor.config.CachePath, 0755)
+	}
+
+	// read the time cache
+	executor.cmdEtaCache = make(map[string]time.Duration)
+	if utils.DoesFileExist(executor.config.EtaCachePath) {
+		err := utils.Load(executor.config.EtaCachePath, &executor.cmdEtaCache)
+		utils.CheckError(err, "Unable to load command eta cache.")
+	}
+
+}
+
+// estimateRuntime accumulates the ETA for all planned tasks
+func (executor *Executor) estimateRuntime() {
+	executor.readEtaCache()
+
+	for _, task := range executor.Tasks {
 		if task.Config.CmdString != "" || task.Config.URL != "" {
 			executor.TotalTasks++
-			if eta, ok := executor.CommandTimeCache[task.Config.CmdString]; ok {
+			if eta, ok := executor.cmdEtaCache[task.Config.CmdString]; ok {
 				task.Command.addEstimatedRuntime(eta)
 			}
 		}
@@ -58,30 +78,13 @@ func newExecutor(taskConfigs []config.TaskConfig, cfg *config.Config) *Executor 
 		for _, subTask := range task.Children {
 			if subTask.Config.CmdString != "" || subTask.Config.URL != "" {
 				executor.TotalTasks++
-				if eta, ok := executor.CommandTimeCache[subTask.Config.CmdString]; ok {
+				if eta, ok := executor.cmdEtaCache[subTask.Config.CmdString]; ok {
 					subTask.Command.addEstimatedRuntime(eta)
 				}
 			}
 		}
 
-		cfg.TotalEtaSeconds += task.EstimateRuntime()
-	}
-
-	return executor
-}
-
-// readTimeCache fetches and reads a cache file from disk containing CmdString-to-ETASeconds. Note: this this must be done before fetching/parsing the run.yaml
-func (executor *Executor) readTimeCache() {
-
-	// create the cache dirs if they do not already exist
-	if _, err := os.Stat(executor.config.CachePath); os.IsNotExist(err) {
-		os.Mkdir(executor.config.CachePath, 0755)
-	}
-
-	executor.CommandTimeCache = make(map[string]time.Duration)
-	if utils.DoesFileExist(executor.config.EtaCachePath) {
-		err := utils.Load(executor.config.EtaCachePath, &executor.CommandTimeCache)
-		utils.CheckError(err, "Unable to load command eta cache.")
+		executor.config.TotalEtaSeconds += task.estimateRuntime()
 	}
 }
 
@@ -90,7 +93,7 @@ func (executor *Executor) addEventHandler(handler EventHandler) {
 }
 
 func (executor *Executor) execute(task *Task) error {
-	task.Run(executor.Environment)
+	task.Execute(executor.Environment)
 	return nil
 }
 
@@ -106,7 +109,7 @@ func (executor *Executor) run() error {
 		handler.Close()
 	}
 
-	err := utils.Save(executor.config.EtaCachePath, &executor.CommandTimeCache)
+	err := utils.Save(executor.config.EtaCachePath, &executor.cmdEtaCache)
 	utils.CheckError(err, "Unable to save command eta cache.")
 
 	return nil

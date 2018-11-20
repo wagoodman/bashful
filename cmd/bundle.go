@@ -61,7 +61,7 @@ func Bundle(yamlString []byte, outputPath string, cli config.Cli) {
 	yamlString, err := ioutil.ReadFile(cli.YamlPath)
 	utils.CheckError(err, "Unable to read yaml Config.")
 
-	client, err := runtime.NewClientFromConfig(yamlString, &cli)
+	client, err := runtime.NewClientFromYaml(yamlString, &cli)
 	if err != nil {
 		utils.ExitWithErrorMessage(err.Error())
 	}

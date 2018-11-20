@@ -16,7 +16,7 @@ package cmd
 //   - cmd: false
 //     ignore-failure: true
 // `
-// 	failedTasks = Run([]byte(simpleYamlStr), map[string]string{})
+// 	failedTasks = Execute([]byte(simpleYamlStr), map[string]string{})
 // 	if len(failedTasks) > 0 {
 // 		t.Error("TestTaskErrorPolicy: ignore-failure: Expected no tasks to fail, got " + strconv.Itoa(len(failedTasks)))
 // 	}
@@ -25,7 +25,7 @@ package cmd
 // tasks:
 //   - cmd: false
 // `
-// 	failedTasks = Run([]byte(simpleYamlStr), map[string]string{})
+// 	failedTasks = Execute([]byte(simpleYamlStr), map[string]string{})
 // 	if len(failedTasks) != 1 {
 // 		t.Error("TestTaskErrorPolicy: ack failure: Expected exactly 1 task to fail, got " + strconv.Itoa(len(failedTasks)))
 // 	}
@@ -37,7 +37,7 @@ package cmd
 //   - cmd: false
 //   - cmd: false
 // `
-// 	failedTasks = Run([]byte(simpleYamlStr), map[string]string{})
+// 	failedTasks = Execute([]byte(simpleYamlStr), map[string]string{})
 // 	if len(failedTasks) != 1 {
 // 		t.Error("TestTaskErrorPolicy: stop on failure: Expected exactly 1 task to fail, got " + strconv.Itoa(len(failedTasks)))
 // 	}
@@ -49,7 +49,7 @@ package cmd
 //   - cmd: false
 //   - cmd: false
 // `
-// 	failedTasks = Run([]byte(simpleYamlStr), map[string]string{})
+// 	failedTasks = Execute([]byte(simpleYamlStr), map[string]string{})
 // 	if len(failedTasks) != 2 {
 // 		t.Error("TestTaskErrorPolicy: do not stop on failure: Expected exactly 2 task to fail, got " + strconv.Itoa(len(failedTasks)))
 // 	}

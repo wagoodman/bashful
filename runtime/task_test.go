@@ -1,47 +1,218 @@
 package runtime
 
-//
-// import (
-// 	"strings"
-// 	"testing"
-//
-// 	"github.com/alecthomas/repr"
-// 	"github.com/wagoodman/bashful/config"
-// 	"time"
-// )
-//
-// func TestTaskString(t *testing.T) {
-// 	var testOutput, expectedOutput string
-//
-// 	taskConfig := config.TaskConfig{
-// 		Name:      "some name!",
-// 		CmdString: "/bin/true",
-// 	}
-// 	task := NewTask(taskConfig, 1, "2")
-// 	task.Display.Values = lineInfo{Status: StatusSuccess.Color(""), Title: task.Config.Name, Msg: "some message", Prefix: "$", Eta: "SOMEETAVALUE"}
-//
-// 	testOutput = task.String(50)
-// 	expectedOutput = " \x1b[38;5;10m  \x1b[0m • some name!                som...SOMEETAVALUE"
-// 	if expectedOutput != testOutput {
-// 		t.Error("TestTaskString (default): Expected", repr.String(expectedOutput), "got", repr.String(testOutput))
-// 	}
-//
-// 	config.Config.Options.ShowTaskEta = false
-// 	task.Display.Values.Title = "123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm"
-// 	testOutput = task.String(20)
-// 	expectedOutput = " \x1b[38;5;10m  \x1b[0m • 123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm123456789qwertyuiopasdfghjklzxcvbnm234567890qwertyuiopasdfghjklzxcvbnm s...SOMEETAVALUE"
-// 	if expectedOutput != testOutput {
-// 		t.Error("TestTaskString (eta, truncate): Expected", repr.String(expectedOutput), "got", repr.String(testOutput))
-// 	}
-//
-// }
+import (
+	"github.com/wagoodman/bashful/config"
+	"strings"
+	"testing"
+	"time"
+)
+
+func Test_Task_estimateRuntime(t *testing.T) {
+	table := map[string]struct {
+		index         int
+		maxParallel   int
+		parentTaskEta int
+		childTaskEta  []int
+		expectedEta   float64
+		runYaml       []byte
+	}{
+
+		"single task": {
+			index:         0,
+			maxParallel:   4,
+			parentTaskEta: 20,
+			childTaskEta:  []int{},
+			expectedEta:   20,
+			runYaml: []byte(`
+tasks:
+  - cmd: ./do/thing.sh 4`),
+		},
+
+		"parallel tasks": {
+			index:         0,
+			maxParallel:   4,
+			parentTaskEta: 0,
+			childTaskEta:  []int{20, 30, 40},
+			expectedEta:   40,
+			runYaml: []byte(`
+tasks:
+  - parallel-tasks:
+    - cmd: ./do/thing.sh 2
+    - cmd: ./do/thing.sh 3
+    - cmd: ./do/thing.sh 4`),
+		},
+
+		"parallel tasks, restricted concurrency": {
+			index:         0,
+			maxParallel:   2,
+			parentTaskEta: 0,
+			childTaskEta:  []int{20, 30, 40},
+			expectedEta:   60,
+			runYaml: []byte(`
+tasks:
+  - parallel-tasks:
+      - cmd: ./do/thing.sh 2
+      - cmd: ./do/thing.sh 3
+      - cmd: ./do/thing.sh 4`),
+		},
+	}
+
+	for name, testCase := range table {
+		t.Logf("Running test case: %s", name)
+		client, err := NewClientFromYaml(testCase.runYaml, &config.Cli{})
+		if err != nil {
+			t.Errorf("unexpeced error: %v", err)
+		}
+
+		// load test data...
+		client.Config.Options.MaxParallelCmds = testCase.maxParallel
+		for _, task := range client.Executor.Tasks {
+			task.Command.addEstimatedRuntime(time.Duration(testCase.parentTaskEta) * time.Second)
+			for cIdx, subTask := range task.Children {
+				subTask.Command.addEstimatedRuntime(time.Duration(testCase.childTaskEta[cIdx]) * time.Second)
+			}
+		}
+
+		// assert...
+		task := client.Executor.Tasks[testCase.index]
+
+		runtime := task.estimateRuntime()
+		if runtime != testCase.expectedEta {
+			t.Errorf("   expected eta='%v', got '%v'", testCase.expectedEta, runtime)
+		}
+	}
+}
+
+func Test_Task_UpdateExec(t *testing.T) {
+	runYaml := []byte(`
+tasks:
+  - cmd: <exec> run
+    url: https://some-url.com/the-script.sh
+  - url: https://some-url.com/the-other-script.sh`)
+
+	client, err := NewClientFromYaml(runYaml, &config.Cli{})
+	if err != nil {
+		t.Errorf("unexpeced error: %v", err)
+	}
+
+	table := map[string]struct {
+		index       int
+		expectedUrl string
+		expectedCmd string
+	}{
+		"command template": {
+			index:       0,
+			expectedUrl: "https://some-url.com/the-script.sh",
+			expectedCmd: "/a/path/to/a/tempfile.sh run",
+		},
+		"empty template": {
+			index:       1,
+			expectedUrl: "https://some-url.com/the-other-script.sh",
+			expectedCmd: "/a/path/to/a/tempfile.sh",
+		},
+	}
+
+	for name, testCase := range table {
+		t.Logf("Running test case: %s", name)
+
+		task := client.Executor.Tasks[testCase.index]
+		task.UpdateExec("/a/path/to/a/tempfile.sh")
+
+		if task.Config.CmdString != testCase.expectedCmd {
+			t.Errorf("   expected cmdString='%s', got '%s'", testCase.expectedCmd, task.Config.CmdString)
+		}
+		if task.Config.URL != testCase.expectedUrl {
+			t.Errorf("   expected url='%s', got '%s'", testCase.expectedUrl, task.Config.URL)
+		}
+
+		// the real command may be a bit more verbose, only check if the command is in the final cmd obj string
+		cmdObjString := strings.Join(task.Command.Cmd.Args, " ")
+		if !strings.Contains(cmdObjString, task.Config.CmdString) {
+			t.Errorf("   expected cmd='%+v', got '%+v'", testCase.expectedCmd, cmdObjString)
+		}
+	}
+}
+
+func Test_Task_requiresSudoPasswd(t *testing.T) {
+	var table = []struct {
+		taskConfig     config.TaskConfig
+		expectedResult bool
+	}{
+		{
+			taskConfig: config.TaskConfig{
+				Name: "parent-task",
+				ParallelTasks: []config.TaskConfig{
+					{
+						Name:      "first-child",
+						CmdString: "./bin/first-thing.sh",
+					},
+					{
+						Name:      "second-child",
+						CmdString: "./bin/second-thing.sh",
+						Sudo:      true,
+					},
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			taskConfig: config.TaskConfig{
+				Name: "parent-task",
+				ParallelTasks: []config.TaskConfig{
+					{
+						Name:      "first-child",
+						CmdString: "./bin/first-thing.sh",
+					},
+					{
+						Name:      "second-child",
+						CmdString: "./bin/second-thing.sh",
+					},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			taskConfig: config.TaskConfig{
+				Name: "parent-task",
+				Sudo: true,
+				ParallelTasks: []config.TaskConfig{
+					{
+						Name:      "first-child",
+						CmdString: "./bin/first-thing.sh",
+					},
+					{
+						Name:      "second-child",
+						CmdString: "./bin/second-thing.sh",
+					},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			taskConfig: config.TaskConfig{
+				Name:      "parent-task",
+				CmdString: "./bin/parent-thing.sh",
+				Sudo:      true,
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, testCase := range table {
+		task := NewTask(testCase.taskConfig, nil, nil)
+		if task.requiresSudoPasswd() != testCase.expectedResult {
+			t.Errorf("expected requiresSudoPasswd='%v'", testCase.expectedResult)
+		}
+	}
+}
+
 //
 // func TestSerialTaskEnvPersistence(t *testing.T) {
 // 	var expStr, actStr string
 // 	var failedTasks []*Task
 // 	simpleYamlStr := `
-// Tasks:
-//   - name: start
+// tasks:
+//   - name: startNextTask
 //     cmd: export SOMEVAR=this
 //
 //   - name: append 'is'
@@ -63,7 +234,7 @@ package runtime
 //
 // 	environment := map[string]string{}
 // 	config.Config.Options.StopOnFailure = false
-// 	failedTasks = Run([]byte(simpleYamlStr), environment)
+// 	failedTasks = Execute([]byte(simpleYamlStr), environment)
 // 	if len(failedTasks) > 0 {
 // 		t.Error("TestSerialTaskEnvPersistence: Expected no Tasks to fail")
 // 	}
@@ -74,20 +245,21 @@ package runtime
 // 	}
 //
 // }
+
 //
 // func TestCurrentWorkingDirectory(t *testing.T) {
 // 	var expStr, actStr string
 // 	var failedTasks []*Task
 // 	simpleYamlStr := `
 // Tasks:
-//   - name: start
+//   - name: startNextTask
 //     cmd: export CWD=$(pwd)
 //     cwd: ../example
 // `
 //
 // 	environment := map[string]string{}
 // 	config.Config.Options.StopOnFailure = false
-// 	failedTasks = Run([]byte(simpleYamlStr), environment)
+// 	failedTasks = Execute([]byte(simpleYamlStr), environment)
 // 	if len(failedTasks) > 0 {
 // 		t.Error("TestSerialTaskEnvPersistence: Expected no Tasks to fail")
 // 	}
@@ -159,12 +331,12 @@ package runtime
 //       - plug 2
 // `
 // 	// load test time cache
-// 	config.Config.CommandTimeCache = make(map[string]time.Duration)
-// 	config.Config.CommandTimeCache["compile-something.sh 2"] = time.Duration(2 * time.Second)
-// 	config.Config.CommandTimeCache["compile-something.sh 4"] = time.Duration(4 * time.Second)
-// 	config.Config.CommandTimeCache["compile-something.sh 6"] = time.Duration(6 * time.Second)
-// 	config.Config.CommandTimeCache["compile-something.sh 9"] = time.Duration(9 * time.Second)
-// 	config.Config.CommandTimeCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
+// 	config.Config.cmdEtaCache = make(map[string]time.Duration)
+// 	config.Config.cmdEtaCache["compile-something.sh 2"] = time.Duration(2 * time.Second)
+// 	config.Config.cmdEtaCache["compile-something.sh 4"] = time.Duration(4 * time.Second)
+// 	config.Config.cmdEtaCache["compile-something.sh 6"] = time.Duration(6 * time.Second)
+// 	config.Config.cmdEtaCache["compile-something.sh 9"] = time.Duration(9 * time.Second)
+// 	config.Config.cmdEtaCache["compile-something.sh 10"] = time.Duration(10 * time.Second)
 //
 // 	// load test Config yaml
 // 	config.parseRunYaml([]byte(simpleYamlStr))

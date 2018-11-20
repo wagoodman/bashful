@@ -98,7 +98,7 @@ func init() {
 
 func Run(yamlString []byte, cli config.Cli) {
 
-	client, err := runtime.NewClientFromConfig(yamlString, &cli)
+	client, err := runtime.NewClientFromYaml(yamlString, &cli)
 	if err != nil {
 		utils.ExitWithErrorMessage(err.Error())
 	}
