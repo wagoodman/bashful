@@ -35,7 +35,7 @@ import (
 	"github.com/wagoodman/bashful/utils"
 )
 
-type assetDownloader struct {
+type downloader struct {
 	downloadPath  string
 	maxParallel   int
 	urlToRequest  map[string]*grab.Request
@@ -43,12 +43,12 @@ type assetDownloader struct {
 	urltoFilename map[string]string
 }
 
-func NewAssetDownloader(tasks []*Task, downloadPath string, maxParallel int) *assetDownloader {
+func NewDownloader(tasks []*Task, downloadPath string, maxParallel int) *downloader {
 	if _, err := os.Stat(downloadPath); os.IsNotExist(err) {
 		os.Mkdir(downloadPath, 0755)
 	}
 
-	registry := &assetDownloader{
+	registry := &downloader{
 		downloadPath:  downloadPath,
 		maxParallel:   maxParallel,
 		urlToRequest:  make(map[string]*grab.Request),
@@ -76,7 +76,7 @@ func NewAssetDownloader(tasks []*Task, downloadPath string, maxParallel int) *as
 	return registry
 }
 
-func (registry *assetDownloader) monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response, waiter *sync.WaitGroup) {
+func (registry *downloader) monitorDownload(requests map[*grab.Request][]*Task, response *grab.Response, waiter *sync.WaitGroup) {
 	bar := uiprogress.AddBar(100)
 	bar.AppendFunc(func(b *uiprogress.Bar) string {
 
@@ -152,7 +152,7 @@ Loop:
 }
 
 // AddRequest extracts all URLS configured for a given task (does not examine child Tasks) and queues them for download
-func (registry *assetDownloader) AddRequest(task *Task) {
+func (registry *downloader) AddRequest(task *Task) {
 	if task.Config.URL != "" {
 		request, ok := registry.urlToRequest[task.Config.URL]
 		if !ok {
@@ -186,7 +186,7 @@ func (registry *assetDownloader) AddRequest(task *Task) {
 }
 
 // DownloadAssets fetches all assets for the given task
-func (registry *assetDownloader) Download() {
+func (registry *downloader) Download() {
 
 	client := grab.NewClient()
 

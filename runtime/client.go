@@ -54,30 +54,31 @@ func (client *Client) AddEventHandler(handler EventHandler) {
 }
 
 func (client *Client) Run() error {
-	client.Executor.estimateRuntime()
 
 	for _, task := range client.Executor.Tasks {
-		if task.requiresSudoPasswd() {
+		if task.requiresSudoPassword() {
 			sudoPassword = utils.GetSudoPasswd()
 			break
 		}
 	}
 
-	assetManager := NewAssetDownloader(client.Executor.Tasks, client.Config.DownloadCachePath, client.Config.Options.MaxParallelCmds)
+	assetManager := NewDownloader(client.Executor.Tasks, client.Config.DownloadCachePath, client.Config.Options.MaxParallelCmds)
 	assetManager.Download()
+
+	client.Executor.estimateRuntime()
 	client.Executor.run()
 
-	if len(client.Executor.FailedTasks) > 0 {
+	if len(client.Executor.RuntimeData.FailedTasks) > 0 {
 		var buffer bytes.Buffer
 		buffer.WriteString(utils.Red(" ...Some Tasks failed, see below for details.\n"))
 
-		for _, task := range client.Executor.FailedTasks {
+		for _, task := range client.Executor.RuntimeData.FailedTasks {
 
 			buffer.WriteString("\n")
 			buffer.WriteString(utils.Bold(utils.Red("• Failed task: ")) + utils.Bold(task.Config.Name) + "\n")
 			buffer.WriteString(utils.Red("  ├─ command: ") + task.Config.CmdString + "\n")
 			buffer.WriteString(utils.Red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode) + "\n")
-			buffer.WriteString(utils.Red("  └─ stderr: ") + task.ErrorBuffer.String() + "\n")
+			buffer.WriteString(utils.Red("  └─ stderr: ") + task.errorBuffer.String() + "\n")
 
 		}
 		log.LogToMain(buffer.String(), "")
@@ -89,7 +90,7 @@ func (client *Client) Run() error {
 
 	}
 
-	if len(client.Executor.FailedTasks) > 0 {
+	if len(client.Executor.RuntimeData.FailedTasks) > 0 {
 		return fmt.Errorf("failed Tasks discovered")
 	}
 
@@ -97,7 +98,7 @@ func (client *Client) Run() error {
 }
 
 func (client *Client) Bundle(userYamlPath, outputPath string) error {
-	assetManager := NewAssetDownloader(client.Executor.Tasks, client.Config.DownloadCachePath, client.Config.Options.MaxParallelCmds)
+	assetManager := NewDownloader(client.Executor.Tasks, client.Config.DownloadCachePath, client.Config.Options.MaxParallelCmds)
 	assetManager.Download()
 
 	archivePath := "bundle.tar.gz"
@@ -144,9 +145,9 @@ __BASHFUL_ARCHIVE__
 
 	tmpl := template.New("test")
 	tmpl, err = tmpl.Parse(execute)
-	utils.CheckError(err, "Failed to parse execute template")
+	utils.CheckError(err, "Failed to parse Execute template")
 	err = tmpl.Execute(&buff, values)
-	utils.CheckError(err, "Failed to render execute template")
+	utils.CheckError(err, "Failed to render Execute template")
 
 	runnerFh, err := os.Create(outputPath)
 	utils.CheckError(err, "Unable to create runner executable file")

@@ -19,12 +19,12 @@ type cUiData struct {
 }
 
 type CompressedUI struct {
-	lock      sync.Mutex
-	config    *config.Config
-	data      map[uuid.UUID]*cUiData
-	startTime time.Time
-	executor  *runtime.Executor
-	frame     *jotframe.FixedFrame
+	lock        sync.Mutex
+	config      *config.Config
+	data        map[uuid.UUID]*cUiData
+	startTime   time.Time
+	runtimeData *runtime.RuntimeData
+	frame       *jotframe.FixedFrame
 }
 
 func NewCompressedUI(config *config.Config) *CompressedUI {
@@ -37,6 +37,10 @@ func NewCompressedUI(config *config.Config) *CompressedUI {
 	}
 
 	return handler
+}
+
+func (handler *CompressedUI) AddRuntimeData(data *runtime.RuntimeData) {
+	handler.runtimeData = data
 }
 
 func (handler *CompressedUI) Close() {
@@ -57,11 +61,6 @@ func (handler *CompressedUI) doRegister(task *runtime.Task) {
 	if _, ok := handler.data[task.Id]; ok {
 		// ignore data that have already been registered
 		return
-	}
-
-	// todo: this is hackey
-	if handler.executor == nil && task.Executor != nil {
-		handler.executor = task.Executor
 	}
 
 	handler.data[task.Id] = &cUiData{
@@ -105,12 +104,12 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 
 	fillColor := color.ColorCode(strconv.Itoa(handler.config.Options.ColorSuccess) + "+i")
 	emptyColor := color.ColorCode(strconv.Itoa(handler.config.Options.ColorSuccess))
-	if len(task.Executor.FailedTasks) > 0 {
+	if len(handler.runtimeData.FailedTasks) > 0 {
 		fillColor = color.ColorCode(strconv.Itoa(handler.config.Options.ColorError) + "+i")
 		emptyColor = color.ColorCode(strconv.Itoa(handler.config.Options.ColorError))
 	}
 
-	numFill := int(effectiveWidth) * len(task.Executor.CompletedTasks) / task.Executor.TotalTasks
+	numFill := int(effectiveWidth) * len(handler.runtimeData.CompletedTasks) / handler.runtimeData.TotalTasks
 
 	if handler.config.Options.ShowSummaryTimes {
 		duration := time.Since(handler.startTime)
@@ -121,16 +120,16 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
 
-	if len(task.Executor.CompletedTasks) == task.Executor.TotalTasks {
+	if len(handler.runtimeData.CompletedTasks) == handler.runtimeData.TotalTasks {
 		etaString = ""
 	}
 
 	if handler.config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(task.Executor.CompletedTasks), task.Executor.TotalTasks)
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(handler.runtimeData.CompletedTasks), handler.runtimeData.TotalTasks)
 	}
 
 	if handler.config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", len(task.Executor.FailedTasks))
+		errorString = fmt.Sprintf(" Errors[%d]", len(handler.runtimeData.FailedTasks))
 	}
 
 	valueStr := stepString + errorString + durString + etaString

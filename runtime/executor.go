@@ -27,20 +27,26 @@ import (
 	"time"
 )
 
-func newExecutor(cfg *config.Config) *Executor {
-	executor := &Executor{
-		Environment:    make(map[string]string, 0),
+func newExecutorStats() *RuntimeData {
+	return &RuntimeData{
 		FailedTasks:    make([]*Task, 0),
 		CompletedTasks: make([]*Task, 0),
-		eventHandlers:  make([]EventHandler, 0),
-		config:         cfg,
 		cmdEtaCache:    make(map[string]time.Duration, 0),
-		Tasks:          make([]*Task, 0),
+	}
+}
+
+func newExecutor(cfg *config.Config) *Executor {
+	executor := &Executor{
+		Environment:   make(map[string]string, 0),
+		eventHandlers: make([]EventHandler, 0),
+		config:        cfg,
+		Tasks:         make([]*Task, 0),
+		RuntimeData:   newExecutorStats(),
 	}
 
 	for _, taskConfig := range cfg.TaskConfigs {
 		// finalize task by appending to the set of final Tasks
-		task := NewTask(taskConfig, executor, &cfg.Options)
+		task := NewTask(taskConfig, &cfg.Options)
 		executor.Tasks = append(executor.Tasks, task)
 	}
 
@@ -55,9 +61,9 @@ func (executor *Executor) readEtaCache() {
 	}
 
 	// read the time cache
-	executor.cmdEtaCache = make(map[string]time.Duration)
+	executor.RuntimeData.cmdEtaCache = make(map[string]time.Duration)
 	if utils.DoesFileExist(executor.config.EtaCachePath) {
-		err := utils.Load(executor.config.EtaCachePath, &executor.cmdEtaCache)
+		err := utils.Load(executor.config.EtaCachePath, &executor.RuntimeData.cmdEtaCache)
 		utils.CheckError(err, "Unable to load command eta cache.")
 	}
 
@@ -69,16 +75,16 @@ func (executor *Executor) estimateRuntime() {
 
 	for _, task := range executor.Tasks {
 		if task.Config.CmdString != "" || task.Config.URL != "" {
-			executor.TotalTasks++
-			if eta, ok := executor.cmdEtaCache[task.Config.CmdString]; ok {
+			executor.RuntimeData.TotalTasks++
+			if eta, ok := executor.RuntimeData.cmdEtaCache[task.Config.CmdString]; ok {
 				task.Command.addEstimatedRuntime(eta)
 			}
 		}
 
 		for _, subTask := range task.Children {
 			if subTask.Config.CmdString != "" || subTask.Config.URL != "" {
-				executor.TotalTasks++
-				if eta, ok := executor.cmdEtaCache[subTask.Config.CmdString]; ok {
+				executor.RuntimeData.TotalTasks++
+				if eta, ok := executor.RuntimeData.cmdEtaCache[subTask.Config.CmdString]; ok {
 					subTask.Command.addEstimatedRuntime(eta)
 				}
 			}
@@ -89,11 +95,76 @@ func (executor *Executor) estimateRuntime() {
 }
 
 func (executor *Executor) addEventHandler(handler EventHandler) {
+	handler.AddRuntimeData(executor.RuntimeData)
 	executor.eventHandlers = append(executor.eventHandlers, handler)
 }
 
+// startNextSubTasks will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already markCompleted commands)
+func (executor *Executor) startNextSubTasks(task *Task) {
+	// Note that the parent task result channel and waiter are used for all Tasks and child Tasks
+	if task.Config.CmdString != "" && !task.Started && executor.RuntimeData.RunningTasks < task.Options.MaxParallelCmds {
+		go task.Execute(task.events, &task.waiter, executor.Environment)
+		task.Started = true
+		executor.RuntimeData.RunningTasks++
+	}
+	for ; executor.RuntimeData.RunningTasks < task.Options.MaxParallelCmds && task.lastStartedChild < len(task.Children); task.lastStartedChild++ {
+		go task.Children[task.lastStartedChild].Execute(task.events, &task.waiter, nil)
+		task.Children[task.lastStartedChild].Started = true
+		executor.RuntimeData.RunningTasks++
+	}
+}
+
+// Execute will run the current Tasks primary command and/or all child commands. When execution has markCompleted, the screen frame will advance.
 func (executor *Executor) execute(task *Task) error {
-	task.Execute(executor.Environment)
+
+	for _, handler := range executor.eventHandlers {
+		handler.Register(task)
+	}
+
+	executor.startNextSubTasks(task)
+
+	for executor.RuntimeData.RunningTasks > 0 {
+		event := <-task.events
+
+		// manage completed tasks...
+		if event.Complete {
+			event.Task.Completed = true
+			event.Task.Command.ReturnCode = event.ReturnCode
+
+			executor.RuntimeData.CompletedTasks = append(executor.RuntimeData.CompletedTasks, event.Task)
+			executor.RuntimeData.cmdEtaCache[task.Config.CmdString] = event.Task.Command.StopTime.Sub(event.Task.Command.StartTime)
+			executor.RuntimeData.RunningTasks--
+
+			executor.startNextSubTasks(task)
+
+			task.Status = event.Status
+
+			if event.Status == StatusError {
+				// keep note of the failed task for an after task report
+				task.FailedChildren++
+				executor.RuntimeData.FailedTasks = append(executor.RuntimeData.FailedTasks, event.Task)
+			}
+		}
+
+		// notify all handlers...
+		for _, handler := range executor.eventHandlers {
+			handler.OnEvent(task, event)
+		}
+	}
+
+	if !exitSignaled {
+		task.waiter.Wait()
+	}
+
+	// we should be done with all tasks/subtasks at this point, unregister everything
+	for _, subTask := range task.Children {
+		for _, handler := range executor.eventHandlers {
+			handler.Unregister(subTask)
+		}
+	}
+	for _, handler := range executor.eventHandlers {
+		handler.Unregister(task)
+	}
 	return nil
 }
 
@@ -109,7 +180,7 @@ func (executor *Executor) run() error {
 		handler.Close()
 	}
 
-	err := utils.Save(executor.config.EtaCachePath, &executor.cmdEtaCache)
+	err := utils.Save(executor.config.EtaCachePath, &executor.RuntimeData.cmdEtaCache)
 	utils.CheckError(err, "Unable to save command eta cache.")
 
 	return nil

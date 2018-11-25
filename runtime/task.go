@@ -53,23 +53,22 @@ const (
 )
 
 // NewTask creates a new task in the context of the user configuration at a particular screen location (row)
-func NewTask(taskConfig config.TaskConfig, executor *Executor, runtimeOptions *config.Options) *Task {
+func NewTask(taskConfig config.TaskConfig, runtimeOptions *config.Options) *Task {
 	task := Task{
-		Id:       uuid.New(),
-		Config:   taskConfig,
-		Options:  runtimeOptions,
-		Executor: executor,
+		Id:      uuid.New(),
+		Config:  taskConfig,
+		Options: runtimeOptions,
 	}
 
 	task.Command = newCommand(task.Config)
-	task.ErrorBuffer = bytes.NewBufferString("")
+	task.errorBuffer = bytes.NewBufferString("")
 	task.events = make(chan TaskEvent)
 	task.Status = StatusPending
 
 	for subIndex := range taskConfig.ParallelTasks {
 		subTaskConfig := &taskConfig.ParallelTasks[subIndex]
 
-		subTask := NewTask(*subTaskConfig, executor, runtimeOptions)
+		subTask := NewTask(*subTaskConfig, runtimeOptions)
 		task.Children = append(task.Children, subTask)
 	}
 
@@ -84,25 +83,27 @@ func (task *Task) UpdateExec(execpath string) {
 	task.Config.URL = strings.Replace(task.Config.URL, task.Options.ExecReplaceString, execpath, -1)
 
 	task.Command = newCommand(task.Config)
-	if eta, ok := task.Executor.cmdEtaCache[task.Config.CmdString]; ok {
-		task.Command.addEstimatedRuntime(eta)
-	}
+
+	// note: this will affect the eta, however, this should be handled by the executor (todo: any cleanup here?)
+	// if eta, ok := task.Executor.cmdEtaCache[task.Config.CmdString]; ok {
+	// 	task.Command.addEstimatedRuntime(eta)
+	// }
 }
 
 // Kill will stop any running command (including child Tasks) with a -9 signal
 func (task *Task) Kill() {
-	if task.Config.CmdString != "" && task.Command.Started && !task.Command.Complete {
+	if task.Config.CmdString != "" && task.Started && !task.Completed {
 		syscall.Kill(-task.Command.Cmd.Process.Pid, syscall.SIGKILL)
 	}
 
 	for _, subTask := range task.Children {
-		if subTask.Config.CmdString != "" && subTask.Command.Started && !subTask.Command.Complete {
+		if subTask.Config.CmdString != "" && subTask.Started && !subTask.Completed {
 			syscall.Kill(-subTask.Command.Cmd.Process.Pid, syscall.SIGKILL)
 		}
 	}
 }
 
-func (task *Task) requiresSudoPasswd() bool {
+func (task *Task) requiresSudoPassword() bool {
 	if task.Config.Sudo && task.Config.CmdString != "" {
 		return true
 	}
@@ -158,23 +159,18 @@ func (task *Task) estimateRuntime() float64 {
 }
 
 // run executes a Tasks primary command (not child task commands) and monitors command events
-func (task *Task) execute(owningResultChan chan TaskEvent, owningWaiter *sync.WaitGroup, environment map[string]string) {
+func (task *Task) Execute(eventChan chan TaskEvent, waiter *sync.WaitGroup, environment map[string]string) {
 
 	task.Command.StartTime = time.Now()
 
-	owningResultChan <- TaskEvent{Task: task, Status: StatusRunning, ReturnCode: -1}
-	owningWaiter.Add(1)
-	defer owningWaiter.Done()
+	eventChan <- TaskEvent{Task: task, Status: StatusRunning, ReturnCode: -1}
+	waiter.Add(1)
+	defer waiter.Done()
 
+	stdoutChan := make(chan string, 1000)
+	stderrChan := make(chan string, 1000)
 	stdoutPipe, _ := task.Command.Cmd.StdoutPipe()
 	stderrPipe, _ := task.Command.Cmd.StderrPipe()
-
-	// copy env vars into proc
-	for k, v := range environment {
-		task.Command.Cmd.Env = append(task.Command.Cmd.Env, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	task.Command.Cmd.Start()
 
 	readPipe := func(resultChan chan string, pipe io.ReadCloser) {
 		defer close(resultChan)
@@ -187,10 +183,15 @@ func (task *Task) execute(owningResultChan chan TaskEvent, owningWaiter *sync.Wa
 		}
 	}
 
-	stdoutChan := make(chan string, 1000)
-	stderrChan := make(chan string, 1000)
 	go readPipe(stdoutChan, stdoutPipe)
 	go readPipe(stderrChan, stderrPipe)
+
+	// copy env vars into proc
+	for k, v := range environment {
+		task.Command.Cmd.Env = append(task.Command.Cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	task.Command.Cmd.Start()
 
 	for {
 		select {
@@ -204,7 +205,7 @@ func (task *Task) execute(owningResultChan chan TaskEvent, owningWaiter *sync.Wa
 				// todo: we should always throw the TaskEvent? let the TaskEvent handler deal with TaskEvent/polling...
 				if task.Config.EventDriven {
 					// this is TaskEvent driven... (signal this TaskEvent)
-					owningResultChan <- TaskEvent{Task: task, Status: StatusRunning, Stdout: utils.Blue(stdoutMsg), ReturnCode: -1}
+					eventChan <- TaskEvent{Task: task, Status: StatusRunning, Stdout: utils.Blue(stdoutMsg), ReturnCode: -1}
 				}
 				// else {
 				// 	// on a polling interval... (do not create an TaskEvent)
@@ -220,13 +221,13 @@ func (task *Task) execute(owningResultChan chan TaskEvent, owningWaiter *sync.Wa
 				// todo: we should always throw the TaskEvent? let the TaskEvent handler deal with TaskEvent/polling...
 				if task.Config.EventDriven {
 					// either this is TaskEvent driven... (signal this TaskEvent)
-					owningResultChan <- TaskEvent{Task: task, Status: StatusRunning, Stderr: utils.Red(stderrMsg), ReturnCode: -1}
+					eventChan <- TaskEvent{Task: task, Status: StatusRunning, Stderr: utils.Red(stderrMsg), ReturnCode: -1}
 				}
 				// else {
 				// 	// or on a polling interval... (do not create an TaskEvent)
 				// 	task.Display.Values.Msg = utils.Red(stderrMsg)
 				// }
-				task.ErrorBuffer.WriteString(stderrMsg + "\n")
+				task.errorBuffer.WriteString(stderrMsg + "\n")
 			} else {
 				stderrChan = nil
 			}
@@ -247,8 +248,8 @@ func (task *Task) execute(owningResultChan chan TaskEvent, owningWaiter *sync.Wa
 		} else {
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
-			owningResultChan <- TaskEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
-			task.ErrorBuffer.WriteString(returnCodeMsg + "\n")
+			eventChan <- TaskEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
+			task.errorBuffer.WriteString(returnCodeMsg + "\n")
 		}
 	}
 	task.Command.StopTime = time.Now()
@@ -271,85 +272,13 @@ func (task *Task) execute(owningResultChan chan TaskEvent, owningWaiter *sync.Wa
 	}
 
 	if returnCode == 0 || task.Config.IgnoreFailure {
-		owningResultChan <- TaskEvent{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
+		eventChan <- TaskEvent{Task: task, Status: StatusSuccess, Complete: true, ReturnCode: returnCode}
 	} else {
-		owningResultChan <- TaskEvent{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
+		eventChan <- TaskEvent{Task: task, Status: StatusError, Complete: true, ReturnCode: returnCode}
 		if task.Config.StopOnFailure {
 			exitSignaled = true
 		}
 	}
-}
-
-// startNextTask will kick start the maximum allowed number of commands (both primary and child task commands). Repeated invocation will iterate to new commands (and not repeat already markCompleted commands)
-func (task *Task) startNextTask(environment map[string]string) {
-	// Note that the parent task result channel and waiter are used for all Tasks and child Tasks
-	if task.Config.CmdString != "" && !task.Command.Started && task.Executor.RunningTasks < task.Options.MaxParallelCmds {
-		go task.execute(task.events, &task.waiter, environment)
-		task.Command.Started = true
-		task.Executor.RunningTasks++
-	}
-	for ; task.Executor.RunningTasks < task.Options.MaxParallelCmds && task.lastStartedTask < len(task.Children); task.lastStartedTask++ {
-		go task.Children[task.lastStartedTask].execute(task.events, &task.waiter, nil)
-		task.Children[task.lastStartedTask].Command.Started = true
-		task.Executor.RunningTasks++
-	}
-}
-
-// markCompleted marks a task command as being markCompleted
-func (task *Task) markCompleted(rc int) {
-	task.Command.Complete = true
-	task.Command.ReturnCode = rc
-
-	task.Executor.CompletedTasks = append(task.Executor.CompletedTasks, task)
-	task.Executor.cmdEtaCache[task.Config.CmdString] = task.Command.StopTime.Sub(task.Command.StartTime)
-	task.Executor.RunningTasks--
-}
-
-// Execute will run the current Tasks primary command and/or all child commands. When execution has markCompleted, the screen frame will advance.
-func (task *Task) Execute(environment map[string]string) {
-	for _, handler := range task.Executor.eventHandlers {
-		handler.Register(task)
-	}
-
-	task.startNextTask(environment)
-
-	for task.Executor.RunningTasks > 0 {
-		msgObj := <-task.events
-
-		// manage markCompleted tasks...
-		if msgObj.Complete {
-			msgObj.Task.markCompleted(msgObj.ReturnCode)
-			task.startNextTask(environment)
-
-			task.Status = msgObj.Status
-
-			if msgObj.Status == StatusError {
-				// keep note of the failed task for an after task report
-				task.FailedChildren++
-				task.Executor.FailedTasks = append(task.Executor.FailedTasks, msgObj.Task)
-			}
-		}
-
-		// notify all handlers...
-		for _, handler := range task.Executor.eventHandlers {
-			handler.OnEvent(task, msgObj)
-		}
-	}
-
-	if !exitSignaled {
-		task.waiter.Wait()
-	}
-
-	// we should be done with all tasks/subtasks at this point, unregister everything
-	for _, subTask := range task.Children {
-		for _, handler := range subTask.Executor.eventHandlers {
-			handler.Unregister(subTask)
-		}
-	}
-	for _, handler := range task.Executor.eventHandlers {
-		handler.Unregister(task)
-	}
-
 }
 
 // variableSplitFunc splits a bytestream based on either newline characters or by length (if the string is too long)

@@ -13,3 +13,4 @@ archive
 /dist
 *.bundle
 /tmp
+.cover

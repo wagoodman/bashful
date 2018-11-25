@@ -20,14 +20,14 @@ import (
 )
 
 type VerticalUI struct {
-	lock      sync.Mutex
-	config    *config.Config
-	data      map[uuid.UUID]*display
-	spinner   *spin.Spinner
-	ticker    *time.Ticker
-	startTime time.Time
-	executor  *runtime.Executor
-	frame     *jotframe.FixedFrame
+	lock        sync.Mutex
+	config      *config.Config
+	data        map[uuid.UUID]*display
+	spinner     *spin.Spinner
+	ticker      *time.Ticker
+	startTime   time.Time
+	runtimeData *runtime.RuntimeData
+	frame       *jotframe.FixedFrame
 }
 
 // display represents all non-Config items that control how the task line should be printed to the screen
@@ -111,6 +111,10 @@ func NewVerticalUI(cfg *config.Config) *VerticalUI {
 	return handler
 }
 
+func (handler *VerticalUI) AddRuntimeData(data *runtime.RuntimeData) {
+	handler.runtimeData = data
+}
+
 func (handler *VerticalUI) spinnerHandler() {
 
 	for {
@@ -124,7 +128,7 @@ func (handler *VerticalUI) spinnerHandler() {
 				task := displayData.Task
 
 				if task.Config.CmdString != "" {
-					if !task.Command.Complete && task.Command.Started {
+					if !task.Completed && task.Started {
 						displayData.Values.Prefix = handler.spinner.Current()
 						displayData.Values.Eta = handler.CurrentEta(task)
 					}
@@ -133,7 +137,7 @@ func (handler *VerticalUI) spinnerHandler() {
 
 				for _, subTask := range task.Children {
 					childDisplayData := handler.data[subTask.Id]
-					if !subTask.Command.Complete && subTask.Command.Started {
+					if !subTask.Completed && subTask.Started {
 						childDisplayData.Values.Prefix = handler.spinner.Current()
 						childDisplayData.Values.Eta = handler.CurrentEta(subTask)
 					}
@@ -142,7 +146,7 @@ func (handler *VerticalUI) spinnerHandler() {
 
 				// update the summary line
 				if handler.config.Options.ShowSummaryFooter {
-					renderedFooter := handler.footer(runtime.StatusPending, "", task.Executor)
+					renderedFooter := handler.footer(runtime.StatusPending, "")
 					io.WriteString(handler.frame.Footer(), renderedFooter)
 				}
 			}
@@ -160,15 +164,15 @@ func (handler *VerticalUI) Close() {
 		message := ""
 
 		handler.frame.Footer().Open()
-		if len(handler.executor.FailedTasks) > 0 {
+		if len(handler.runtimeData.FailedTasks) > 0 {
 			if handler.config.Options.LogPath != "" {
 				message = utils.Bold(" See log for details (" + handler.config.Options.LogPath + ")")
 			}
 
-			renderedFooter := handler.footer(runtime.StatusError, message, handler.executor)
+			renderedFooter := handler.footer(runtime.StatusError, message)
 			handler.frame.Footer().WriteStringAndClose(renderedFooter)
 		} else {
-			renderedFooter := handler.footer(runtime.StatusSuccess, message, handler.executor)
+			renderedFooter := handler.footer(runtime.StatusSuccess, message)
 			handler.frame.Footer().WriteStringAndClose(renderedFooter)
 		}
 		handler.frame.Footer().Close()
@@ -221,11 +225,6 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 	if _, ok := handler.data[task.Id]; ok {
 		// ignore data that have already been registered
 		return
-	}
-
-	// todo: replace this messy hack
-	if handler.executor == nil && task.Executor != nil {
-		handler.executor = task.Executor
 	}
 
 	hasParentCmd := task.Config.CmdString != ""
@@ -333,7 +332,7 @@ func (handler *VerticalUI) OnEvent(task *runtime.Task, e runtime.TaskEvent) {
 
 	// update the summary line
 	if handler.config.Options.ShowSummaryFooter {
-		renderedFooter := handler.footer(runtime.StatusPending, "", task.Executor)
+		renderedFooter := handler.footer(runtime.StatusPending, "")
 		handler.frame.Footer().WriteString(renderedFooter)
 	}
 }
@@ -354,7 +353,7 @@ func (handler *VerticalUI) displayTask(task *runtime.Task) {
 
 }
 
-func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, executor *runtime.Executor) string {
+func (handler *VerticalUI) footer(status runtime.TaskStatus, message string) string {
 	var tpl bytes.Buffer
 	var durString, etaString, stepString, errorString string
 
@@ -367,20 +366,20 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, exe
 		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
 
-	if len(executor.CompletedTasks) == executor.TotalTasks {
+	if len(handler.runtimeData.CompletedTasks) == handler.runtimeData.TotalTasks {
 		etaString = ""
 	}
 
 	if handler.config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(executor.CompletedTasks), executor.TotalTasks)
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(handler.runtimeData.CompletedTasks), handler.runtimeData.TotalTasks)
 	}
 
 	if handler.config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", len(executor.FailedTasks))
+		errorString = fmt.Sprintf(" Errors[%d]", len(handler.runtimeData.FailedTasks))
 	}
 
 	// get a string with the summary line without a split gap (eta floats left)
-	percentValue := (float64(len(executor.CompletedTasks)) * float64(100)) / float64(executor.TotalTasks)
+	percentValue := (float64(len(handler.runtimeData.CompletedTasks)) * float64(100)) / float64(handler.runtimeData.TotalTasks)
 	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
 	percentStr = color.Color(percentStr, "default+b")
 
@@ -403,7 +402,7 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string, exe
 func (handler *VerticalUI) renderTask(task *runtime.Task, terminalWidth int) string {
 	displayData := handler.data[task.Id]
 
-	if task.Command.Complete {
+	if task.Completed {
 		displayData.Values.Eta = ""
 		if task.Command.ReturnCode != 0 && !task.Config.IgnoreFailure {
 			displayData.Values.Msg = utils.Red("Exited with error (" + strconv.Itoa(task.Command.ReturnCode) + ")")
@@ -446,9 +445,9 @@ func (handler *VerticalUI) renderTask(task *runtime.Task, terminalWidth int) str
 	message.Reset()
 
 	// override the current spinner to empty or a handler.config.Options.BulletChar
-	if (!task.Command.Started || task.Command.Complete) && len(task.Children) == 0 && displayData.Template == lineDefaultTemplate {
+	if (!task.Started || task.Completed) && len(task.Children) == 0 && displayData.Template == lineDefaultTemplate {
 		displayData.Values.Prefix = handler.config.Options.BulletChar
-	} else if task.Command.Complete {
+	} else if task.Completed {
 		displayData.Values.Prefix = ""
 	}
 

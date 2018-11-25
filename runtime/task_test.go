@@ -133,12 +133,12 @@ tasks:
 	}
 }
 
-func Test_Task_requiresSudoPasswd(t *testing.T) {
-	var table = []struct {
+func Test_Task_requiresSudoPassword(t *testing.T) {
+	var table = map[string]struct {
 		taskConfig     config.TaskConfig
 		expectedResult bool
 	}{
-		{
+		"parallel with sudo child": {
 			taskConfig: config.TaskConfig{
 				Name: "parent-task",
 				ParallelTasks: []config.TaskConfig{
@@ -155,7 +155,7 @@ func Test_Task_requiresSudoPasswd(t *testing.T) {
 			},
 			expectedResult: true,
 		},
-		{
+		"parallel no sudo": {
 			taskConfig: config.TaskConfig{
 				Name: "parent-task",
 				ParallelTasks: []config.TaskConfig{
@@ -171,7 +171,7 @@ func Test_Task_requiresSudoPasswd(t *testing.T) {
 			},
 			expectedResult: false,
 		},
-		{
+		"parallel with sudo parent": {
 			taskConfig: config.TaskConfig{
 				Name: "parent-task",
 				Sudo: true,
@@ -188,7 +188,7 @@ func Test_Task_requiresSudoPasswd(t *testing.T) {
 			},
 			expectedResult: false,
 		},
-		{
+		"single task with sudo": {
 			taskConfig: config.TaskConfig{
 				Name:      "parent-task",
 				CmdString: "./bin/parent-thing.sh",
@@ -198,10 +198,11 @@ func Test_Task_requiresSudoPasswd(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range table {
-		task := NewTask(testCase.taskConfig, nil, nil)
-		if task.requiresSudoPasswd() != testCase.expectedResult {
-			t.Errorf("expected requiresSudoPasswd='%v'", testCase.expectedResult)
+	for name, testCase := range table {
+		t.Logf("Running test case: %s", name)
+		task := NewTask(testCase.taskConfig, nil)
+		if task.requiresSudoPassword() != testCase.expectedResult {
+			t.Errorf("expected requiresSudoPassword='%v'", testCase.expectedResult)
 		}
 	}
 }
@@ -212,7 +213,7 @@ func Test_Task_requiresSudoPasswd(t *testing.T) {
 // 	var failedTasks []*Task
 // 	simpleYamlStr := `
 // tasks:
-//   - name: startNextTask
+//   - name: startNextSubTasks
 //     cmd: export SOMEVAR=this
 //
 //   - name: append 'is'
@@ -252,7 +253,7 @@ func Test_Task_requiresSudoPasswd(t *testing.T) {
 // 	var failedTasks []*Task
 // 	simpleYamlStr := `
 // Tasks:
-//   - name: startNextTask
+//   - name: startNextSubTasks
 //     cmd: export CWD=$(pwd)
 //     cwd: ../example
 // `

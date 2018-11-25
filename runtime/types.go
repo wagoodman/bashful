@@ -35,6 +35,7 @@ type EventHandler interface {
 	Unregister(task *Task)
 	OnEvent(task *Task, e TaskEvent)
 	Close()
+	AddRuntimeData(data *RuntimeData)
 }
 
 type Client struct {
@@ -51,6 +52,10 @@ type Executor struct {
 	// Tasks is a list of all Task objects that will be invoked
 	Tasks []*Task
 
+	RuntimeData *RuntimeData
+}
+
+type RuntimeData struct {
 	// FailedTasks is a list of Task objects with non-zero return codes upon invocation
 	FailedTasks []*Task
 
@@ -67,7 +72,7 @@ type Executor struct {
 	cmdEtaCache map[string]time.Duration
 }
 
-// Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to execute, track, and display the task.
+// Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to Execute, track, and display the task.
 type Task struct {
 	Id uuid.UUID
 
@@ -76,17 +81,11 @@ type Task struct {
 
 	Options *config.Options
 
-	// Command represents all non-Config items used to execute and track task progress
+	// Command represents all non-Config items used to Execute and track task progress
 	Command command
-
-	// ErrorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
-	ErrorBuffer *bytes.Buffer
 
 	// Children is a list of all sub-Tasks that should be run concurrently
 	Children []*Task
-
-	// lastStartedTask is the index of the last child task that was started
-	lastStartedTask int
 
 	// events is a channel where all raw command events are queued to
 	events chan TaskEvent
@@ -97,15 +96,25 @@ type Task struct {
 	// TaskStatus is the last known TaskStatus value that represents the entire list of child commands
 	Status TaskStatus
 
-	// FailedTasks is a list of Tasks with a non-zero return value
-	FailedChildren int
+	// Started indicates whether the Task has been attempted to run
+	Started bool
 
-	Executor *Executor
+	// Completed indicates whether the Task has been finished execution
+	Completed bool
+
+	// errorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
+	errorBuffer *bytes.Buffer
+
+	// lastStartedChild is the index of the last child task that was started
+	lastStartedChild int
+
+	// FailedChildren is a list of Tasks with a non-zero return value
+	FailedChildren int
 }
 
-// command represents all non-Config items used to execute and track task progress
+// command represents all non-Config items used to Execute and track task progress
 type command struct {
-	// Cmd is the object used to execute the given user CmdString to a sub-shell
+	// Cmd is the object used to Execute the given user CmdString to a sub-shell
 	Cmd *exec.Cmd
 
 	// TempExecFromURL is the path to a temporary file downloaded from a TaskConfig url reference
@@ -120,12 +129,6 @@ type command struct {
 	// EstimatedRuntime indicates the expected runtime for the given command (based off of cached values from previous runs)
 	EstimatedRuntime time.Duration
 
-	// Started indicates whether the Cmd has been attempted to run
-	Started bool
-
-	// Complete indicates whether the Cmd has been finished execution
-	Complete bool
-
 	// ReturnCode is simply the value returned from the child process after Cmd execution
 	ReturnCode int
 
@@ -136,7 +139,7 @@ type command struct {
 	Environment map[string]string
 }
 
-// TaskStatus represents whether a task command is about to run, already running, or has markCompleted (in which case, was it successful or not)
+// TaskStatus represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
 type TaskStatus int32
 
 // TaskEvent represents an output from stdout/stderr during command execution or when a command has markCompleted
@@ -153,7 +156,7 @@ type TaskEvent struct {
 	// Stderr is a single line from standard error (optional)
 	Stderr string
 
-	// Complete indicates if the command has exited
+	// Completed indicates if the command has exited
 	Complete bool
 
 	// ReturnCode is the sub-process return code value upon completion

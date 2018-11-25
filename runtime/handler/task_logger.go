@@ -40,6 +40,10 @@ func NewTaskLogger(config *config.Config) *TaskLogger {
 	}
 }
 
+func (handler *TaskLogger) AddRuntimeData(data *runtime.RuntimeData) {
+
+}
+
 func (handler *TaskLogger) doRegister(task *runtime.Task) {
 	tempFile, _ := ioutil.TempFile(handler.config.LogCachePath, "")
 
