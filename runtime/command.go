@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"github.com/wagoodman/bashful/config"
 	"github.com/wagoodman/bashful/utils"
 	"os"
@@ -41,6 +42,7 @@ func newCommand(taskConfig config.TaskConfig) command {
 		EnvReadFile:      readFd,
 		Cmd:              cmd,
 		EstimatedRuntime: time.Duration(-1),
+		errorBuffer:      bytes.NewBufferString(""),
 	}
 }
 

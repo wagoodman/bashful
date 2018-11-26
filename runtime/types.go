@@ -35,7 +35,7 @@ type EventHandler interface {
 	Unregister(task *Task)
 	OnEvent(task *Task, e TaskEvent)
 	Close()
-	AddRuntimeData(data *RuntimeData)
+	AddRuntimeData(data *TaskStatistics)
 }
 
 type Client struct {
@@ -48,28 +48,27 @@ type Executor struct {
 	eventHandlers []EventHandler
 
 	config *config.Config
+	// cmdEtaCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
+	cmdEtaCache map[string]time.Duration
 
 	// Tasks is a list of all Task objects that will be invoked
 	Tasks []*Task
 
-	RuntimeData *RuntimeData
+	Statistics *TaskStatistics
 }
 
-type RuntimeData struct {
-	// FailedTasks is a list of Task objects with non-zero return codes upon invocation
-	FailedTasks []*Task
+type TaskStatistics struct {
+	// Failed is a list of Task objects with non-zero return codes upon invocation
+	Failed []*Task
 
-	// RunningTasks indicates the number of actively running Tasks
-	RunningTasks int
+	// Running indicates the number of actively running Tasks
+	Running int
 
-	// CompletedTasks is a list of Task objects that have been invoked (regardless of the return code value)
-	CompletedTasks []*Task
+	// Completed is a list of Task objects that have been invoked (regardless of the return code value)
+	Completed []*Task
 
-	// TotalTasks indicates the number of tasks that can be run (Note: this is not necessarily the same number of tasks planned to be run)
-	TotalTasks int
-
-	// cmdEtaCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
-	cmdEtaCache map[string]time.Duration
+	// Total indicates the number of tasks that can be run (Note: this is not necessarily the same number of tasks planned to be run)
+	Total int
 }
 
 // Task is a runtime object derived from the TaskConfig (parsed from the user yaml) and contains everything needed to Execute, track, and display the task.
@@ -102,12 +101,6 @@ type Task struct {
 	// Completed indicates whether the Task has been finished execution
 	Completed bool
 
-	// errorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
-	errorBuffer *bytes.Buffer
-
-	// lastStartedChild is the index of the last child task that was started
-	lastStartedChild int
-
 	// FailedChildren is a list of Tasks with a non-zero return value
 	FailedChildren int
 }
@@ -137,6 +130,9 @@ type command struct {
 
 	// Environment is a list of env vars from the exited child process
 	Environment map[string]string
+
+	// errorBuffer contains all stderr lines generated from the executed command (used to generate the task report)
+	errorBuffer *bytes.Buffer
 }
 
 // TaskStatus represents whether a task command is about to run, already running, or has completed (in which case, was it successful or not)
@@ -159,6 +155,7 @@ type TaskEvent struct {
 	// Completed indicates if the command has exited
 	Complete bool
 
+	// todo: remove return code from an event
 	// ReturnCode is the sub-process return code value upon completion
 	ReturnCode int
 }

@@ -40,7 +40,7 @@ func NewTaskLogger(config *config.Config) *TaskLogger {
 	}
 }
 
-func (handler *TaskLogger) AddRuntimeData(data *runtime.RuntimeData) {
+func (handler *TaskLogger) AddRuntimeData(data *runtime.TaskStatistics) {
 
 }
 

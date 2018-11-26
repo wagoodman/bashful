@@ -23,7 +23,7 @@ type CompressedUI struct {
 	config      *config.Config
 	data        map[uuid.UUID]*cUiData
 	startTime   time.Time
-	runtimeData *runtime.RuntimeData
+	runtimeData *runtime.TaskStatistics
 	frame       *jotframe.FixedFrame
 }
 
@@ -39,7 +39,7 @@ func NewCompressedUI(config *config.Config) *CompressedUI {
 	return handler
 }
 
-func (handler *CompressedUI) AddRuntimeData(data *runtime.RuntimeData) {
+func (handler *CompressedUI) AddRuntimeData(data *runtime.TaskStatistics) {
 	handler.runtimeData = data
 }
 
@@ -104,12 +104,12 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 
 	fillColor := color.ColorCode(strconv.Itoa(handler.config.Options.ColorSuccess) + "+i")
 	emptyColor := color.ColorCode(strconv.Itoa(handler.config.Options.ColorSuccess))
-	if len(handler.runtimeData.FailedTasks) > 0 {
+	if len(handler.runtimeData.Failed) > 0 {
 		fillColor = color.ColorCode(strconv.Itoa(handler.config.Options.ColorError) + "+i")
 		emptyColor = color.ColorCode(strconv.Itoa(handler.config.Options.ColorError))
 	}
 
-	numFill := int(effectiveWidth) * len(handler.runtimeData.CompletedTasks) / handler.runtimeData.TotalTasks
+	numFill := int(effectiveWidth) * len(handler.runtimeData.Completed) / handler.runtimeData.Total
 
 	if handler.config.Options.ShowSummaryTimes {
 		duration := time.Since(handler.startTime)
@@ -120,16 +120,16 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
 
-	if len(handler.runtimeData.CompletedTasks) == handler.runtimeData.TotalTasks {
+	if len(handler.runtimeData.Completed) == handler.runtimeData.Total {
 		etaString = ""
 	}
 
 	if handler.config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(handler.runtimeData.CompletedTasks), handler.runtimeData.TotalTasks)
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(handler.runtimeData.Completed), handler.runtimeData.Total)
 	}
 
 	if handler.config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", len(handler.runtimeData.FailedTasks))
+		errorString = fmt.Sprintf(" Errors[%d]", len(handler.runtimeData.Failed))
 	}
 
 	valueStr := stepString + errorString + durString + etaString

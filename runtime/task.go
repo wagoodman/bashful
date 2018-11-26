@@ -22,7 +22,6 @@ package runtime
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -61,7 +60,7 @@ func NewTask(taskConfig config.TaskConfig, runtimeOptions *config.Options) *Task
 	}
 
 	task.Command = newCommand(task.Config)
-	task.errorBuffer = bytes.NewBufferString("")
+
 	task.events = make(chan TaskEvent)
 	task.Status = StatusPending
 
@@ -227,7 +226,7 @@ func (task *Task) Execute(eventChan chan TaskEvent, waiter *sync.WaitGroup, envi
 				// 	// or on a polling interval... (do not create an TaskEvent)
 				// 	task.Display.Values.Msg = utils.Red(stderrMsg)
 				// }
-				task.errorBuffer.WriteString(stderrMsg + "\n")
+				task.Command.errorBuffer.WriteString(stderrMsg + "\n")
 			} else {
 				stderrChan = nil
 			}
@@ -249,12 +248,13 @@ func (task *Task) Execute(eventChan chan TaskEvent, waiter *sync.WaitGroup, envi
 			returnCode = -1
 			returnCodeMsg = "Failed to run: " + err.Error()
 			eventChan <- TaskEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
-			task.errorBuffer.WriteString(returnCodeMsg + "\n")
+			task.Command.errorBuffer.WriteString(returnCodeMsg + "\n")
 		}
 	}
+	task.Command.ReturnCode = returnCode
 	task.Command.StopTime = time.Now()
 
-	// close the write end of the pipe since the child shell is positively no longer writting to it
+	// close the write end of the pipe since the child shell is positively no longer writing to it
 	task.Command.Cmd.ExtraFiles[0].Close()
 	data, err := ioutil.ReadAll(task.Command.EnvReadFile)
 	utils.CheckError(err, "Could not read env vars from child shell")

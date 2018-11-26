@@ -27,7 +27,7 @@ func NewSimpleLogger(config *config.Config) *SimpleLogger {
 	}
 }
 
-func (handler *SimpleLogger) AddRuntimeData(data *runtime.RuntimeData) {
+func (handler *SimpleLogger) AddRuntimeData(data *runtime.TaskStatistics) {
 
 }
 

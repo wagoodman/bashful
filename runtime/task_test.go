@@ -207,6 +207,70 @@ func Test_Task_requiresSudoPassword(t *testing.T) {
 	}
 }
 
+func Test_Task_Execute(t *testing.T) {
+	var table = map[string]struct {
+		taskConfig     config.TaskConfig
+		expectedEvents []TaskEvent
+		expectedEnv    map[string]string
+	}{
+		"single task": {
+			taskConfig: config.TaskConfig{
+				Name:      "easy task",
+				CmdString: "true",
+			},
+			expectedEvents: []TaskEvent{
+				{nil, StatusRunning, "", "", false, -1},
+				{nil, StatusSuccess, "", "", true, 0},
+			},
+			expectedEnv: map[string]string{},
+		},
+	}
+
+	for name, testCase := range table {
+		t.Logf("Running test case: %s", name)
+		task := NewTask(testCase.taskConfig, nil)
+
+		environment := make(map[string]string, 0)
+
+		events := make([]TaskEvent, 0)
+		go task.Execute(task.events, &task.waiter, environment)
+
+		for event := range task.events {
+			t.Logf("  recording event %d (%s): %v", len(events), event.Task.Config.Name, event)
+			events = append(events, event)
+			if event.Complete {
+				close(task.events)
+			}
+		}
+
+		if len(events) != len(testCase.expectedEvents) {
+			t.Fatalf("expected %v events, got %v", len(testCase.expectedEvents), len(events))
+		}
+
+		for idx, expEvent := range testCase.expectedEvents {
+			t.Logf("checking event %d...", idx)
+			actualEvent := events[idx]
+			if expEvent.Status != actualEvent.Status {
+				t.Errorf("   expected status=%v, got %v", expEvent.Status, actualEvent.Status)
+			}
+			if expEvent.Complete != actualEvent.Complete {
+				t.Errorf("   expected complete=%v, got %v", expEvent.Complete, actualEvent.Complete)
+			}
+			if expEvent.ReturnCode != actualEvent.ReturnCode {
+				t.Errorf("   expected rc=%v, got %v", expEvent.ReturnCode, actualEvent.ReturnCode)
+			}
+			if expEvent.Stderr != actualEvent.Stderr {
+				t.Errorf("   expected stderr='%v', got '%v'", expEvent.Stderr, actualEvent.Stderr)
+			}
+			if expEvent.Stdout != actualEvent.Stdout {
+				t.Errorf("   expected stdout='%v', got '%v'", expEvent.Stdout, actualEvent.Stdout)
+			}
+
+		}
+
+	}
+}
+
 //
 // func TestSerialTaskEnvPersistence(t *testing.T) {
 // 	var expStr, actStr string

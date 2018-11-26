@@ -68,17 +68,17 @@ func (client *Client) Run() error {
 	client.Executor.estimateRuntime()
 	client.Executor.run()
 
-	if len(client.Executor.RuntimeData.FailedTasks) > 0 {
+	if len(client.Executor.Statistics.Failed) > 0 {
 		var buffer bytes.Buffer
 		buffer.WriteString(utils.Red(" ...Some Tasks failed, see below for details.\n"))
 
-		for _, task := range client.Executor.RuntimeData.FailedTasks {
+		for _, task := range client.Executor.Statistics.Failed {
 
 			buffer.WriteString("\n")
 			buffer.WriteString(utils.Bold(utils.Red("• Failed task: ")) + utils.Bold(task.Config.Name) + "\n")
 			buffer.WriteString(utils.Red("  ├─ command: ") + task.Config.CmdString + "\n")
 			buffer.WriteString(utils.Red("  ├─ return code: ") + strconv.Itoa(task.Command.ReturnCode) + "\n")
-			buffer.WriteString(utils.Red("  └─ stderr: ") + task.errorBuffer.String() + "\n")
+			buffer.WriteString(utils.Red("  └─ stderr: ") + task.Command.errorBuffer.String() + "\n")
 
 		}
 		log.LogToMain(buffer.String(), "")
@@ -90,7 +90,7 @@ func (client *Client) Run() error {
 
 	}
 
-	if len(client.Executor.RuntimeData.FailedTasks) > 0 {
+	if len(client.Executor.Statistics.Failed) > 0 {
 		return fmt.Errorf("failed Tasks discovered")
 	}
 

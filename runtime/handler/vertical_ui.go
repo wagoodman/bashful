@@ -26,7 +26,7 @@ type VerticalUI struct {
 	spinner     *spin.Spinner
 	ticker      *time.Ticker
 	startTime   time.Time
-	runtimeData *runtime.RuntimeData
+	runtimeData *runtime.TaskStatistics
 	frame       *jotframe.FixedFrame
 }
 
@@ -111,7 +111,7 @@ func NewVerticalUI(cfg *config.Config) *VerticalUI {
 	return handler
 }
 
-func (handler *VerticalUI) AddRuntimeData(data *runtime.RuntimeData) {
+func (handler *VerticalUI) AddRuntimeData(data *runtime.TaskStatistics) {
 	handler.runtimeData = data
 }
 
@@ -164,7 +164,7 @@ func (handler *VerticalUI) Close() {
 		message := ""
 
 		handler.frame.Footer().Open()
-		if len(handler.runtimeData.FailedTasks) > 0 {
+		if len(handler.runtimeData.Failed) > 0 {
 			if handler.config.Options.LogPath != "" {
 				message = utils.Bold(" See log for details (" + handler.config.Options.LogPath + ")")
 			}
@@ -366,20 +366,20 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string) str
 		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
 	}
 
-	if len(handler.runtimeData.CompletedTasks) == handler.runtimeData.TotalTasks {
+	if len(handler.runtimeData.Completed) == handler.runtimeData.Total {
 		etaString = ""
 	}
 
 	if handler.config.Options.ShowSummarySteps {
-		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(handler.runtimeData.CompletedTasks), handler.runtimeData.TotalTasks)
+		stepString = fmt.Sprintf(" Tasks[%d/%d]", len(handler.runtimeData.Completed), handler.runtimeData.Total)
 	}
 
 	if handler.config.Options.ShowSummaryErrors {
-		errorString = fmt.Sprintf(" Errors[%d]", len(handler.runtimeData.FailedTasks))
+		errorString = fmt.Sprintf(" Errors[%d]", len(handler.runtimeData.Failed))
 	}
 
 	// get a string with the summary line without a split gap (eta floats left)
-	percentValue := (float64(len(handler.runtimeData.CompletedTasks)) * float64(100)) / float64(handler.runtimeData.TotalTasks)
+	percentValue := (float64(len(handler.runtimeData.Completed)) * float64(100)) / float64(handler.runtimeData.Total)
 	percentStr := fmt.Sprintf("%3.2f%% Complete", percentValue)
 	percentStr = color.Color(percentStr, "default+b")
 
