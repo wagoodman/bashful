@@ -1,11 +1,11 @@
 language: go
 
 go:
-  - 1.8
-  - 1.9
-  - 1.10
-  - 1.11
-  - master
+  - '1.8'
+  - '1.9'
+  - '1.10'
+  - '1.11'
+  - 'master'
 
 # Skip the install step. Don't `go get` dependencies. Only build with the
 # code in vendor/
