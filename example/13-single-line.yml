@@ -27,6 +27,7 @@ tasks:
 
   - name: Compiling app (with trace)
     cmd: example/scripts/random-error.sh 4
+    ignore-failure: true
 
   - name: Installing dependencies
     parallel-tasks:
