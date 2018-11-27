@@ -362,11 +362,11 @@ func (handler *VerticalUI) footer(status runtime.TaskStatus, message string) str
 
 	if handler.config.Options.ShowSummaryTimes {
 		duration := time.Since(handler.startTime)
-		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
+		durString = fmt.Sprintf(" Runtime[%s]", utils.FormatDuration(duration))
 
 		totalEta := time.Duration(handler.config.TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
+		etaString = fmt.Sprintf(" ETA[%s]", utils.FormatDuration(remainingEta))
 	}
 
 	if len(handler.runtimeData.Completed) == handler.runtimeData.Total {
@@ -487,7 +487,7 @@ func (handler *VerticalUI) CurrentEta(task *runtime.Task) string {
 		running := time.Since(task.Command.StartTime)
 		etaValue = "Unknown!"
 		if task.Command.EstimatedRuntime > 0 {
-			etaValue = utils.ShowDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
+			etaValue = utils.FormatDuration(time.Duration(task.Command.EstimatedRuntime.Seconds()-running.Seconds()) * time.Second)
 		}
 		eta = fmt.Sprintf(utils.Bold("[%s]"), etaValue)
 	}

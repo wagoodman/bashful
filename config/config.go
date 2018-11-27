@@ -33,6 +33,7 @@ import (
 
 var globalOptions *Options
 
+// NewConfig creates a application runtime config given the user task yaml and CLI options
 func NewConfig(yamlString []byte, options *Cli) (*Config, error) {
 	config := Config{}
 	if options != nil {

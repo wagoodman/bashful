@@ -30,30 +30,43 @@ import (
 	"time"
 )
 
+// EventHandler represents a type that can listen to Task events managed by the Executor
 type EventHandler interface {
+	// Register a task with the handler
 	Register(task *Task)
+	// Unregister a task from the handler
 	Unregister(task *Task)
+	// OnEvent is invoked by a task when execution state changes
 	OnEvent(task *Task, e TaskEvent)
+	// Close the handler
 	Close()
+	// AddRuntimeData makes realtime statistics available to the handler
 	AddRuntimeData(data *TaskStatistics)
 }
 
 type Client struct {
-	Config   *config.Config
+	// Config contains the runtime configuration for the application
+	Config *config.Config
+
+	// Executor is the task invoker
 	Executor *Executor
 }
 
 type Executor struct {
-	Environment   map[string]string
+	// Environment is a mapping of all environment variables passed to each task on execution (except parallel tasks)
+	Environment map[string]string
+
 	eventHandlers []EventHandler
 
 	config *config.Config
+
 	// cmdEtaCache is the task CmdString-to-ETASeconds for any previously run command (read from EtaCachePath)
 	cmdEtaCache map[string]time.Duration
 
 	// Tasks is a list of all Task objects that will be invoked
 	Tasks []*Task
 
+	// Statistics contains runtime statistics of all planned tasks
 	Statistics *TaskStatistics
 }
 

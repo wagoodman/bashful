@@ -52,6 +52,7 @@ func RemoveOneValue(slice []float64, value float64) []float64 {
 	return slice
 }
 
+// VisualLength determines the length of a string (taking into account ansi control sequences)
 func VisualLength(str string) int {
 	inEscapeSeq := false
 	length := 0
@@ -72,6 +73,7 @@ func VisualLength(str string) int {
 	return length
 }
 
+// TrimToVisualLength truncates the given message to the given length (taking into account ansi escape sequences)
 func TrimToVisualLength(message string, length int) string {
 	for VisualLength(message) > length && len(message) > 1 {
 		message = message[:len(message)-1]
@@ -79,17 +81,20 @@ func TrimToVisualLength(message string, length int) string {
 	return message
 }
 
+// ExitWithErrorMessage will exit with return code 1 and output an error message
 func ExitWithErrorMessage(msg string) {
 	cleanup()
 	fmt.Fprintln(os.Stderr, Red(msg))
 	os.Exit(1)
 }
 
+// Exit with the given return code, gracefully cleaning up
 func Exit(rc int) {
 	cleanup()
 	os.Exit(rc)
 }
 
+// CheckError will exit upon the presence of an error, showing a message upon error
 func CheckError(err error, message string) {
 	if err != nil {
 		fmt.Println(Red("Error:"))
@@ -113,6 +118,7 @@ func cleanup() {
 	// fmt.Print("\033[?25h") // show cursor
 }
 
+// DoesFileExist returns if the given file exists on disk
 func DoesFileExist(name string) bool {
 	if _, err := os.Stat(name); err != nil {
 		if os.IsNotExist(err) {
@@ -122,7 +128,8 @@ func DoesFileExist(name string) bool {
 	return true
 }
 
-func ShowDuration(duration time.Duration) string {
+// FormatDuration outputs a given duration in HH:MM:SS
+func FormatDuration(duration time.Duration) string {
 	if duration < 0 {
 		return "Overdue!"
 	}
@@ -185,6 +192,7 @@ func Load(path string, object interface{}) error {
 }
 
 // todo: return error and have caller handle
+// GetFilenameFromUrl extracts the postfix filename from a given URL
 func GetFilenameFromUrl(urlStr string) string {
 	uri, err := url.Parse(urlStr)
 	CheckError(err, "Unable to parse URI")
@@ -195,6 +203,7 @@ func GetFilenameFromUrl(urlStr string) string {
 }
 
 // todo: return error and have caller handle
+// Md5OfFile returns the Md5 sum of a file given the path to the file
 func Md5OfFile(filepath string) string {
 	f, err := os.Open(filepath)
 	CheckError(err, "File does not exist: "+filepath)

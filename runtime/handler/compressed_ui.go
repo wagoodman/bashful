@@ -113,11 +113,11 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 
 	if handler.config.Options.ShowSummaryTimes {
 		duration := time.Since(handler.startTime)
-		durString = fmt.Sprintf(" Runtime[%s]", utils.ShowDuration(duration))
+		durString = fmt.Sprintf(" Runtime[%s]", utils.FormatDuration(duration))
 
 		totalEta := time.Duration(handler.config.TotalEtaSeconds) * time.Second
 		remainingEta := time.Duration(totalEta.Seconds()-duration.Seconds()) * time.Second
-		etaString = fmt.Sprintf(" ETA[%s]", utils.ShowDuration(remainingEta))
+		etaString = fmt.Sprintf(" ETA[%s]", utils.FormatDuration(remainingEta))
 	}
 
 	if len(handler.runtimeData.Completed) == handler.runtimeData.Total {

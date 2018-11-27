@@ -74,6 +74,7 @@ func NewTask(taskConfig config.TaskConfig, runtimeOptions *config.Options) *Task
 	return &task
 }
 
+// UpdateExec reinstantiates the planned command to run based on the given path to an executable
 func (task *Task) UpdateExec(execpath string) {
 	if task.Config.CmdString == "" {
 		task.Config.CmdString = task.Options.ExecReplaceString
