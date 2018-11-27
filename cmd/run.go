@@ -22,13 +22,21 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/deckarep/golang-set"
 
 	"github.com/spf13/cobra"
-	"strings"
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/log"
+	"github.com/wagoodman/bashful/runtime"
+	"github.com/wagoodman/bashful/runtime/handler"
+	"github.com/wagoodman/bashful/utils"
 	"io/ioutil"
-	"github.com/wagoodman/bashful/core"
+	"math/rand"
+	"strings"
+	"time"
 )
 
+// todo: put these in a cli struct instance instead, then most logic can be in the cli struct
 var tags, onlyTags string
 
 // runCmd represents the run command
@@ -36,46 +44,48 @@ var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Execute the given yaml file with bashful",
 	Long:  `Execute the given yaml file with bashful`,
-	Args: cobra.MaximumNArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 
-		userYamlPath := args[0]
-		if len(args) > 1 {
-			core.Config.Cli.Args = args[1:]
-		} else {
-			core.Config.Cli.Args = []string{}
+		if tags != "" && onlyTags != "" {
+			utils.ExitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
 		}
 
-		if tags != "" && onlyTags != "" {
-			core.ExitWithErrorMessage("Options 'tags' and 'only-tags' are mutually exclusive.")
+		cli := config.Cli{
+			YamlPath: args[0],
+		}
+
+		if len(args) > 1 {
+			cli.Args = args[1:]
+		} else {
+			cli.Args = []string{}
 		}
 
 		for _, value := range strings.Split(tags, ",") {
 			if value != "" {
-				core.Config.Cli.RunTags = append(core.Config.Cli.RunTags, value)
+				cli.RunTags = append(cli.RunTags, value)
 			}
 		}
 
 		for _, value := range strings.Split(onlyTags, ",") {
 			if value != "" {
-				core.Config.Cli.ExecuteOnlyMatchedTags = true
-				core.Config.Cli.RunTags = append(core.Config.Cli.RunTags, value)
+				cli.ExecuteOnlyMatchedTags = true
+				cli.RunTags = append(cli.RunTags, value)
 			}
 		}
 
-		// Since this is an empty map, no env vars will be loaded explicitly into the first exec.Command
-		// which will cause the current processes env vars to be loaded instead
-		environment := map[string]string{}
+		// todo: make this a function for CLI (addTag or something)
+		cli.RunTagSet = mapset.NewSet()
+		for _, tag := range cli.RunTags {
+			cli.RunTagSet.Add(tag)
+		}
 
-		yamlString, err := ioutil.ReadFile(userYamlPath)
-		core.CheckError(err, "Unable to read yaml config.")
+		yamlString, err := ioutil.ReadFile(cli.YamlPath)
+		utils.CheckError(err, "Unable to read yaml config.")
 
 		fmt.Print("\033[?25l") // hide cursor
-		failedTasks := core.Run(yamlString, environment)
+		Run(yamlString, cli)
 
-		core.LogToMain("Exiting", "")
-
-		core.Exit(len(failedTasks))
 	},
 }
 
@@ -84,4 +94,43 @@ func init() {
 
 	runCmd.Flags().StringVar(&tags, "tags", "", "A comma delimited list of matching task tags. If a task's tag matches *or if it is not tagged* then it will be executed (also see --only-tags)")
 	runCmd.Flags().StringVar(&onlyTags, "only-tags", "", "A comma delimited list of matching task tags. A task will only be executed if it has a matching tag")
+}
+
+func Run(yamlString []byte, cli config.Cli) {
+
+	client, err := runtime.NewClientFromYaml(yamlString, &cli)
+	if err != nil {
+		utils.ExitWithErrorMessage(err.Error())
+	}
+
+	if client.Config.Options.SingleLineDisplay {
+		client.AddEventHandler(handler.NewCompressedUI(client.Config))
+	} else {
+		client.AddEventHandler(handler.NewVerticalUI(client.Config))
+	}
+	client.AddEventHandler(handler.NewTaskLogger(client.Config))
+
+	rand.Seed(time.Now().UnixNano())
+
+	tagInfo := ""
+	if len(cli.RunTags) > 0 {
+		if cli.ExecuteOnlyMatchedTags {
+			tagInfo = " only matching tags: "
+		} else {
+			tagInfo = " non-tagged and matching tags: "
+		}
+		tagInfo += strings.Join(cli.RunTags, ", ")
+	}
+
+	fmt.Println(utils.Bold("Running " + tagInfo))
+	log.LogToMain("Running "+tagInfo, log.StyleMajor)
+
+	failedTasksErr := client.Run()
+	log.LogToMain("Complete", log.StyleMajor)
+
+	log.LogToMain("Exiting", "")
+
+	if failedTasksErr != nil {
+		utils.Exit(1)
+	}
 }

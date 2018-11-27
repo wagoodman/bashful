@@ -1,13 +1,13 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := ci
-TARGETS := $(shell ls scripts) 
+TARGETS := $(shell ls .scripts)
 .PHONY: run clean $(TARGETS)
 
 $(TARGETS): 
-	./scripts/$@
+	./.scripts/$@
 
 run:
-	go run main.go run example/13-single-line.yml
+	go run main.go run example/00-demo.yml
 
 examples: clean build
 	./dist/bashful run example/00-demo.yml
@@ -24,7 +24,7 @@ examples: clean build
 	./dist/bashful run example/11-tags.yml --tags some-app1
 	./dist/bashful run example/11-tags.yml --only-tags migrate
 	./dist/bashful run example/12-share-variables.yml
-	./dist/bashful run example/13-single-line.yml || true
+	./dist/bashful run example/13-single-line.yml
 	# ./dist/bashful run example/14-sudo.yml
 	./dist/bashful run example/15-yaml-includes.yml
 	./dist/bashful bundle example/16-bundle-manifest.yml && ./16-bundle-manifest.bundle; rm -f 16-bundle-manifest.bundle

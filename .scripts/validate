@@ -1,0 +1,22 @@
+#!/bin/sh
+set -u
+
+BOLD=$(tput bold)
+RED=$(tput setaf 1)
+NORMAL=$(tput sgr0)
+
+echo "${BOLD}Static analysis${NORMAL}"
+
+cd $(dirname $0)/..
+
+FAILED=0
+
+echo -e "\n${BOLD}Running: go fmt${NORMAL}"
+test -z "$(go fmt ./... | tee /dev/stderr)"
+[ $? -eq 0 ] || FAILED=1 echo -e "\n${RED}Failed${NORMAL}"
+
+echo -e "\n${BOLD}Running: go vet${NORMAL}"
+go vet ./... | tee /dev/stderr
+[ $? -eq 0 ] || FAILED=1 echo -e "\n${RED}Failed${NORMAL}"
+
+[ $FAILED -eq 0 ] || exit 1

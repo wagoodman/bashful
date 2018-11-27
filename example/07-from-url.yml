@@ -11,40 +11,40 @@ x-reference-data:
     - some-awesome-app-5
     - watcher-app
 
-  bashful-version: &bashful-version v0.0.5
+  version: &version v0.0.5
 
 tasks:
 
   # simply run the script from the given url
-  - name: Run Bashful Linux
-    url: https://github.com/wagoodman/bashful/releases/download/v0.0.5/bashful_Linux-x86_64
+  - name: Run worker
+    url: https://raw.githubusercontent.com/wagoodman/bashful/v0.1.1/example/scripts/random-worker.sh
 
-  - name: Run Bashful Linux
-    url: https://github.com/wagoodman/bashful/releases/download/v0.0.5/bashful_Linux-x86_64
+  - name: Run worker again
+    url: https://raw.githubusercontent.com/wagoodman/bashful/v0.1.1/example/scripts/random-worker.sh
 
-  - name: Run Bashful Mac
-    url: https://github.com/wagoodman/bashful/releases/download/<replace>/bashful_Darwin-x86_64
-    md5: 569cff0d4b216012bc7dfb9b45c6bc63
+  - name: Run worker (ensure hash)
+    url: https://raw.githubusercontent.com/wagoodman/bashful/v0.1.1/example/scripts/random-worker.sh
+    md5: 6556748b11c5712e9b9911aabe6a0199
     for-each:
-      - *bashful-version
+      - *version
 
   - name: Prep environment
-    url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/compile-something.sh
+    url: https://raw.githubusercontent.com/wagoodman/bashful/v0.1.1/example/scripts/compile-something.sh
 
   - name: Run worker
-    url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/random-worker.sh
+    url: https://raw.githubusercontent.com/wagoodman/bashful/v0.1.1/example/scripts/random-worker.sh
 
   # same as before, but we want to control arguments and such (notice the same script is not downloaded again)
   # Note: the '<exec>' reference is replaced with the downloaded script path
   - name: Quick compile
-    url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/compile-something.sh
+    url: https://raw.githubusercontent.com/wagoodman/bashful/v0.1.1/example/scripts/compile-something.sh
     cmd: <exec> 4
 
   # the script is downloaded once even when invoking in in parallel (though, different commands)
   - name: Running worker
     parallel-tasks:
       - name: "Running <replace>"
-        url: https://raw.githubusercontent.com/wagoodman/bashful/master/example/scripts/random-worker.sh
+        url: https://raw.githubusercontent.com/wagoodman/bashful/v0.1.1/example/scripts/random-worker.sh
         cmd: <exec> 4 <replace>
         for-each: *app-names
 

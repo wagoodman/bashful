@@ -41,8 +41,21 @@ tasks:
       - name: Installing Bridgy
         cmd: example/scripts/random-worker.sh 6
 
-  - name: Building Images
+  - name: Building Base Image
     cmd: example/scripts/random-worker.sh 3
+
+#  - name: Building Application Images
+#    parallel-tasks:
+#    - name: some-app1
+#      cmd: example/scripts/random-worker.sh 3
+#    - name: some-app3
+#      cmd: example/scripts/random-worker.sh 4
+#    - name: some-awesome-app-5
+#      cmd: example/scripts/random-worker.sh 3
+#    - name: watcher-app
+#      cmd: example/scripts/random-worker.sh 2
+#    - name: yup-another-app-7
+#      cmd: example/scripts/random-worker.sh 2
 
   - name: Gathering Secrets
     cmd: example/scripts/random-worker.sh 3

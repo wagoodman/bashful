@@ -11,7 +11,7 @@ tasks:
   - name: Compiling source
     parallel-tasks:
       - name: Compiling aux libraries
-        cmd: example/scripts/compile-something.sh 2 
+        cmd: example/scripts/compile-something.sh 2
       - name: Compiling app (debug)
         cmd: example/scripts/compile-something.sh 1
       - name: Compiling app (release)

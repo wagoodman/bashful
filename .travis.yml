@@ -1,9 +1,11 @@
 language: go
 
 go:
-  - 1.8
-  - 1.9
-  - master 
+  - '1.8'
+  - '1.9'
+  - '1.10'
+  - '1.11'
+  - 'master'
 
 # Skip the install step. Don't `go get` dependencies. Only build with the
 # code in vendor/
@@ -22,11 +24,9 @@ notifications:
 
 before_script:
   - go get -t ./...
-#  - go get github.com/golang/lint/golint
-#  - go get honnef.co/go/tools/cmd/megacheck
-#  - go get github.com/fzipp/gocyclo
 
 # Note: scripts always run to completion
 script:
+  - make validate
   - make test
-#  - make validate
+

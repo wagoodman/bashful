@@ -1,9 +1,30 @@
-package core
+// Copyright © 2018 Alex Goodman
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+package runtime
 
 import (
 	"archive/tar"
 	"compress/gzip"
 	"errors"
+	"github.com/wagoodman/bashful/utils"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,7 +38,7 @@ type Archiver interface {
 
 func NewArchive(dest string) Archiver {
 	fw, err := os.Create(dest)
-	CheckError(err, "Could not create archive file")
+	utils.CheckError(err, "Could not create archive file")
 	gw := gzip.NewWriter(fw)
 	tw := tar.NewWriter(gw)
 	return &archive{
@@ -55,7 +76,7 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 	}
 
 	isDirectory, err := isDir(srcPath)
-	CheckError(err, "Could not determine if this is a directory.")
+	utils.CheckError(err, "Could not determine if this is a directory.")
 
 	if isDirectory || !preservePath {
 		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
@@ -83,7 +104,7 @@ func (archiver *archive) Archive(srcPath string, preservePath bool) error {
 		for idx := range fields {
 			path := strings.Join(fields[:idx+1], string(os.PathSeparator))
 			err := archiver.addTarFile(path, path)
-			CheckError(err, "Unable to archive file")
+			utils.CheckError(err, "Unable to archive file")
 		}
 	}
 

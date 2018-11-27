@@ -12,3 +12,5 @@ archive
 /vendor
 /dist
 *.bundle
+/tmp
+.cover

@@ -18,40 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package cmd
+package runtime
 
 import (
-	"fmt"
+	"github.com/wagoodman/bashful/utils"
 	"os"
-
-	"github.com/spf13/cobra"
-	"github.com/wagoodman/bashful/runtime"
+	"os/signal"
+	"syscall"
 )
 
-var cachePath string
-
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "bashful",
-	Short: "Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar",
-	Long:  `Takes a yaml file containing commands and bash snippits and executes each command while showing a simple (vertical) progress bar`,
-}
-
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-}
-
-func init() {
-	cobra.OnInitialize(initBashful)
-	rootCmd.PersistentFlags().StringVar(&cachePath, "cache-path", "", "The path where cached files will be stored. By default '$(pwd)/.bashful' is used")
-}
-
-// initConfigDir ...todo
-func initBashful() {
-	runtime.Setup()
+func Setup() {
+	sigChannel := make(chan os.Signal, 2)
+	signal.Notify(sigChannel, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		for sig := range sigChannel {
+			if sig == syscall.SIGINT {
+				utils.ExitWithErrorMessage(utils.Red("Keyboard Interrupt"))
+			} else if sig == syscall.SIGTERM {
+				utils.Exit(0)
+			} else {
+				utils.ExitWithErrorMessage("Unknown Signal: " + sig.String())
+			}
+		}
+	}()
 }

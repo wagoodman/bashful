@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 BOLD=$(tput bold)
@@ -22,6 +22,6 @@ else
 fi
 
 mkdir -p dist
-[ "$(uname)" != "Darwin" ] && LINKFLAGS="-linkmode external -extldflags -static -s"
+[ "$(uname)" != "Darwin" ] && LINKFLAGS=" -extldflags -static -s"
 CGO_ENABLED=0 go build -ldflags "-X main.Version=$VERSION -X main.GitCommit=$COMMIT -X main.BuildTime=`date -u '+%Y-%m-%d_%I:%M:%S%p'` $LINKFLAGS" -o $TARGET
 echo "successfully built $TARGET"

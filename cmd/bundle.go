@@ -21,8 +21,12 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/wagoodman/bashful/core"
+	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/runtime"
+	"github.com/wagoodman/bashful/utils"
+	"io/ioutil"
 	"path/filepath"
 )
 
@@ -31,26 +35,39 @@ var bundleCmd = &cobra.Command{
 	Use:   "bundle",
 	Short: "Bundle yaml and referenced resources into a single executable (experimental)",
 	Long:  `Bundle yaml and referenced resources into a single executable (experimental)`,
-	Args: cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 
-		userYamlPath := args[0]
-		bundlePath := filepath.Base(userYamlPath[0:len(userYamlPath)-len(filepath.Ext(userYamlPath))]) + ".bundle"
+		cli := config.Cli{
+			YamlPath: args[0],
+		}
 
-		core.Bundle(userYamlPath, bundlePath)
+		bundlePath := filepath.Base(cli.YamlPath[0:len(cli.YamlPath)-len(filepath.Ext(cli.YamlPath))]) + ".bundle"
+
+		yamlString, err := ioutil.ReadFile(cli.YamlPath)
+		utils.CheckError(err, "Unable to read yaml config.")
+
+		fmt.Print("\033[?25l") // hide cursor
+		Bundle(yamlString, bundlePath, cli)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(bundleCmd)
+}
 
-	// Here you will define your flags and configuration settings.
+func Bundle(yamlString []byte, outputPath string, cli config.Cli) {
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// bundleCmd.PersistentFlags().String("foo", "", "A help for foo")
+	yamlString, err := ioutil.ReadFile(cli.YamlPath)
+	utils.CheckError(err, "Unable to read yaml Config.")
 
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// bundleCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	client, err := runtime.NewClientFromYaml(yamlString, &cli)
+	if err != nil {
+		utils.ExitWithErrorMessage(err.Error())
+	}
+
+	fmt.Println(utils.Bold("Bundling " + cli.YamlPath + " to " + outputPath))
+
+	client.Bundle(cli.YamlPath, outputPath)
+
 }
