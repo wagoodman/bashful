@@ -177,6 +177,7 @@ func (handler *VerticalUI) Close() {
 		}
 		handler.frame.Footer().Close()
 	}
+	handler.frame.Close()
 }
 
 func (handler *VerticalUI) Unregister(task *runtime.Task) {
@@ -216,7 +217,6 @@ func (handler *VerticalUI) Unregister(task *runtime.Task) {
 			}
 		}
 	}
-	handler.frame.Close()
 
 	delete(handler.data, task.Id)
 }
@@ -236,8 +236,11 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 
 	// we should overwrite the footer of the last frame when creating a new frame (kinda hacky... todo: replace this)
 	isFirst := handler.frame == nil
+	if handler.frame != nil {
+		handler.frame.Close()
+	}
 	handler.frame = jotframe.NewFixedFrame(0, hasHeader, handler.config.Options.ShowSummaryFooter, false)
-	if !isFirst {
+	if !isFirst && handler.config.Options.ShowSummaryFooter {
 		handler.frame.Move(-1)
 	}
 

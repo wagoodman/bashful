@@ -109,7 +109,6 @@ func Run(yamlString []byte, cli config.Cli) {
 		client.AddEventHandler(handler.NewVerticalUI(client.Config))
 	}
 	client.AddEventHandler(handler.NewTaskLogger(client.Config))
-	client.AddEventHandler(handler.NewSimpleLogger(client.Config))
 
 	rand.Seed(time.Now().UnixNano())
 
