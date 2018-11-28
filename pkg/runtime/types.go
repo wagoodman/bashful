@@ -23,7 +23,7 @@ package runtime
 import (
 	"bytes"
 	"github.com/google/uuid"
-	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/pkg/config"
 	"os"
 	"os/exec"
 	"sync"

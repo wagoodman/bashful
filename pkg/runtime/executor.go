@@ -21,7 +21,7 @@
 package runtime
 
 import (
-	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/utils"
 	"os"
 	"time"

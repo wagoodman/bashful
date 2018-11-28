@@ -2,9 +2,9 @@ package handler
 
 import (
 	"github.com/google/uuid"
-	"github.com/wagoodman/bashful/config"
-	"github.com/wagoodman/bashful/log"
-	"github.com/wagoodman/bashful/runtime"
+	"github.com/wagoodman/bashful/pkg/config"
+	"github.com/wagoodman/bashful/pkg/log"
+	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/utils"
 	"io/ioutil"
 	"os"

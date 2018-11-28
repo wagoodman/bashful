@@ -2,8 +2,8 @@ package handler
 
 import (
 	"fmt"
-	"github.com/wagoodman/bashful/config"
-	"github.com/wagoodman/bashful/runtime"
+	"github.com/wagoodman/bashful/pkg/config"
+	"github.com/wagoodman/bashful/pkg/runtime"
 	"os"
 )
 

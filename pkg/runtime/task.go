@@ -34,7 +34,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lunixbochs/vtclean"
-	"github.com/wagoodman/bashful/config"
+	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wayneashleyberry/terminal-dimensions"
 )

@@ -31,7 +31,7 @@ import (
 	"github.com/cavaliercoder/grab"
 	"github.com/dustin/go-humanize"
 	"github.com/gosuri/uiprogress"
-	"github.com/wagoodman/bashful/log"
+	"github.com/wagoodman/bashful/pkg/log"
 	"github.com/wagoodman/bashful/utils"
 )
 

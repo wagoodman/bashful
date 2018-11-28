@@ -23,8 +23,8 @@ package runtime
 import (
 	"bytes"
 	"fmt"
-	"github.com/wagoodman/bashful/config"
-	"github.com/wagoodman/bashful/log"
+	"github.com/wagoodman/bashful/pkg/config"
+	"github.com/wagoodman/bashful/pkg/log"
 	"github.com/wagoodman/bashful/utils"
 	"io"
 	"os"
