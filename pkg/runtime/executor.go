@@ -21,7 +21,9 @@
 package runtime
 
 import (
+	"fmt"
 	"github.com/wagoodman/bashful/pkg/config"
+	"github.com/wagoodman/bashful/pkg/log"
 	"github.com/wagoodman/bashful/utils"
 	"os"
 	"time"
@@ -64,7 +66,7 @@ func (executor *Executor) readEtaCache() {
 	executor.cmdEtaCache = make(map[string]time.Duration)
 	if utils.DoesFileExist(executor.config.EtaCachePath) {
 		err := utils.Load(executor.config.EtaCachePath, &executor.cmdEtaCache)
-		utils.CheckError(err, "Unable to load command eta cache.")
+		log.LogToMain(fmt.Sprintf("unable to load command eta cache: %v", err), log.StyleError)
 	}
 
 }
@@ -175,9 +177,11 @@ func (executor *Executor) execute(task *Task) error {
 
 func (executor *Executor) run() error {
 	for _, task := range executor.Tasks {
+		// todo: execute should return error and be checked here
 		executor.execute(task)
 
 		if exitSignaled {
+			log.LogToMain("signaled to exit", log.StyleMajor)
 			break
 		}
 	}
@@ -186,7 +190,9 @@ func (executor *Executor) run() error {
 	}
 
 	err := utils.Save(executor.config.EtaCachePath, &executor.cmdEtaCache)
-	utils.CheckError(err, "Unable to save command eta cache.")
+	if err != nil {
+		log.LogToMain(fmt.Sprintf("unable to save command eta cache: %v", err), log.StyleError)
+	}
 
 	return nil
 }

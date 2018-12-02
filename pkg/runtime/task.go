@@ -39,6 +39,7 @@ import (
 	"github.com/wayneashleyberry/terminal-dimensions"
 )
 
+// todo: remove these global vars
 var (
 	sudoPassword string
 	exitSignaled bool
