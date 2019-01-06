@@ -217,6 +217,21 @@ tasks:
         for-each: *app-names
 ```
 
+**5. Pass arbitrary arguments to jobs.**
+
+```
+$ bashful run some.yaml first-argument 20
+```
+
+Which can be used as bash `$#` parameters (in this case `$1` and `$2`):
+```yaml
+tasks:
+    - name: Show some stuff!
+      cmd: echo $1
+    - name: Show some other stuff!
+      cmd: echo $2
+```
+
 **There are a ton of examples in the [`example/`](https://github.com/wagoodman/bashful/tree/master/example) dir.** Go check them out!
 
 ## Configuration Options
