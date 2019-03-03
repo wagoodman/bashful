@@ -9,7 +9,7 @@ import (
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/wagoodman/jotframe"
+	"github.com/wagoodman/jotframe/pkg/frame"
 	"github.com/wayneashleyberry/terminal-dimensions"
 	"io"
 	"strconv"
@@ -27,7 +27,7 @@ type VerticalUI struct {
 	ticker      *time.Ticker
 	startTime   time.Time
 	runtimeData *runtime.TaskStatistics
-	frame       *jotframe.FixedFrame
+	frame       *frame.Frame
 }
 
 // display represents all non-Config items that control how the task line should be printed to the screen
@@ -43,7 +43,7 @@ type display struct {
 	// Values holds all template values that represent the task TaskStatus
 	Values lineInfo
 
-	line *jotframe.Line
+	line *frame.Line
 }
 
 type summary struct {
@@ -239,12 +239,19 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 	if handler.frame != nil {
 		handler.frame.Close()
 	}
-	handler.frame = jotframe.NewFixedFrame(0, hasHeader, handler.config.Options.ShowSummaryFooter, false)
+
+	handler.frame = frame.New(frame.Config{
+		Lines:          0,
+		HasHeader:      hasHeader,
+		HasFooter:      handler.config.Options.ShowSummaryFooter,
+		TrailOnRemove:  false,
+		PositionPolicy: frame.FloatForward,
+	})
 	if !isFirst && handler.config.Options.ShowSummaryFooter {
 		handler.frame.Move(-1)
 	}
 
-	var line *jotframe.Line
+	var line *frame.Line
 	if hasParentCmd {
 		line, _ = handler.frame.Append()
 		// todo: check err

@@ -36,7 +36,7 @@ import (
 	"github.com/lunixbochs/vtclean"
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/wayneashleyberry/terminal-dimensions"
+	terminaldimensions "github.com/wayneashleyberry/terminal-dimensions"
 )
 
 // todo: remove these global vars
@@ -160,7 +160,7 @@ func (task *Task) estimateRuntime() float64 {
 }
 
 // run executes a Tasks primary command (not child task commands) and monitors command events
-func (task *Task) Execute(eventChan chan TaskEvent, waiter *sync.WaitGroup, environment map[string]string) {
+func (task *Task) Execute(eventChan chan<- TaskEvent, waiter *sync.WaitGroup, environment map[string]string) {
 
 	task.Command.StartTime = time.Now()
 

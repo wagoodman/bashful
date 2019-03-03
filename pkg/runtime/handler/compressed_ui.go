@@ -7,7 +7,7 @@ import (
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/wagoodman/jotframe"
+	"github.com/wagoodman/jotframe/pkg/frame"
 	"github.com/wayneashleyberry/terminal-dimensions"
 	"strconv"
 	"sync"
@@ -24,15 +24,23 @@ type CompressedUI struct {
 	data        map[uuid.UUID]*cUiData
 	startTime   time.Time
 	runtimeData *runtime.TaskStatistics
-	frame       *jotframe.FixedFrame
+	frame       *frame.Frame
 }
 
 func NewCompressedUI(config *config.Config) *CompressedUI {
 
+	frameCfg := frame.Config{
+		Lines:          1,
+		HasHeader:      false,
+		HasFooter:      false,
+		TrailOnRemove:  false,
+		PositionPolicy: frame.FloatForward,
+	}
+
 	handler := &CompressedUI{
 		data:      make(map[uuid.UUID]*cUiData, 0),
 		startTime: time.Now(),
-		frame:     jotframe.NewFixedFrame(1, false, false, false),
+		frame:     frame.New(frameCfg),
 		config:    config,
 	}
 
