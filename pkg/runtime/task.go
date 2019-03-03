@@ -94,12 +94,12 @@ func (task *Task) UpdateExec(execpath string) {
 // Kill will stop any running command (including child Tasks) with a -9 signal
 func (task *Task) Kill() {
 	if task.Config.CmdString != "" && task.Started && !task.Completed {
-		syscall.Kill(-task.Command.Cmd.Process.Pid, syscall.SIGKILL)
+		utils.KillProcess(task.Command.Cmd.Process.Pid)
 	}
 
 	for _, subTask := range task.Children {
 		if subTask.Config.CmdString != "" && subTask.Started && !subTask.Completed {
-			syscall.Kill(-subTask.Command.Cmd.Process.Pid, syscall.SIGKILL)
+			utils.KillProcess(subTask.Command.Cmd.Process.Pid)
 		}
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -34,7 +33,7 @@ func newCommand(taskConfig config.TaskConfig) command {
 	cmd.ExtraFiles = []*os.File{writeFd}
 
 	// set this command as a process group
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = utils.GetSysProcAttr()
 
 	return command{
 		Environment:      map[string]string{},
