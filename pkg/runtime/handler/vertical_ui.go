@@ -99,7 +99,7 @@ func NewVerticalUI(cfg *config.Config) *VerticalUI {
 	}
 
 	handler := &VerticalUI{
-		data:      make(map[uuid.UUID]*display, 0),
+		data:      make(map[uuid.UUID]*display),
 		spinner:   spin.New(),
 		ticker:    time.NewTicker(updateInterval),
 		startTime: time.Now(),

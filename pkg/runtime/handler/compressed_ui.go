@@ -30,7 +30,7 @@ type CompressedUI struct {
 func NewCompressedUI(config *config.Config) *CompressedUI {
 
 	handler := &CompressedUI{
-		data:      make(map[uuid.UUID]*cUiData, 0),
+		data:      make(map[uuid.UUID]*cUiData),
 		startTime: time.Now(),
 		frame:     jotframe.NewFixedFrame(1, false, false, false),
 		config:    config,

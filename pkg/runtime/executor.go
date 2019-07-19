@@ -38,12 +38,12 @@ func newExecutorStats() *TaskStatistics {
 
 func newExecutor(cfg *config.Config) *Executor {
 	executor := &Executor{
-		Environment:   make(map[string]string, 0),
+		Environment:   make(map[string]string),
 		eventHandlers: make([]EventHandler, 0),
 		config:        cfg,
 		Tasks:         make([]*Task, 0),
 		Statistics:    newExecutorStats(),
-		cmdEtaCache:   make(map[string]time.Duration, 0),
+		cmdEtaCache:   make(map[string]time.Duration),
 	}
 
 	for _, taskConfig := range cfg.TaskConfigs {
