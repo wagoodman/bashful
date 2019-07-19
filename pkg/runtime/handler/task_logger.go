@@ -1,15 +1,16 @@
 package handler
 
 import (
+	"io/ioutil"
+	"os"
+	"strconv"
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/pkg/log"
 	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/utils"
-	"io/ioutil"
-	"os"
-	"strconv"
-	"sync"
 )
 
 type bufferedLog struct {

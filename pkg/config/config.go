@@ -22,13 +22,14 @@ package config
 
 import (
 	"fmt"
-	"github.com/deckarep/golang-set"
-	"github.com/spf13/afero"
-	"github.com/wagoodman/bashful/utils"
-	"gopkg.in/yaml.v2"
 	"os"
 	"path"
 	"strings"
+
+	mapset "github.com/deckarep/golang-set"
+	"github.com/spf13/afero"
+	"github.com/wagoodman/bashful/utils"
+	"gopkg.in/yaml.v2"
 )
 
 var globalOptions *Options

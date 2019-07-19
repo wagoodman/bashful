@@ -36,7 +36,7 @@ import (
 	"github.com/lunixbochs/vtclean"
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/utils"
-	"github.com/wayneashleyberry/terminal-dimensions"
+	terminaldimensions "github.com/wayneashleyberry/terminal-dimensions"
 )
 
 // todo: remove these global vars

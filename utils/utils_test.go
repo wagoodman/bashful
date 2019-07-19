@@ -1,8 +1,9 @@
 package utils
 
 import (
-	"github.com/alecthomas/repr"
 	"testing"
+
+	"github.com/alecthomas/repr"
 )
 
 func TestMinMax(t *testing.T) {

@@ -2,13 +2,14 @@ package runtime
 
 import (
 	"bytes"
-	"github.com/wagoodman/bashful/pkg/config"
-	"github.com/wagoodman/bashful/utils"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/wagoodman/bashful/pkg/config"
+	"github.com/wagoodman/bashful/utils"
 )
 
 func newCommand(taskConfig config.TaskConfig) command {

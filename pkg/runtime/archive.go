@@ -24,11 +24,12 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"errors"
-	"github.com/wagoodman/bashful/utils"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wagoodman/bashful/utils"
 )
 
 type Archiver interface {

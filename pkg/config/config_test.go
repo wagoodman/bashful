@@ -1,9 +1,10 @@
 package config
 
 import (
-	"github.com/deckarep/golang-set"
-	"github.com/wagoodman/bashful/utils"
 	"testing"
+
+	mapset "github.com/deckarep/golang-set"
+	"github.com/wagoodman/bashful/utils"
 )
 
 func Test_Compile_SingleTask(t *testing.T) {

@@ -22,11 +22,12 @@ package runtime
 
 import (
 	"fmt"
-	"github.com/deckarep/golang-set"
 	"os"
 	"path"
 	"sync"
 	"time"
+
+	mapset "github.com/deckarep/golang-set"
 
 	"github.com/cavaliercoder/grab"
 	"github.com/dustin/go-humanize"

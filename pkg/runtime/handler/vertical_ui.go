@@ -3,6 +3,13 @@ package handler
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
+	"sync"
+	"text/template"
+	"time"
+
 	"github.com/google/uuid"
 	color "github.com/mgutz/ansi"
 	"github.com/tj/go-spin"
@@ -10,13 +17,7 @@ import (
 	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/jotframe"
-	"github.com/wayneashleyberry/terminal-dimensions"
-	"io"
-	"strconv"
-	"strings"
-	"sync"
-	"text/template"
-	"time"
+	terminaldimensions "github.com/wayneashleyberry/terminal-dimensions"
 )
 
 type VerticalUI struct {
