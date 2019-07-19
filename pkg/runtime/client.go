@@ -23,14 +23,15 @@ package runtime
 import (
 	"bytes"
 	"fmt"
-	"github.com/wagoodman/bashful/pkg/config"
-	"github.com/wagoodman/bashful/pkg/log"
-	"github.com/wagoodman/bashful/utils"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"text/template"
+
+	"github.com/wagoodman/bashful/pkg/config"
+	"github.com/wagoodman/bashful/pkg/log"
+	"github.com/wagoodman/bashful/utils"
 )
 
 func NewClientFromYaml(yamlString []byte, cli *config.Cli) (*Client, error) {

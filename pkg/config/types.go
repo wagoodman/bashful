@@ -21,7 +21,7 @@
 package config
 
 import (
-	"github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 )
 
 type stringArray []string

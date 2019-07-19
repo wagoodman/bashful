@@ -2,16 +2,17 @@ package handler
 
 import (
 	"fmt"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	color "github.com/mgutz/ansi"
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/utils"
 	"github.com/wagoodman/jotframe"
-	"github.com/wayneashleyberry/terminal-dimensions"
-	"strconv"
-	"sync"
-	"time"
+	terminaldimensions "github.com/wayneashleyberry/terminal-dimensions"
 )
 
 type cUiData struct {

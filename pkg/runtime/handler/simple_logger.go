@@ -2,9 +2,10 @@ package handler
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/pkg/runtime"
-	"os"
 )
 
 // this was just a (successful) experiment :) needs to be reworked

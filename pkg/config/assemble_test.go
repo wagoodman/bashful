@@ -2,8 +2,9 @@ package config
 
 import (
 	"bytes"
-	"github.com/spf13/afero"
 	"testing"
+
+	"github.com/spf13/afero"
 )
 
 func TestYamlInclude(t *testing.T) {

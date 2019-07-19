@@ -22,11 +22,12 @@ package runtime
 
 import (
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/pkg/log"
 	"github.com/wagoodman/bashful/utils"
-	"os"
-	"time"
 )
 
 func newExecutorStats() *TaskStatistics {

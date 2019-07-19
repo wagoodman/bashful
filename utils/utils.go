@@ -6,8 +6,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/howeyc/gopass"
-	color "github.com/mgutz/ansi"
 	"io"
 	"net/url"
 	"os"
@@ -15,6 +13,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/howeyc/gopass"
+	color "github.com/mgutz/ansi"
 )
 
 var (

@@ -22,12 +22,13 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 	"github.com/wagoodman/bashful/pkg/config"
 	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/utils"
-	"io/ioutil"
-	"path/filepath"
 )
 
 // bundleCmd represents the bundle command

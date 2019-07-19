@@ -21,10 +21,11 @@
 package runtime
 
 import (
-	"github.com/wagoodman/bashful/utils"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/wagoodman/bashful/utils"
 )
 
 func Setup() {

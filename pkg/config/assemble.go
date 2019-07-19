@@ -1,10 +1,11 @@
 package config
 
 import (
-	"github.com/spf13/afero"
-	"github.com/wagoodman/bashful/utils"
 	"regexp"
 	"strings"
+
+	"github.com/spf13/afero"
+	"github.com/wagoodman/bashful/utils"
 )
 
 type assembler struct {
