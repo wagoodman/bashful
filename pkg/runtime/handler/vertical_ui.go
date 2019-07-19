@@ -229,10 +229,6 @@ func (handler *VerticalUI) doRegister(task *runtime.Task) {
 
 	hasParentCmd := task.Config.CmdString != ""
 	hasHeader := len(task.Children) > 0
-	numTasks := len(task.Children)
-	if hasParentCmd {
-		numTasks++
-	}
 
 	// we should overwrite the footer of the last frame when creating a new frame (kinda hacky... todo: replace this)
 	isFirst := handler.frame == nil
