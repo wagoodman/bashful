@@ -239,7 +239,6 @@ func (task *Task) Execute(eventChan chan TaskEvent, waiter *sync.WaitGroup, envi
 	}
 
 	returnCode := 0
-	returnCodeMsg := "unknown"
 	if err := task.Command.Cmd.Wait(); err != nil {
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			// The program has exited with an Exit code != 0
@@ -248,7 +247,7 @@ func (task *Task) Execute(eventChan chan TaskEvent, waiter *sync.WaitGroup, envi
 			}
 		} else {
 			returnCode = -1
-			returnCodeMsg = "Failed to run: " + err.Error()
+			returnCodeMsg := "Failed to run: " + err.Error()
 			eventChan <- TaskEvent{Task: task, Status: StatusError, Stderr: returnCodeMsg, ReturnCode: returnCode}
 			task.Command.errorBuffer.WriteString(returnCodeMsg + "\n")
 		}
