@@ -109,7 +109,7 @@ func (handler *CompressedUI) displayTask(task *runtime.Task) {
 		emptyColor = color.ColorCode(strconv.Itoa(handler.config.Options.ColorError))
 	}
 
-	numFill := int(effectiveWidth) * len(handler.runtimeData.Completed) / handler.runtimeData.Total
+	numFill := effectiveWidth * len(handler.runtimeData.Completed) / handler.runtimeData.Total
 
 	if handler.config.Options.ShowSummaryTimes {
 		duration := time.Since(handler.startTime)
