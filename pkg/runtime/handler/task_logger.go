@@ -35,7 +35,7 @@ func NewTaskLogger(config *config.Config) *TaskLogger {
 	}
 
 	return &TaskLogger{
-		logs:   make(map[uuid.UUID]*bufferedLog, 0),
+		logs:   make(map[uuid.UUID]*bufferedLog),
 		config: config,
 	}
 }

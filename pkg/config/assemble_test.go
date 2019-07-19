@@ -150,7 +150,7 @@ tasks:
 		t.Error("Got error during assemble readfile ", err)
 	} else {
 		actStr = configAssembler.assemble(contents)
-		if bytes.Compare(actStr, expStr) != 0 {
+		if !bytes.Equal(actStr, expStr) {
 			t.Error("Expected:\n>>>", string(expStr), "<<< Got:\n>>>", string(actStr), "<<<")
 		}
 	}
