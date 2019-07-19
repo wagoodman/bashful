@@ -25,7 +25,7 @@ func newCommand(taskConfig config.TaskConfig) command {
 		sudoCmd = "sudo -S "
 	}
 	cmd := exec.Command(shell, "-c", sudoCmd+taskConfig.CmdString+"; BASHFUL_RC=$?; env >&3; exit $BASHFUL_RC")
-	cmd.Stdin = strings.NewReader(string(sudoPassword) + "\n")
+	cmd.Stdin = strings.NewReader(sudoPassword + "\n")
 
 	// Set current working directory; default is empty
 	cmd.Dir = taskConfig.CwdString
