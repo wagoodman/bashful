@@ -22,7 +22,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/deckarep/golang-set"
+
+	mapset "github.com/deckarep/golang-set"
+
+	"io/ioutil"
+	"math/rand"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/wagoodman/bashful/pkg/config"
@@ -30,10 +36,6 @@ import (
 	"github.com/wagoodman/bashful/pkg/runtime"
 	"github.com/wagoodman/bashful/pkg/runtime/handler"
 	"github.com/wagoodman/bashful/utils"
-	"io/ioutil"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 // todo: put these in a cli struct instance instead, then most logic can be in the cli struct
@@ -83,7 +85,8 @@ var runCmd = &cobra.Command{
 		yamlString, err := ioutil.ReadFile(cli.YamlPath)
 		utils.CheckError(err, "Unable to read yaml config.")
 
-		fmt.Print("\033[?25l") // hide cursor
+		fmt.Print("\033[?25l")       // hide cursor
+		defer fmt.Print("\033[?25h") // show cursor
 		Run(yamlString, cli)
 
 	},
