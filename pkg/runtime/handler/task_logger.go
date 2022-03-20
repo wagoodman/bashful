@@ -30,6 +30,13 @@ type TaskLogger struct {
 }
 
 func NewTaskLogger(config *config.Config) *TaskLogger {
+	if _, err := os.Stat(config.LogCachePath); os.IsNotExist(err) {
+		err := os.MkdirAll(config.LogCachePath, 0755)
+		if err != nil {
+			utils.ExitWithErrorMessage("\nUnable to create log dir\n" + err.Error())
+		}
+	}
+
 	if config.Options.LogPath != "" {
 		log.SetupLogging(config.Options.LogPath, config.LogCachePath)
 	}
